@@ -4,6 +4,10 @@
  */
 
 if (!window.quantConfig) {
+  const runtimeEnv = typeof process !== 'undefined' ? process.env || {} : {};
+  const isHttpRuntime = /^https?:$/i.test(window.location.protocol || '');
+  const sameOriginApiBase = isHttpRuntime ? window.location.origin : 'http://127.0.0.1:47829';
+
   window.quantConfig = {
     // Detect environment from various sources
     environment: (() => {
@@ -26,7 +30,7 @@ if (!window.quantConfig) {
       }
 
       // 4. Check NODE_ENV or default to local for development
-      if (process.env?.NODE_ENV === 'production') {
+      if (runtimeEnv.NODE_ENV === 'production') {
         return 'production';
       }
 
@@ -37,15 +41,15 @@ if (!window.quantConfig) {
     // Environment configurations
     environments: {
       local: {
-        apiBaseUrl: 'http://127.0.0.1:47829',
+        apiBaseUrl: sameOriginApiBase,
         description: 'Local development server'
       },
       vps: {
-        apiBaseUrl: process.env?.QUANT_VPS_URL || 'http://your-vps-ip:47829',
+        apiBaseUrl: runtimeEnv.QUANT_VPS_URL || sameOriginApiBase,
         description: 'Remote VPS server'
       },
       production: {
-        apiBaseUrl: process.env?.QUANT_PROD_URL || 'https://api.quant.prod',
+        apiBaseUrl: runtimeEnv.QUANT_PROD_URL || sameOriginApiBase,
         description: 'Production server (https)'
       }
     },
@@ -75,11 +79,11 @@ if (!window.quantConfig) {
 
     // Set custom API URL for VPS or custom deployments
     setCustomApiUrl: (env, url) => {
-      if (!this.environments[env]) {
+      if (!window.quantConfig.environments[env]) {
         console.error(`[Config] Unknown environment: ${env}`);
         return false;
       }
-      this.environments[env].apiBaseUrl = url;
+      window.quantConfig.environments[env].apiBaseUrl = url;
       console.log(`[Config] Custom API URL for ${env}: ${url}`);
       return true;
     },

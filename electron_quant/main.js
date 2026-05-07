@@ -25,6 +25,7 @@ const { spawn } = require('node:child_process');
 const { createLogger } = require('./backend/logging/logger');
 const { ENV_EXAMPLE } = require('./backend/config/env');
 const { resolveListenHost } = require('./backend/config/runtime');
+const { resolveUiEntry } = require('./backend/server/ui-entry');
 const { createJsonStore } = require('./backend/memory/json-store');
 const { createDefaultBotState, mergeBotState } = require('./backend/services/bot-state-service');
 const { createDefaultRiskConfig, assertTradingRealCanBeEnabled, validateRiskConfig } = require('./backend/risk/risk-policy');
@@ -1589,7 +1590,7 @@ function readBody(req) {
   });
 }
 
-function serveStatic(req, res, pathname) {
+function serveStatic(req, res, urlLike) {
   const mimeFor = (p) => {
     const e = path.extname(p);
     if (e === '.css')  return 'text/css';
@@ -1605,26 +1606,45 @@ function serveStatic(req, res, pathname) {
     fs.createReadStream(full).pipe(res);
   };
 
-  // Login page
-  if (pathname === '/login') {
-    const f = path.join(__dirname, 'public', 'login.html');
-    if (fs.existsSync(f)) { sendFile(f, 'text/html'); return; }
+  const pathname = String(urlLike?.pathname || '/');
+  const resolvedUiEntry = resolveUiEntry(urlLike);
+
+  if (resolvedUiEntry.mode === 'login') {
+    const loginFile = path.join(__dirname, 'public', resolvedUiEntry.file);
+    if (fs.existsSync(loginFile)) { sendFile(loginFile, 'text/html'); return; }
   }
 
-  const file = pathname === '/' ? 'index.html' : pathname.replace(/^\//, '');
+  const file = resolvedUiEntry.file;
+  const publicRoot = path.join(__dirname, 'public');
+  const srcRoot = path.join(__dirname, 'src');
 
-  // public/ first (cloud/web UI)
-  const pubFull = path.join(__dirname, 'public', file);
-  if (pubFull.startsWith(path.join(__dirname, 'public')) && fs.existsSync(pubFull)) {
+  if (resolvedUiEntry.root === 'public') {
+    const publicFile = path.join(publicRoot, file);
+    if (publicFile.startsWith(publicRoot) && fs.existsSync(publicFile)) {
+      sendFile(publicFile, mimeFor(publicFile)); return;
+    }
+    res.writeHead(404); res.end('Not found'); return;
+  }
+
+  if (resolvedUiEntry.root === 'src') {
+    const srcFile = path.join(srcRoot, file);
+    if (srcFile.startsWith(srcRoot) && fs.existsSync(srcFile)) {
+      sendFile(srcFile, mimeFor(srcFile)); return;
+    }
+    res.writeHead(404); res.end('Not found'); return;
+  }
+
+  const pubFull = path.join(publicRoot, file);
+  if (pubFull.startsWith(publicRoot) && fs.existsSync(pubFull)) {
     sendFile(pubFull, mimeFor(pubFull)); return;
   }
 
-  // fallback: src/ (desktop Electron app assets)
-  const srcFull = path.join(__dirname, 'src', file);
-  if (!srcFull.startsWith(path.join(__dirname, 'src')) || !fs.existsSync(srcFull)) {
-    res.writeHead(404); res.end('Not found'); return;
+  const srcFull = path.join(srcRoot, file);
+  if (srcFull.startsWith(srcRoot) && fs.existsSync(srcFull)) {
+    sendFile(srcFull, mimeFor(srcFull)); return;
   }
-  sendFile(srcFull, mimeFor(srcFull));
+
+  res.writeHead(404); res.end('Not found');
 }
 
 async function handleApi(req, res, url) {
@@ -2285,7 +2305,7 @@ function startLocalWebServer() {
       }
 
       if (url.pathname.startsWith('/api/')) return handleApi(req, res, url);
-      return serveStatic(req, res, url.pathname);
+      return serveStatic(req, res, url);
     });
     webServer.once('error', (err) => {
       webServer = null;

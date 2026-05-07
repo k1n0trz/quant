@@ -55,6 +55,9 @@ if (!window.heroController) {
       window.addEventListener('training-toggled', (e) => {
         window.heroController.updateUI();
       });
+      window.addEventListener('kill-switch-toggled', (e) => {
+        window.heroController.updateUI();
+      });
       window.addEventListener('kill-switch-activated', (e) => {
         window.heroController.updateUI();
       });
@@ -96,7 +99,12 @@ if (!window.heroController) {
 
       // Kill Switch button
       if (el.killSwitchBtn) {
-        el.killSwitchBtn.addEventListener('click', () => {
+        el.killSwitchBtn.addEventListener('click', async () => {
+          if (window.quantStateManager.killSwitch.enabled) {
+            await window.quantStateManager.setKillSwitch(false);
+            window.heroController.updateUI();
+            return;
+          }
           window.heroController.showKillSwitchConfirm();
         });
       }
@@ -125,7 +133,9 @@ if (!window.heroController) {
       }
 
       if (el.tradingRealToggle) {
+        el.tradingRealToggle.disabled = state.killSwitch;
         el.tradingRealToggle.classList.toggle('active', state.tradingReal);
+        el.tradingRealToggle.classList.toggle('disabled', state.killSwitch);
         el.tradingRealToggle.querySelector('.toggle-state').textContent = state.tradingReal
           ? 'DISABLE'
           : 'ENABLE';
@@ -153,6 +163,19 @@ if (!window.heroController) {
       // Update pause button visibility
       if (el.pauseTradingBtn) {
         el.pauseTradingBtn.style.display = state.tradingReal ? 'flex' : 'none';
+      }
+
+      if (el.killSwitchBtn) {
+        el.killSwitchBtn.classList.toggle('active', state.killSwitch);
+        el.killSwitchBtn.querySelector('span:last-child').textContent = state.killSwitch
+          ? 'RESUME TRADING'
+          : 'KILL SWITCH';
+        el.killSwitchBtn.setAttribute(
+          'title',
+          state.killSwitch
+            ? 'Kill switch active: real trading is blocked'
+            : 'Stop all real trading operations immediately'
+        );
       }
     },
 
@@ -202,7 +225,7 @@ if (!window.heroController) {
       if (confirmBtn) {
         confirmBtn.onclick = async () => {
           clearInterval(countdownInterval);
-          await window.quantStateManager.killSwitch();
+          await window.quantStateManager.setKillSwitch(true);
           el.killSwitchConfirm.style.display = 'none';
           window.heroController.updateUI();
         };

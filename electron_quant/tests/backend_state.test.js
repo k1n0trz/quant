@@ -42,7 +42,30 @@ test('trading real and training are independent toggles', () => {
 test('kill switch blocks enabling real trading', () => {
   const state = setKillSwitch(createDefaultBotState(), true);
   const risk = createDefaultRiskConfig();
+  assert.equal(state.tradingRealEnabled, false);
+  assert.equal(state.paperMode, true);
   assert.throws(() => toggleTradingReal(state, true, risk), /kill switch/i);
+});
+
+test('kill switch preserves training state while blocking real trading', () => {
+  const base = {
+    ...createDefaultBotState(),
+    trainingEnabled: true,
+    tradingRealEnabled: true,
+    paperMode: false
+  };
+
+  const active = setKillSwitch(base, true);
+  assert.equal(active.killSwitch, true);
+  assert.equal(active.tradingRealEnabled, false);
+  assert.equal(active.paperMode, true);
+  assert.equal(active.trainingEnabled, true);
+
+  const released = setKillSwitch(active, false);
+  assert.equal(released.killSwitch, false);
+  assert.equal(released.tradingRealEnabled, false);
+  assert.equal(released.paperMode, true);
+  assert.equal(released.trainingEnabled, true);
 });
 
 test('real trading requires minimum risk rules', () => {

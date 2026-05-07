@@ -1,13 +1,14 @@
 openapi: 3.1.0
 info:
-  title: Quant API Contract v1
-  version: 1.0.0
+  title: Quant API Contract v1.1
+  version: 1.1.0
   summary: Official stable API contract for the current Quant backend.
   description: |
-    Quant API Contract v1 documents the backend exactly as implemented today.
+    Quant API Contract v1.1 documents the backend exactly as implemented today.
 
     Compatibility rules:
     - No endpoint behavior is changed by this document.
+    - v1.1 adds official kill-switch control endpoints without breaking v1 clients.
     - This contract preserves backward compatibility with the current frontend integration path.
     - Current authentication is session-cookie based when `WEB_AUTH_ENABLED=true`.
     - Future Google OAuth, multiuser SaaS flows, mobile clients, and full web frontend support must remain backward compatible with this contract.
@@ -259,6 +260,81 @@ paths:
                   value:
                     tradingRealEnabled: false
                     trainingEnabled: false
+                    killSwitch: false
+                    paperMode: true
+                    updatedAt: '2026-05-06T20:30:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/bot/kill-switch/on:
+    post:
+      tags: [Bot]
+      summary: Activate kill switch
+      description: |
+        Activates the global kill switch. When active:
+        - `tradingRealEnabled` is forced to `false`
+        - `paperMode` is forced to `true`
+        - real trading execution remains blocked by backend policy
+        - `trainingEnabled` remains unchanged
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmptyObject'
+            examples:
+              empty:
+                value: {}
+      responses:
+        '200':
+          description: Kill switch activated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotState'
+              examples:
+                killSwitchOn:
+                  value:
+                    tradingRealEnabled: false
+                    trainingEnabled: true
+                    killSwitch: true
+                    paperMode: true
+                    updatedAt: '2026-05-06T20:30:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/bot/kill-switch/off:
+    post:
+      tags: [Bot]
+      summary: Deactivate kill switch
+      description: |
+        Deactivates the global kill switch. This does not re-enable real trading automatically.
+        Clients must still call `/api/bot/trading-real/on` and satisfy risk validation before any real execution can resume.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmptyObject'
+            examples:
+              empty:
+                value: {}
+      responses:
+        '200':
+          description: Kill switch deactivated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotState'
+              examples:
+                killSwitchOff:
+                  value:
+                    tradingRealEnabled: false
+                    trainingEnabled: true
                     killSwitch: false
                     paperMode: true
                     updatedAt: '2026-05-06T20:30:00.000Z'

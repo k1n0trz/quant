@@ -6,6 +6,11 @@
 // Extended state object (complementa el state global en renderer.js)
 if (!window.quantStateManager) {
   window.quantStateManager = {
+    killSwitch: {
+      enabled: false,
+      lastUpdated: null,
+    },
+
     // Estado de Trading Real
     tradingReal: {
       enabled: false,
@@ -75,22 +80,34 @@ if (!window.quantStateManager) {
       console.log('[StateManager] Training toggled:', enable ? 'ON' : 'OFF');
     },
 
-    // Kill Switch - detener todo
-    killSwitch: async () => {
-      console.warn('[StateManager] KILL SWITCH ACTIVATED');
+    setKillSwitch: async (enable) => {
+      const nextEnabled = Boolean(enable);
+      console.warn(
+        `[StateManager] KILL SWITCH ${nextEnabled ? 'ACTIVATED' : 'DEACTIVATED'}`
+      );
 
-      // Llamar al backend
-      // await window.quant.botKillSwitch();
+      window.quantStateManager.killSwitch.enabled = nextEnabled;
+      window.quantStateManager.killSwitch.lastUpdated = new Date();
 
-      window.quantStateManager.tradingReal.enabled = false;
-      window.quantStateManager.training.enabled = false;
-      window.quantStateManager.tradingReal.lastUpdated = new Date();
-      window.quantStateManager.training.lastUpdated = new Date();
+      if (nextEnabled) {
+        window.quantStateManager.tradingReal.enabled = false;
+        window.quantStateManager.tradingReal.lastUpdated = new Date();
+      }
 
-      // Despachar evento
-      window.dispatchEvent(new CustomEvent('kill-switch-activated'));
+      window.dispatchEvent(
+        new CustomEvent('kill-switch-toggled', {
+          detail: { enabled: nextEnabled },
+        })
+      );
 
-      console.log('[StateManager] All operations stopped');
+      if (nextEnabled) {
+        window.dispatchEvent(new CustomEvent('kill-switch-activated'));
+      }
+
+      console.log(
+        '[StateManager] Real trading stopped, training preserved:',
+        window.quantStateManager.training.enabled ? 'ON' : 'OFF'
+      );
     },
 
     // Obtener estado actual como objeto
@@ -99,6 +116,7 @@ if (!window.quantStateManager) {
         botState: window.quantStateManager.botState,
         tradingReal: window.quantStateManager.tradingReal.enabled,
         training: window.quantStateManager.training.enabled,
+        killSwitch: window.quantStateManager.killSwitch.enabled,
       };
     },
 
@@ -106,6 +124,7 @@ if (!window.quantStateManager) {
     reset: () => {
       window.quantStateManager.tradingReal.enabled = false;
       window.quantStateManager.training.enabled = false;
+      window.quantStateManager.killSwitch.enabled = false;
       console.log('[StateManager] State reset');
     },
   };

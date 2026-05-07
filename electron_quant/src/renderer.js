@@ -3259,7 +3259,10 @@ async function updateHeroSection() {
       // Sync local state with backend authoritative state
       window.quantStateManager.tradingReal.enabled = statusData.bot.tradingRealEnabled;
       window.quantStateManager.training.enabled = statusData.bot.trainingEnabled;
+      window.quantStateManager.killSwitch.enabled = statusData.bot.killSwitch;
       window.quantStateManager.tradingReal.lastUpdated = new Date(statusData.bot.updatedAt);
+      window.quantStateManager.training.lastUpdated = new Date(statusData.bot.updatedAt);
+      window.quantStateManager.killSwitch.lastUpdated = new Date(statusData.bot.updatedAt);
     }
 
     // Update hero controller UI with synced state
@@ -3441,9 +3444,41 @@ async function setTrainingBackend(enabled) {
   }
 }
 
-// NOTE: Kill switch is NOT an endpoint in Quant API Contract v1.
-// killSwitch is a boolean field in BotState, not a separate action.
-// Frontend kill-switch button is local-only for now. Future versions may require backend integration.
+async function setKillSwitchBackend(enabled) {
+  try {
+    const endpoint = enabled
+      ? window.quantConfig.getEndpoint('/api/bot/kill-switch/on')
+      : window.quantConfig.getEndpoint('/api/bot/kill-switch/off');
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({})
+    });
+
+    if (response.status === 401) {
+      logEvent('ERR', 'Kill Switch: Not authenticated');
+      return false;
+    }
+    if (response.status === 500) {
+      logEvent('ERR', 'Kill Switch: Server error');
+      return false;
+    }
+    if (response.status === 200) {
+      const botState = await response.json();
+      logEvent('OK', `Kill Switch: ${botState.killSwitch ? 'ON' : 'OFF'}`);
+      updateHeroSection();
+      return true;
+    }
+
+    logEvent('ERR', `Kill Switch: Unexpected status ${response.status}`);
+    return false;
+  } catch (err) {
+    logEvent('ERR', `Kill Switch API error: ${err.message}`);
+    return false;
+  }
+}
 
 // PHASE 2: Connect state manager to Quant API Contract v1 endpoints
 if (window.quantStateManager) {
@@ -3464,8 +3499,13 @@ if (window.quantStateManager) {
     }
   };
 
-  // Kill switch is local-only in this version (not in API contract v1)
-  // quantStateManager.killSwitch() remains as local toggle
+  const originalSetKillSwitch = window.quantStateManager.setKillSwitch;
+  window.quantStateManager.setKillSwitch = async function(enable) {
+    const success = await setKillSwitchBackend(enable);
+    if (success) {
+      originalSetKillSwitch.call(this, enable);
+    }
+  };
 }
 
 function drawPerf() {

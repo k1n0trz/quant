@@ -54,3 +54,30 @@ test('connections route reports MT5 as optional adapter', async () => {
   assert.equal(res.body.adapters.binance.required, true);
   assert.equal(res.body.adapters.mt5.optional, true);
 });
+
+test('kill switch routes toggle authoritative backend state', async () => {
+  const context = createBackendContext({
+    botState: {
+      ...createDefaultBotState(),
+      tradingRealEnabled: true,
+      trainingEnabled: true,
+      paperMode: false
+    },
+    riskConfig: createDefaultRiskConfig()
+  });
+  const router = createApiRouter(context);
+
+  const onRes = await router.dispatch({ method: 'POST', pathname: '/api/bot/kill-switch/on', body: {} });
+  assert.equal(onRes.status, 200);
+  assert.equal(onRes.body.killSwitch, true);
+  assert.equal(onRes.body.tradingRealEnabled, false);
+  assert.equal(onRes.body.paperMode, true);
+  assert.equal(onRes.body.trainingEnabled, true);
+
+  const offRes = await router.dispatch({ method: 'POST', pathname: '/api/bot/kill-switch/off', body: {} });
+  assert.equal(offRes.status, 200);
+  assert.equal(offRes.body.killSwitch, false);
+  assert.equal(offRes.body.tradingRealEnabled, false);
+  assert.equal(offRes.body.paperMode, true);
+  assert.equal(offRes.body.trainingEnabled, true);
+});

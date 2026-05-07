@@ -7,7 +7,8 @@
     "start": "electron .",
     "web": "electron .",
     "start:backend": "node main.js",
-    "test:backend": "node tests/backend_state.test.js && node tests/backend_routes.test.js && node tests/training_static.test.js",
+    "test:backend": "node tests/backend_state.test.js && node tests/backend_routes.test.js && node tests/training_static.test.js && node tests/vps_runtime.test.js",
+    "healthcheck": "node scripts/healthcheck.js",
     "pack": "electron-packager . Quant --platform=win32 --arch=x64 --out=dist --overwrite --asar=false --ignore=dist --ignore=\\.git"
   },
   "devDependencies": {

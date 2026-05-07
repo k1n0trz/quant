@@ -3235,7 +3235,7 @@ async function updateHeroSection() {
 
   try {
     // Fetch bot status from contract v1 (every 3 seconds)
-    const statusResponse = await fetch('http://127.0.0.1:47829/api/status', {
+    const statusResponse = await fetch(window.quantConfig.getEndpoint('/api/status'), {
       credentials: 'include'
     });
 
@@ -3271,7 +3271,7 @@ async function updateHeroSection() {
       window._lastTradesFetch = now;
 
       try {
-        const tradesResponse = await fetch('http://127.0.0.1:47829/api/trades', {
+        const tradesResponse = await fetch(window.quantConfig.getEndpoint('/api/trades'), {
           credentials: 'include'
         });
 
@@ -3323,7 +3323,7 @@ async function updateHeroSection() {
       window._lastSignalsFetch = now;
 
       try {
-        const signalsResponse = await fetch('http://127.0.0.1:47829/api/signals', {
+        const signalsResponse = await fetch(window.quantConfig.getEndpoint('/api/signals'), {
           credentials: 'include'
         });
 
@@ -3366,8 +3366,8 @@ function getTimeAgoText(date) {
 async function setTradingRealBackend(enabled) {
   try {
     const endpoint = enabled
-      ? 'http://127.0.0.1:47829/api/bot/trading-real/on'
-      : 'http://127.0.0.1:47829/api/bot/trading-real/off';
+      ? window.quantConfig.getEndpoint('/api/bot/trading-real/on')
+      : window.quantConfig.getEndpoint('/api/bot/trading-real/off');
 
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -3408,8 +3408,8 @@ async function setTradingRealBackend(enabled) {
 async function setTrainingBackend(enabled) {
   try {
     const endpoint = enabled
-      ? 'http://127.0.0.1:47829/api/bot/training/on'
-      : 'http://127.0.0.1:47829/api/bot/training/off';
+      ? window.quantConfig.getEndpoint('/api/bot/training/on')
+      : window.quantConfig.getEndpoint('/api/bot/training/off');
 
     const response = await fetch(endpoint, {
       method: 'POST',

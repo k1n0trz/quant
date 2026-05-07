@@ -24,6 +24,7 @@ const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { createLogger } = require('./backend/logging/logger');
 const { ENV_EXAMPLE } = require('./backend/config/env');
+const { resolveListenHost } = require('./backend/config/runtime');
 const { createJsonStore } = require('./backend/memory/json-store');
 const { createDefaultBotState, mergeBotState } = require('./backend/services/bot-state-service');
 const { createDefaultRiskConfig, assertTradingRealCanBeEnabled, validateRiskConfig } = require('./backend/risk/risk-policy');
@@ -38,7 +39,7 @@ const CLOUD_ENV_KEYS = [
   'MT5_ACCOUNT1_LOGIN','MT5_ACCOUNT1_PASSWORD','MT5_ACCOUNT1_SERVER',
   'MT5_ACCOUNT2_LOGIN','MT5_ACCOUNT2_PASSWORD','MT5_ACCOUNT2_SERVER',
   'WEB_AUTH_ENABLED','WEB_AUTH_EMAIL','WEB_AUTH_PASSWORD',
-  'QUANT_WEB_PORT','QUANT_DATA_DIR','QUANT_SYNC_URL','QUANT_SYNC_KEY',
+  'QUANT_WEB_PORT','QUANT_WEB_HOST','QUANT_DATA_DIR','QUANT_SYNC_URL','QUANT_SYNC_KEY',
   'QUANT_DESKTOP_DOWNLOAD_URL','DEFAULT_PROVIDER','QUANT_PRIMARY_MODEL',
   'DEEPSEEK_MODEL','DEEPSEEK_BASE_URL','DEEPINFRA_MODEL','DEEPINFRA_BASE_URL',
   'MATEO_WEB_AUTH_PASSWORD'
@@ -2233,7 +2234,7 @@ function startLocalWebServer() {
   if (webServer) return;
   // Cloud Run injects PORT; also accept QUANT_WEB_PORT for self-hosting
   const basePort = Number(process.env.PORT || ENV.QUANT_WEB_PORT || 47829);
-  const listenHost = IS_ELECTRON ? '127.0.0.1' : '0.0.0.0';
+  const listenHost = resolveListenHost({ isElectron: IS_ELECTRON, env: { ...ENV, ...process.env } });
   const tryListen = (port, attemptsLeft) => {
     activeWebPort = port;
     webServer = http.createServer(async (req, res) => {

@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>QUANT - Component Testing</title>
+  <link rel="stylesheet" href="./styles.css" />
+  <style>
+    body {
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      padding: 20px;
+    }
+    .test-container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .test-section {
+      margin-bottom: 40px;
+    }
+    .test-title {
+      font-size: 18px;
+      font-weight: 800;
+      font-family: var(--font-mono);
+      margin-bottom: 16px;
+      color: var(--cyan);
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .test-subtitle {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+    }
+    .test-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 768px) {
+      .test-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="test-container">
+    <h1 style="margin-bottom: 30px; font-family: var(--font-mono);">
+      ◆ QUANT - COMPONENT TESTING (PHASE 0)
+    </h1>
+
+    <!-- ═══ BOT STATE HERO ═══ -->
+    <div class="test-section">
+      <h2 class="test-title">Bot State Hero Section</h2>
+      <p class="test-subtitle">MVP component - status display & controls</p>
+
+      <div class="test-grid">
+        <!-- Hero 1: OPERATING - Both ON -->
+        <div>
+          <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">
+            State: OPERATING (Trading ON + Training ON)
+          </p>
+          <section class="bot-state-hero">
+            <div class="hero-header">
+              <div class="hero-mark">◆</div>
+              <h1>QUANT STATUS</h1>
+            </div>
+
+            <div class="hero-body">
+              <div class="state-row mode-row">
+                <label>MODE</label>
+                <span class="state-value operating">OPERATING</span>
+              </div>
+
+              <div class="state-row control-row">
+                <div class="control-left">
+                  <label>TRADING REAL</label>
+                  <div class="control-indicator">
+                    <span class="indicator-dot trading-live"></span>
+                    <span class="control-status">ON</span>
+                  </div>
+                </div>
+                <button class="control-btn toggle-btn active">DISABLE</button>
+              </div>
+
+              <div class="state-row control-row">
+                <div class="control-left">
+                  <label>TRAINING</label>
+                  <div class="control-indicator">
+                    <span class="indicator-dot training-sim"></span>
+                    <span class="control-status training">ON</span>
+                  </div>
+                </div>
+                <button class="control-btn toggle-btn active training">DISABLE</button>
+              </div>
+
+              <div class="state-metric pnl-metric">
+                <label>P&L TODAY</label>
+                <span class="metric-value positive">+$1,234.56</span>
+                <span class="metric-change">+5.67%</span>
+              </div>
+
+              <div class="state-metric last-action">
+                <label>LAST ACTION</label>
+                <span class="action-text">BUY BTCUSDT @ $42,541 • 5 mins ago</span>
+              </div>
+
+              <div class="state-metric confidence">
+                <label>CONFIDENCE</label>
+                <div class="confidence-bar">
+                  <div class="confidence-fill" style="width: 87%"></div>
+                </div>
+                <span class="confidence-text">87%</span>
+              </div>
+            </div>
+
+            <div class="hero-footer">
+              <button class="btn-secondary">
+                <span>⏸</span>
+                <span>PAUSE</span>
+              </button>
+              <button class="btn-danger kill-switch">
+                <span>⚠</span>
+                <span>KILL SWITCH</span>
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <!-- Hero 2: IDLE - Both OFF -->
+        <div>
+          <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">
+            State: IDLE (Trading OFF + Training OFF)
+          </p>
+          <section class="bot-state-hero">
+            <div class="hero-header">
+              <div class="hero-mark">◆</div>
+              <h1>QUANT STATUS</h1>
+            </div>
+
+            <div class="hero-body">
+              <div class="state-row mode-row">
+                <label>MODE</label>
+                <span class="state-value idle">IDLE</span>
+              </div>
+
+              <div class="state-row control-row">
+                <div class="control-left">
+                  <label>TRADING REAL</label>
+                  <div class="control-indicator">
+                    <span class="indicator-dot trading-live off"></span>
+                    <span class="control-status off">OFF</span>
+                  </div>
+                </div>
+                <button class="control-btn toggle-btn">ENABLE</button>
+              </div>
+
+              <div class="state-row control-row">
+                <div class="control-left">
+                  <label>TRAINING</label>
+                  <div class="control-indicator">
+                    <span class="indicator-dot training-sim off"></span>
+                    <span class="control-status off">OFF</span>
+                  </div>
+                </div>
+                <button class="control-btn toggle-btn">ENABLE</button>
+              </div>
+
+              <div class="state-metric pnl-metric">
+                <label>P&L TODAY</label>
+                <span class="metric-value">+$0.00</span>
+                <span class="metric-change">0.00%</span>
+              </div>
+
+              <div class="state-metric last-action">
+                <label>LAST ACTION</label>
+                <span class="action-text">No operations yet</span>
+              </div>
+
+              <div class="state-metric confidence">
+                <label>CONFIDENCE</label>
+                <div class="confidence-bar">
+                  <div class="confidence-fill" style="width: 0%"></div>
+                </div>
+                <span class="confidence-text">0%</span>
+              </div>
+            </div>
+
+            <div class="hero-footer">
+              <button class="btn-secondary" style="display: none;">
+                <span>⏸</span>
+                <span>PAUSE</span>
+              </button>
+              <button class="btn-danger kill-switch">
+                <span>⚠</span>
+                <span>KILL SWITCH</span>
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <!-- Hero 3: LEARNING -->
+      <div>
+        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">
+          State: LEARNING (Training ON + Trading OFF)
+        </p>
+        <section class="bot-state-hero" style="max-width: 600px;">
+          <div class="hero-header">
+            <div class="hero-mark">◆</div>
+            <h1>QUANT STATUS</h1>
+          </div>
+
+          <div class="hero-body">
+            <div class="state-row mode-row">
+              <label>MODE</label>
+              <span class="state-value learning">LEARNING</span>
+            </div>
+
+            <div class="state-row control-row">
+              <div class="control-left">
+                <label>TRADING REAL</label>
+                <div class="control-indicator">
+                  <span class="indicator-dot trading-live off"></span>
+                  <span class="control-status off">OFF</span>
+                </div>
+              </div>
+              <button class="control-btn toggle-btn">ENABLE</button>
+            </div>
+
+            <div class="state-row control-row">
+              <div class="control-left">
+                <label>TRAINING</label>
+                <div class="control-indicator">
+                  <span class="indicator-dot training-sim"></span>
+                  <span class="control-status training">ON</span>
+                </div>
+              </div>
+              <button class="control-btn toggle-btn active training">DISABLE</button>
+            </div>
+
+            <div class="state-metric pnl-metric">
+              <label>P&L TODAY</label>
+              <span class="metric-value negative">-$150.00</span>
+              <span class="metric-change negative">-1.50%</span>
+            </div>
+
+            <div class="state-metric last-action">
+              <label>LAST ACTION</label>
+              <span class="action-text">Simulated SELL ETHUSDT @ $2,145 • 12 mins ago</span>
+            </div>
+
+            <div class="state-metric confidence">
+              <label>CONFIDENCE</label>
+              <div class="confidence-bar">
+                <div class="confidence-fill" style="width: 62%"></div>
+              </div>
+              <span class="confidence-text">62%</span>
+            </div>
+          </div>
+
+          <div class="hero-footer">
+            <button class="btn-secondary" style="display: none;">
+              <span>⏸</span>
+              <span>PAUSE</span>
+            </button>
+            <button class="btn-danger kill-switch">
+              <span>⚠</span>
+              <span>KILL SWITCH</span>
+            </button>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- ═══ COLLAPSABLE PANELS ═══ -->
+    <div class="test-section">
+      <h2 class="test-title">Collapsable Panels</h2>
+      <p class="test-subtitle">Secondary sections - progressive disclosure</p>
+
+      <div class="panel-collapsable" data-section="training">
+        <div class="panel-header-collapsable">
+          <div class="panel-title-group">
+            <h2 class="panel-title-collapsable">TRAINING MODE</h2>
+            <span class="panel-subtitle-collapsable">Demo account with simulated trades</span>
+          </div>
+          <button class="panel-toggle-btn">
+            <span class="toggle-icon">▼</span>
+          </button>
+        </div>
+        <div class="panel-content-collapsable">
+          <p style="color: var(--text-secondary); margin: 0 0 10px;">
+            Training mode active. All trades are simulated using live market data.
+          </p>
+          <div style="background: var(--bg-elevated); padding: 10px; border-radius: 4px; font-size: 12px;">
+            <div style="margin-bottom: 6px;">
+              <b>Demo Balance:</b> $100,000
+            </div>
+            <div style="margin-bottom: 6px;">
+              <b>Trades Today:</b> 5
+            </div>
+            <div>
+              <b>Win Rate:</b> 60%
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-collapsable" data-section="historical">
+        <div class="panel-header-collapsable">
+          <div class="panel-title-group">
+            <h2 class="panel-title-collapsable">HISTORICAL DATA</h2>
+            <span class="panel-subtitle-collapsable">Past operations and performance</span>
+          </div>
+          <button class="panel-toggle-btn">
+            <span class="toggle-icon">▼</span>
+          </button>
+        </div>
+        <div class="panel-content-collapsable">
+          <p style="color: var(--text-secondary); margin: 0 0 10px;">
+            Historical performance metrics and trade analysis.
+          </p>
+          <div style="background: var(--bg-elevated); padding: 10px; border-radius: 4px; font-size: 12px;">
+            <div style="margin-bottom: 6px;">
+              <b>Total Trades:</b> 247
+            </div>
+            <div style="margin-bottom: 6px;">
+              <b>Win Rate:</b> 58.7%
+            </div>
+            <div>
+              <b>Profit Factor:</b> 1.82
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-collapsable collapsed" data-section="advanced">
+        <div class="panel-header-collapsable">
+          <div class="panel-title-group">
+            <h2 class="panel-title-collapsable">ADVANCED SETTINGS</h2>
+            <span class="panel-subtitle-collapsable">Risk parameters and calibration</span>
+          </div>
+          <button class="panel-toggle-btn">
+            <span class="toggle-icon">▼</span>
+          </button>
+        </div>
+        <div class="panel-content-collapsable">
+          <p style="color: var(--text-secondary); margin: 0;">
+            This panel is collapsed by default (demo state).
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ KILL SWITCH DIALOG ═══ -->
+    <div class="test-section">
+      <h2 class="test-title">Kill Switch Dialog</h2>
+      <p class="test-subtitle">Emergency stop confirmation</p>
+
+      <p style="color: var(--text-secondary); margin-bottom: 12px;">
+        Click button to simulate Kill Switch dialog:
+      </p>
+      <button
+        class="kill-switch-btn"
+        onclick="document.getElementById('testKillDialog').style.display = 'block'"
+      >
+        <span class="ks-icon">⚠</span>
+        <span class="ks-text">KILL</span>
+      </button>
+
+      <!-- Dialog (hidden) -->
+      <div
+        class="kill-switch-dialog"
+        id="testKillDialog"
+        style="display: none; z-index: 999;"
+      >
+        <div class="ks-dialog-inner">
+          <div class="ks-dialog-header">
+            <span class="ks-dialog-icon">⚠</span>
+            <h3>EMERGENCY STOP</h3>
+          </div>
+          <div class="ks-dialog-content">
+            <p class="ks-warning">Stop all operations immediately?</p>
+            <p class="ks-hint">This action cannot be undone in this session.</p>
+            <div class="ks-timer">
+              <span class="ks-timer-text">Confirm in:</span>
+              <span class="ks-timer-countdown">3</span>
+              <span class="ks-timer-sec">seconds</span>
+            </div>
+            <div class="ks-progress">
+              <div
+                class="ks-progress-bar"
+                style="animation: progress-fill 3s linear forwards;"
+              ></div>
+            </div>
+          </div>
+          <div class="ks-dialog-actions">
+            <button
+              class="btn-secondary ks-cancel"
+              onclick="document.getElementById('testKillDialog').style.display = 'none'"
+            >
+              CANCEL
+            </button>
+            <button class="btn-danger ks-confirm">CONFIRM STOP</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ RESPONSIVE TEST ═══ -->
+    <div class="test-section">
+      <h2 class="test-title">Responsive Testing</h2>
+      <p class="test-subtitle">Resize window or use device emulation</p>
+
+      <p style="color: var(--text-secondary); margin-bottom: 12px; font-size: 12px;">
+        ✓ Mobile: 375px → Stacked layout, full-width buttons<br/>
+        ✓ Tablet: 768px → Two-column layout<br/>
+        ✓ Desktop: 1024px+ → Full grid layout
+      </p>
+
+      <section class="bot-state-hero">
+        <div class="hero-header">
+          <div class="hero-mark">◆</div>
+          <h1>RESPONSIVE TEST</h1>
+        </div>
+
+        <div class="hero-body">
+          <div class="state-row control-row">
+            <div class="control-left">
+              <label>TRADING REAL</label>
+              <div class="control-indicator">
+                <span class="indicator-dot trading-live"></span>
+                <span class="control-status">ON</span>
+              </div>
+            </div>
+            <button class="control-btn toggle-btn active">DISABLE</button>
+          </div>
+
+          <div class="state-row control-row">
+            <div class="control-left">
+              <label>TRAINING</label>
+              <div class="control-indicator">
+                <span class="indicator-dot training-sim"></span>
+                <span class="control-status training">ON</span>
+              </div>
+            </div>
+            <button class="control-btn toggle-btn active training">DISABLE</button>
+          </div>
+        </div>
+
+        <div class="hero-footer">
+          <button class="btn-secondary">
+            <span>⏸</span>
+            <span>PAUSE</span>
+          </button>
+          <button class="btn-danger kill-switch">
+            <span>⚠</span>
+            <span>KILL SWITCH</span>
+          </button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="./modules/state-manager.js"></script>
+  <script src="./modules/hero-controller.js"></script>
+  <script src="./modules/collapsable-panels.js"></script>
+
+  <script>
+    // Initialize all components on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      // Init state manager with test state
+      window.quantStateManager.tradingReal.enabled = true;
+      window.quantStateManager.training.enabled = true;
+
+      // Init hero controller
+      window.heroController.init();
+
+      // Init collapsable panels
+      window.collapsablePanels.init();
+
+      console.log('[Testing] All modules initialized');
+      console.log('[Testing] State:', window.quantStateManager.getState());
+    });
+  </script>
+</body>
+</html>

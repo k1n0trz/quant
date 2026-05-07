@@ -1,0 +1,32 @@
+<!-- Kill Switch Component - Emergency stop button -->
+<!-- This is a standalone component that can be used in topbar and hero -->
+<button class="kill-switch-btn" id="killSwitch" title="EMERGENCY: Stop all trading and training immediately">
+  <span class="ks-icon">⚠</span>
+  <span class="ks-text">KILL</span>
+</button>
+
+<!-- Confirmation dialog (positioned fixed) -->
+<div class="kill-switch-dialog" id="killSwitchDialog" style="display: none;">
+  <div class="ks-dialog-inner">
+    <div class="ks-dialog-header">
+      <span class="ks-dialog-icon">⚠</span>
+      <h3>EMERGENCY STOP</h3>
+    </div>
+    <div class="ks-dialog-content">
+      <p class="ks-warning">Stop all operations immediately?</p>
+      <p class="ks-hint">This action cannot be undone in this session.</p>
+      <div class="ks-timer">
+        <span class="ks-timer-text">Confirm in:</span>
+        <span class="ks-timer-countdown" id="ksCountdown">3</span>
+        <span class="ks-timer-sec">seconds</span>
+      </div>
+      <div class="ks-progress">
+        <div class="ks-progress-bar" id="ksProgressBar"></div>
+      </div>
+    </div>
+    <div class="ks-dialog-actions">
+      <button class="btn-secondary ks-cancel" id="ksCancelBtn">CANCEL</button>
+      <button class="btn-danger ks-confirm" id="ksConfirmBtn" disabled>CONFIRM STOP</button>
+    </div>
+  </div>
+</div>

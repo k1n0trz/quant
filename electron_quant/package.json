@@ -1,0 +1,20 @@
+{
+  "name": "quant-ai-trading-system",
+  "version": "0.2.0",
+  "description": "Quant desktop AI trading dashboard",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "web": "electron .",
+    "start:backend": "node main.js",
+    "test:backend": "node tests/backend_state.test.js && node tests/backend_routes.test.js && node tests/training_static.test.js",
+    "pack": "electron-packager . Quant --platform=win32 --arch=x64 --out=dist --overwrite --asar=false --ignore=dist --ignore=\\.git"
+  },
+  "devDependencies": {
+    "electron": "^39.2.6",
+    "electron-packager": "^17.1.2"
+  },
+  "dependencies": {
+    "nodemailer": "^8.0.7"
+  }
+}

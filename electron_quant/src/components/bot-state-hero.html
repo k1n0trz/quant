@@ -1,0 +1,91 @@
+<!-- Bot State Hero Section - MVP of the dashboard -->
+<section class="bot-state-hero">
+  <div class="hero-header">
+    <div class="hero-mark">◆</div>
+    <h1>QUANT STATUS</h1>
+  </div>
+
+  <div class="hero-body">
+    <!-- Mode Display -->
+    <div class="state-row mode-row">
+      <label>MODE</label>
+      <span class="state-value" id="botStateMode">IDLE</span>
+    </div>
+
+    <!-- Trading Real Control -->
+    <div class="state-row control-row">
+      <div class="control-left">
+        <label>TRADING REAL</label>
+        <div class="control-indicator">
+          <span class="indicator-dot trading-live" id="tradingRealDot"></span>
+          <span class="control-status" id="tradingRealStatus">OFF</span>
+        </div>
+      </div>
+      <button class="control-btn toggle-btn" id="tradingRealToggle" data-toggle="trading-real">
+        <span class="toggle-state">ENABLE</span>
+      </button>
+    </div>
+
+    <!-- Training Control -->
+    <div class="state-row control-row">
+      <div class="control-left">
+        <label>TRAINING</label>
+        <div class="control-indicator">
+          <span class="indicator-dot training-sim" id="trainingDot"></span>
+          <span class="control-status" id="trainingStatus">OFF</span>
+        </div>
+      </div>
+      <button class="control-btn toggle-btn" id="trainingToggle" data-toggle="training">
+        <span class="toggle-state">ENABLE</span>
+      </button>
+    </div>
+
+    <!-- P&L Metric -->
+    <div class="state-metric pnl-metric">
+      <label>P&L TODAY</label>
+      <span class="metric-value" id="botStatePnl">+$0.00</span>
+      <span class="metric-change" id="botStatePnlPct">0.00%</span>
+    </div>
+
+    <!-- Last Action -->
+    <div class="state-metric last-action">
+      <label>LAST ACTION</label>
+      <span class="action-text" id="botStateLastAction">No operations yet</span>
+    </div>
+
+    <!-- Confidence/Volatility -->
+    <div class="state-metric confidence">
+      <label>CONFIDENCE</label>
+      <div class="confidence-bar">
+        <div class="confidence-fill" id="confidenceFill" style="width: 0%"></div>
+      </div>
+      <span class="confidence-text" id="confidenceText">0%</span>
+    </div>
+  </div>
+
+  <div class="hero-footer">
+    <button class="btn-secondary" id="pauseTradingBtn">
+      <span>⏸</span>
+      <span>PAUSE</span>
+    </button>
+    <button class="btn-danger kill-switch" id="killSwitchBtn" title="Stop all operations immediately">
+      <span>⚠</span>
+      <span>KILL SWITCH</span>
+    </button>
+  </div>
+
+  <!-- Kill Switch Confirmation Modal (hidden by default) -->
+  <div class="kill-switch-confirm" id="killSwitchConfirm" style="display: none;">
+    <div class="confirm-box">
+      <p>CONFIRM: Stop all operations?</p>
+      <p class="confirm-hint">3 seconds required</p>
+      <div class="confirm-progress">
+        <div class="confirm-bar" id="confirmBar"></div>
+      </div>
+      <div class="confirm-buttons">
+        <button class="btn-secondary" id="cancelKillBtn">CANCEL</button>
+        <button class="btn-danger" id="confirmKillBtn" disabled>CONFIRM</button>
+      </div>
+    </div>
+  </div>
+</section>

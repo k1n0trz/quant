@@ -1,0 +1,11 @@
+.env
+*.log
+
+backups/
+quant_data/
+
+electron_quant/node_modules/
+electron_quant/dist/
+electron_quant/dist2/
+
+.claude/

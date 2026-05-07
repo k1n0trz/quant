@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quant · Acceso</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #060e18;
+      color: #c5d3e8;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .card {
+      background: #0d1825;
+      border: 1px solid #1e3050;
+      border-radius: 14px;
+      padding: 42px 48px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.6);
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .logo h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      color: #4a9eff;
+    }
+    .logo p {
+      font-size: 12px;
+      color: #5a7fa8;
+      letter-spacing: 2px;
+      margin-top: 4px;
+    }
+    label {
+      display: block;
+      font-size: 11px;
+      letter-spacing: 1.5px;
+      color: #5a7fa8;
+      margin-bottom: 6px;
+    }
+    input {
+      width: 100%;
+      background: #131d2e;
+      border: 1px solid #2e4268;
+      border-radius: 7px;
+      color: #c5d3e8;
+      font-size: 15px;
+      padding: 11px 14px;
+      outline: none;
+      transition: border-color .2s;
+      margin-bottom: 18px;
+    }
+    input:focus { border-color: #4a9eff; }
+    button {
+      width: 100%;
+      background: #1a4a8a;
+      color: #e8f0ff;
+      border: none;
+      border-radius: 7px;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      padding: 13px;
+      cursor: pointer;
+      transition: background .2s;
+      margin-top: 4px;
+    }
+    button:hover { background: #2860b0; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .err {
+      background: rgba(224,90,90,.12);
+      border: 1px solid rgba(224,90,90,.3);
+      border-radius: 6px;
+      color: #e05a5a;
+      font-size: 13px;
+      padding: 10px 14px;
+      margin-bottom: 18px;
+      display: none;
+    }
+    .footer {
+      text-align: center;
+      font-size: 11px;
+      color: #2e4268;
+      margin-top: 28px;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">
+      <h1>QUANT</h1>
+      <p>AI TRADING SYSTEM</p>
+    </div>
+    <form id="loginForm">
+      <label for="email">CORREO</label>
+      <input id="email" type="email" autocomplete="email" placeholder="tu@correo.com" required />
+      <label for="password">CONTRASEÑA</label>
+      <input id="password" type="password" autocomplete="current-password" placeholder="••••••••••••" required />
+      <div class="err" id="errBox"></div>
+      <button type="submit" id="submitBtn">ENTRAR</button>
+    </form>
+    <p class="footer">ACCESO RESTRINGIDO · SOLO USO AUTORIZADO</p>
+  </div>
+
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn    = document.getElementById('submitBtn');
+      const errBox = document.getElementById('errBox');
+      const email  = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      btn.disabled = true;
+      btn.textContent = 'Verificando...';
+      errBox.style.display = 'none';
+      try {
+        const res = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          window.location.href = '/';
+        } else {
+          errBox.textContent = data.error || 'Credenciales incorrectas.';
+          errBox.style.display = 'block';
+          btn.disabled = false;
+          btn.textContent = 'ENTRAR';
+        }
+      } catch {
+        errBox.textContent = 'Error de conexión. Intenta de nuevo.';
+        errBox.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'ENTRAR';
+      }
+    });
+  </script>
+</body>
+</html>

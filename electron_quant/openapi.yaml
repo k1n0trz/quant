@@ -1,0 +1,917 @@
+openapi: 3.1.0
+info:
+  title: Quant API Contract v1
+  version: 1.0.0
+  summary: Official stable API contract for the current Quant backend.
+  description: |
+    Quant API Contract v1 documents the backend exactly as implemented today.
+
+    Compatibility rules:
+    - No endpoint behavior is changed by this document.
+    - This contract preserves backward compatibility with the current frontend integration path.
+    - Current authentication is session-cookie based when `WEB_AUTH_ENABLED=true`.
+    - Future Google OAuth, multiuser SaaS flows, mobile clients, and full web frontend support must remain backward compatible with this contract.
+
+    Current auth reality:
+    - `GET /healthz` is public.
+    - All `/api/*` routes require a valid `quant_session` cookie when web auth is enabled.
+
+servers:
+  - url: http://127.0.0.1:47829
+    description: Local default backend server
+
+tags:
+  - name: Health
+  - name: Status
+  - name: Bot
+  - name: Risk
+  - name: Trades
+  - name: Signals
+  - name: Training
+  - name: Connections
+
+security:
+  - cookieAuth: []
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Public liveness endpoint for local runtime, VPS probes, Docker, PM2, and systemd watchdog integrations.
+      security: []
+      responses:
+        '200':
+          description: Backend is alive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              examples:
+                ok:
+                  value:
+                    ok: true
+                    service: quant-backend
+                    ts: '2026-05-06T20:30:00.000Z'
+
+  /api/status:
+    get:
+      tags: [Status]
+      summary: Get overall backend status
+      description: Returns authoritative bot state, risk validation summary, and adapter configuration summary.
+      responses:
+        '200':
+          description: Status returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              examples:
+                status:
+                  value:
+                    ok: true
+                    bot:
+                      tradingRealEnabled: false
+                      trainingEnabled: true
+                      killSwitch: false
+                      paperMode: true
+                      updatedAt: '2026-05-06T20:30:00.000Z'
+                    risk:
+                      ok: true
+                      issues: []
+                    adapters:
+                      binance:
+                        required: true
+                        configured: true
+                      mt5:
+                        optional: true
+                        enabled: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/bot/state:
+    get:
+      tags: [Bot]
+      summary: Get authoritative bot state
+      responses:
+        '200':
+          description: Bot state returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotState'
+              examples:
+                default:
+                  value:
+                    tradingRealEnabled: false
+                    trainingEnabled: true
+                    killSwitch: false
+                    paperMode: true
+                    updatedAt: '2026-05-06T20:30:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/bot/trading-real/on:
+    post:
+      tags: [Bot]
+      summary: Enable real trading
+      description: |
+        Enables real trading only if:
+        - kill switch is not active
+        - current risk configuration satisfies minimum requirements
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmptyObject'
+            examples:
+              empty:
+                value: {}
+      responses:
+        '200':
+          description: Real trading enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotState'
+              examples:
+                enabled:
+                  value:
+                    tradingRealEnabled: true
+                    trainingEnabled: true
+                    killSwitch: false
+                    paperMode: false
+                    updatedAt: '2026-05-06T20:30:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Business validation conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictError'
+              examples:
+                killSwitchActive:
+                  value:
+                    error: Global kill switch is active
+                    details: null
+                invalidRisk:
+                  value:
+                    error: Risk configuration does not meet minimum requirements
+                    details:
+                      - maxRiskPerTradePct must be greater than 0
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/bot/trading-real/off:
+    post:
+      tags: [Bot]
+      summary: Disable real trading
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmptyObject'
+            examples:
+              empty:
+                value: {}
+      responses:
+        '200':
+          description: Real trading disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotState'
+              examples:
+                disabled:
+                  value:
+                    tradingRealEnabled: false
+                    trainingEnabled: true
+                    killSwitch: false
+                    paperMode: true
+                    updatedAt: '2026-05-06T20:30:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/bot/training/on:
+    post:
+      tags: [Bot]
+      summary: Enable training
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmptyObject'
+            examples:
+              empty:
+                value: {}
+      responses:
+        '200':
+          description: Training enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotState'
+              examples:
+                trainingOn:
+                  value:
+                    tradingRealEnabled: false
+                    trainingEnabled: true
+                    killSwitch: false
+                    paperMode: true
+                    updatedAt: '2026-05-06T20:30:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/bot/training/off:
+    post:
+      tags: [Bot]
+      summary: Disable training
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmptyObject'
+            examples:
+              empty:
+                value: {}
+      responses:
+        '200':
+          description: Training disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BotState'
+              examples:
+                trainingOff:
+                  value:
+                    tradingRealEnabled: false
+                    trainingEnabled: false
+                    killSwitch: false
+                    paperMode: true
+                    updatedAt: '2026-05-06T20:30:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/trades:
+    get:
+      tags: [Trades]
+      summary: Get trade history items from memory
+      description: Returns memory entries whose `kind` is `trade`. The `payload` object is flexible and must be handled defensively by clients.
+      responses:
+        '200':
+          description: Trade items returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TradesResponse'
+              examples:
+                trades:
+                  value:
+                    items:
+                      - ts: '2026-05-06T20:30:00.000Z'
+                        kind: trade
+                        payload:
+                          status: blocked
+                          reason: REAL_TRADING=false
+                          side: BUY
+                          symbol: BTCUSDT
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/signals:
+    get:
+      tags: [Signals]
+      summary: Get signal-like memory items
+      description: Returns memory entries whose `kind` is `signal`, `training_signal`, or `observation`.
+      responses:
+        '200':
+          description: Signal items returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalsResponse'
+              examples:
+                signals:
+                  value:
+                    items:
+                      - ts: '2026-05-06T20:30:00.000Z'
+                        kind: observation
+                        payload: {}
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/training/logs:
+    get:
+      tags: [Training]
+      summary: Get training log stream and training summary
+      responses:
+        '200':
+          description: Training logs returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingLogsResponse'
+              examples:
+                logs:
+                  value:
+                    logs:
+                      - ts: '2026-05-06T20:30:00.000Z'
+                        kind: training_lesson
+                        payload: {}
+                    trainingStateSummary:
+                      mode: training
+                      positions: 20
+                      lessons: 15
+                      updatedAt: '2026-05-06T20:30:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/risk:
+    get:
+      tags: [Risk]
+      summary: Get current risk configuration
+      responses:
+        '200':
+          description: Risk configuration returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskConfig'
+              examples:
+                risk:
+                  value:
+                    enabled: true
+                    maxRiskPerTradePct: 1
+                    maxDailyLossPct: 3
+                    maxOpenPositions: 5
+                    requireStopLoss: true
+                    allowRealTrading: false
+                    allowedVenues: [BINANCE]
+                    trainingCanChangeCriticalRules: false
+                    updatedAt: '2026-05-06T20:30:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/risk/update:
+    post:
+      tags: [Risk]
+      summary: Update current risk configuration
+      description: |
+        The backend merges defaults, current risk config, and the request body.
+        `trainingCanChangeCriticalRules` is always forced to `false` by the backend.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RiskUpdateRequest'
+            examples:
+              valid:
+                value:
+                  enabled: true
+                  maxRiskPerTradePct: 1
+                  maxDailyLossPct: 3
+                  maxOpenPositions: 5
+                  requireStopLoss: true
+                  allowRealTrading: false
+                  allowedVenues: [BINANCE]
+      responses:
+        '200':
+          description: Risk configuration updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RiskConfig'
+              examples:
+                updated:
+                  value:
+                    enabled: true
+                    maxRiskPerTradePct: 1
+                    maxDailyLossPct: 3
+                    maxOpenPositions: 5
+                    requireStopLoss: true
+                    allowRealTrading: false
+                    allowedVenues: [BINANCE]
+                    trainingCanChangeCriticalRules: false
+                    updatedAt: '2026-05-06T20:30:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Invalid risk configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConflictError'
+              examples:
+                invalid:
+                  value:
+                    error: Invalid risk configuration
+                    details:
+                      - requireStopLoss must be true
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/connections:
+    get:
+      tags: [Connections]
+      summary: Get configured adapter summary
+      responses:
+        '200':
+          description: Connection summary returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectionsResponse'
+              examples:
+                summary:
+                  value:
+                    adapters:
+                      binance:
+                        required: true
+                        configured: true
+                      mt5:
+                        optional: true
+                        enabled: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/connections/binance/test:
+    post:
+      tags: [Connections]
+      summary: Test Binance connectivity
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmptyObject'
+            examples:
+              empty:
+                value: {}
+      responses:
+        '200':
+          description: Binance test completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BinanceConnectionTestResponse'
+              examples:
+                success:
+                  value:
+                    ok: true
+                    adapter: binance
+                    primary: true
+                missingSecrets:
+                  value:
+                    ok: false
+                    adapter: binance
+                    message: Missing BINANCE_API_KEY or BINANCE_SECRET
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/connections/mt5/test:
+    post:
+      tags: [Connections]
+      summary: Test MT5 connectivity
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EmptyObject'
+            examples:
+              empty:
+                value: {}
+      responses:
+        '200':
+          description: MT5 test completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mt5ConnectionTestResponse'
+              examples:
+                disabled:
+                  value:
+                    ok: false
+                    adapter: mt5
+                    optional: true
+                    message: MT5 adapter disabled
+                success:
+                  value:
+                    ok: true
+                    adapter: mt5
+                    optional: true
+                    info:
+                      available: true
+                      login: 106075877
+                      server: FBS-Demo
+                      currency: USD
+                      balance: 20000
+                unavailable:
+                  value:
+                    ok: false
+                    adapter: mt5
+                    optional: true
+                    info:
+                      available: false
+                      message: MT5 no disponible para Python
+                      error: Python no disponible
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: quant_session
+      description: Current production auth scheme for Quant API Contract v1.
+    bearerAuthFuture:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Reserved for future mobile and SaaS authentication while maintaining backward compatibility with v1.
+    googleOAuthFuture:
+      type: oauth2
+      description: Reserved for future Google OAuth integration. Not active in v1.
+      flows:
+        authorizationCode:
+          authorizationUrl: https://accounts.google.com/o/oauth2/v2/auth
+          tokenUrl: https://oauth2.googleapis.com/token
+          scopes: {}
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid authenticated session
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            unauthenticated:
+              value:
+                error: No autenticado
+    InternalError:
+      description: Internal backend error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            generic:
+              value:
+                error: Internal server error
+
+  schemas:
+    EmptyObject:
+      type: object
+      additionalProperties: false
+
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [ok, service, ts]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        service:
+          type: string
+        ts:
+          type: string
+          format: date-time
+
+    BotState:
+      type: object
+      additionalProperties: false
+      required:
+        - tradingRealEnabled
+        - trainingEnabled
+        - killSwitch
+        - paperMode
+        - updatedAt
+      properties:
+        tradingRealEnabled:
+          type: boolean
+        trainingEnabled:
+          type: boolean
+        killSwitch:
+          type: boolean
+        paperMode:
+          type: boolean
+        updatedAt:
+          type: string
+          format: date-time
+
+    RiskValidation:
+      type: object
+      additionalProperties: false
+      required: [ok, issues]
+      properties:
+        ok:
+          type: boolean
+        issues:
+          type: array
+          items:
+            type: string
+
+    BinanceAdapterSummary:
+      type: object
+      additionalProperties: false
+      required: [required, configured]
+      properties:
+        required:
+          type: boolean
+          const: true
+        configured:
+          type: boolean
+
+    Mt5AdapterSummary:
+      type: object
+      additionalProperties: false
+      required: [optional, enabled]
+      properties:
+        optional:
+          type: boolean
+          const: true
+        enabled:
+          type: boolean
+
+    AdaptersSummary:
+      type: object
+      additionalProperties: false
+      required: [binance, mt5]
+      properties:
+        binance:
+          $ref: '#/components/schemas/BinanceAdapterSummary'
+        mt5:
+          $ref: '#/components/schemas/Mt5AdapterSummary'
+
+    StatusResponse:
+      type: object
+      additionalProperties: false
+      required: [ok, bot, risk, adapters]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        bot:
+          $ref: '#/components/schemas/BotState'
+        risk:
+          $ref: '#/components/schemas/RiskValidation'
+        adapters:
+          $ref: '#/components/schemas/AdaptersSummary'
+
+    FlexiblePayload:
+      type: object
+      additionalProperties: true
+
+    MemoryRecord:
+      type: object
+      required: [ts, kind, payload]
+      properties:
+        ts:
+          type: string
+          format: date-time
+        kind:
+          type: string
+        payload:
+          $ref: '#/components/schemas/FlexiblePayload'
+      additionalProperties: true
+
+    TradesResponse:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/MemoryRecord'
+              - type: object
+                properties:
+                  kind:
+                    type: string
+                    const: trade
+
+    SignalsResponse:
+      type: object
+      additionalProperties: false
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemoryRecord'
+
+    TrainingStateSummary:
+      oneOf:
+        - type: 'null'
+        - type: object
+          additionalProperties: false
+          required: [mode, positions, lessons, updatedAt]
+          properties:
+            mode:
+              type: [string, 'null']
+            positions:
+              type: integer
+              minimum: 0
+            lessons:
+              type: integer
+              minimum: 0
+            updatedAt:
+              type: [string, 'null']
+              format: date-time
+
+    TrainingLogsResponse:
+      type: object
+      additionalProperties: false
+      required: [logs, trainingStateSummary]
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemoryRecord'
+        trainingStateSummary:
+          $ref: '#/components/schemas/TrainingStateSummary'
+
+    RiskConfig:
+      type: object
+      additionalProperties: false
+      required:
+        - enabled
+        - maxRiskPerTradePct
+        - maxDailyLossPct
+        - maxOpenPositions
+        - requireStopLoss
+        - allowRealTrading
+        - allowedVenues
+        - trainingCanChangeCriticalRules
+        - updatedAt
+      properties:
+        enabled:
+          type: boolean
+        maxRiskPerTradePct:
+          type: number
+        maxDailyLossPct:
+          type: number
+        maxOpenPositions:
+          type: integer
+        requireStopLoss:
+          type: boolean
+        allowRealTrading:
+          type: boolean
+        allowedVenues:
+          type: array
+          items:
+            type: string
+        trainingCanChangeCriticalRules:
+          type: boolean
+          const: false
+        updatedAt:
+          type: string
+          format: date-time
+
+    RiskUpdateRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        enabled:
+          type: boolean
+        maxRiskPerTradePct:
+          type: number
+        maxDailyLossPct:
+          type: number
+        maxOpenPositions:
+          type: integer
+        requireStopLoss:
+          type: boolean
+        allowRealTrading:
+          type: boolean
+        allowedVenues:
+          type: array
+          items:
+            type: string
+        trainingCanChangeCriticalRules:
+          type: boolean
+          description: Ignored by backend and forced to false.
+
+    ConnectionsResponse:
+      type: object
+      additionalProperties: false
+      required: [adapters]
+      properties:
+        adapters:
+          $ref: '#/components/schemas/AdaptersSummary'
+
+    BinanceConnectionTestResponse:
+      type: object
+      required: [ok, adapter]
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+        adapter:
+          type: string
+          const: binance
+        primary:
+          type: boolean
+        message:
+          type: string
+
+    Mt5Info:
+      type: object
+      additionalProperties: true
+      properties:
+        available:
+          type: boolean
+        login:
+          type: integer
+        server:
+          type: string
+        currency:
+          type: string
+        balance:
+          type: number
+        equity:
+          type: number
+        margin:
+          type: number
+        margin_free:
+          type: number
+        trade_allowed:
+          type: boolean
+        message:
+          type: string
+        error:
+          type: string
+
+    Mt5ConnectionTestResponse:
+      type: object
+      required: [ok, adapter, optional]
+      additionalProperties: false
+      properties:
+        ok:
+          type: boolean
+        adapter:
+          type: string
+          const: mt5
+        optional:
+          type: boolean
+          const: true
+        message:
+          type: string
+        info:
+          $ref: '#/components/schemas/Mt5Info'
+
+    ErrorResponse:
+      type: object
+      additionalProperties: true
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    ConflictError:
+      type: object
+      additionalProperties: false
+      required: [error, details]
+      properties:
+        error:
+          type: string
+        details:
+          oneOf:
+            - type: 'null'
+            - type: array
+              items:
+                type: string

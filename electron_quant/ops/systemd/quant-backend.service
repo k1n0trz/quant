@@ -1,0 +1,15 @@
+[Unit]
+Description=Quant Backend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/quant/electron_quant
+ExecStart=/usr/bin/node /opt/quant/electron_quant/main.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=QUANT_WEB_PORT=47829
+
+[Install]
+WantedBy=multi-user.target

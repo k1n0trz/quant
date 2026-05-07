@@ -1,0 +1,1643 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QUANT · AI Trading System</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   QUANT AI TRADING SYSTEM — Design System
+   Palette: Deep Navy / Electric Green / Amber / Crimson
+   Font: JetBrains Mono (data/labels) + IBM Plex Sans (body)
+   ============================================================ */
+
+:root {
+  /* Core Palette */
+  --bg-base:        #0a0e17;
+  --bg-surface:     #0f1623;
+  --bg-panel:       #141d2e;
+  --bg-elevated:    #1a2540;
+  --bg-hover:       #1f2d4a;
+
+  /* Borders */
+  --border-subtle:  #1e2d45;
+  --border-default: #263650;
+  --border-bright:  #2e4268;
+
+  /* Accent Colors */
+  --green:          #00e676;
+  --green-dim:      #00c853;
+  --green-bg:       rgba(0,230,118,0.08);
+  --green-glow:     rgba(0,230,118,0.15);
+
+  --amber:          #ffab00;
+  --amber-dim:      #ff8f00;
+  --amber-bg:       rgba(255,171,0,0.08);
+
+  --red:            #ff1744;
+  --red-dim:        #d50000;
+  --red-bg:         rgba(255,23,68,0.08);
+
+  --blue:           #2979ff;
+  --blue-dim:       #1565c0;
+  --blue-bg:        rgba(41,121,255,0.1);
+  --blue-glow:      rgba(41,121,255,0.2);
+
+  --cyan:           #00e5ff;
+  --neutral:        #78909c;
+
+  /* Text */
+  --text-primary:   #e8edf5;
+  --text-secondary: #8fa3be;
+  --text-muted:     #4a6080;
+  --text-label:     #607d9e;
+
+  /* Fonts */
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  --font-sans: 'IBM Plex Sans', sans-serif;
+
+  /* Sizing */
+  --sidebar-w: 200px;
+  --topbar-h:  52px;
+  --radius:    6px;
+  --radius-sm: 4px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* ── Scrollbar ─────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-surface); }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+
+/* ============================================================
+   LAYOUT SHELL
+   ============================================================ */
+.app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  grid-template-rows: var(--topbar-h) 1fr;
+  height: 100vh;
+}
+
+/* ============================================================
+   TOPBAR
+   ============================================================ */
+.topbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+  gap: 20px;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: var(--sidebar-w);
+}
+.logo-icon {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, var(--blue) 0%, var(--cyan) 100%);
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+  box-shadow: 0 0 12px var(--blue-glow);
+}
+.logo-text { line-height: 1.1; }
+.logo-name {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 2px;
+  color: var(--text-primary);
+}
+.logo-sub {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.topbar-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+}
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+.status-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.status-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.topbar-spacer { flex: 1; }
+
+.topbar-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.topbar-meta span { color: var(--text-secondary); }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  border: none;
+  transition: all .15s;
+  text-transform: uppercase;
+}
+.btn-primary {
+  background: var(--blue);
+  color: #fff;
+  box-shadow: 0 0 16px rgba(41,121,255,0.3);
+}
+.btn-primary:hover { background: #3d8bfd; box-shadow: 0 0 20px rgba(41,121,255,0.5); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+}
+.btn-ghost:hover { background: var(--bg-elevated); color: var(--text-primary); }
+
+/* ============================================================
+   SIDEBAR
+   ============================================================ */
+.sidebar {
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-nav { flex: 1; padding: 8px 0; }
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: all .15s;
+  border-left: 2px solid transparent;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-weight: 500;
+}
+.nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+.nav-item.active {
+  background: var(--blue-bg);
+  color: var(--text-primary);
+  border-left-color: var(--blue);
+}
+.nav-item svg { flex-shrink: 0; opacity: .7; }
+.nav-item.active svg { opacity: 1; }
+
+.sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+.system-status-group { display: flex; flex-direction: column; gap: 5px; }
+.system-status-title {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.system-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-secondary);
+}
+.dot-on  { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 4px var(--green); }
+.dot-off { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--red); }
+
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+.user-avatar {
+  width: 28px; height: 28px;
+  background: var(--blue-bg);
+  border: 1px solid var(--border-bright);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--blue);
+}
+.user-name { font-size: 12px; color: var(--text-primary); font-weight: 500; }
+.user-role {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+/* ============================================================
+   MAIN CONTENT
+   ============================================================ */
+.main-content {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-base);
+}
+
+/* ── Top KPI Row ─────────────────────────────────── */
+.kpi-row {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 1fr 1fr 1.2fr 1.2fr;
+  gap: 8px;
+}
+
+.kpi-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  position: relative;
+  overflow: hidden;
+}
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--blue) 0%, transparent 100%);
+  opacity: .5;
+}
+.kpi-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.kpi-primary {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+.kpi-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.kpi-change {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+.kpi-change.up   { color: var(--green); }
+.kpi-change.down { color: var(--red); }
+.kpi-change.flat { color: var(--text-muted); }
+
+/* ── Mid Row ─────────────────────────────────── */
+.mid-row {
+  display: grid;
+  grid-template-columns: 1fr 280px 300px;
+  gap: 10px;
+  min-height: 320px;
+}
+
+/* ── Panel Base ─────────────────────────────────── */
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+.panel-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.panel-body { padding: 12px 14px; flex: 1; }
+
+/* ── Chart Panel ─────────────────────────────────── */
+.chart-panel .panel-header { background: var(--bg-elevated); }
+
+.chart-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tf-btn {
+  padding: 3px 7px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  transition: all .15s;
+}
+.tf-btn:hover { color: var(--text-secondary); background: var(--bg-hover); }
+.tf-btn.active { background: var(--blue-bg); color: var(--blue); border: 1px solid rgba(41,121,255,0.3); }
+
+.chart-divider {
+  width: 1px; height: 16px;
+  background: var(--border-subtle);
+  margin: 0 4px;
+}
+
+.chart-ohlc {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 6px 14px;
+  background: rgba(0,0,0,0.2);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.ohlc-val { color: var(--text-secondary); }
+.ohlc-chg { color: var(--green); }
+
+/* Fake chart area */
+.chart-area {
+  flex: 1;
+  background: linear-gradient(180deg, rgba(15,22,35,0.3) 0%, rgba(10,14,23,0.5) 100%);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+.chart-placeholder {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+}
+/* Animated candlestick bars (decorative) */
+.chart-grid {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(var(--border-subtle) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
+  background-size: 60px 40px;
+  opacity: .4;
+}
+.chart-price-line {
+  position: absolute;
+  right: 0; left: 0;
+  top: 45%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--blue), transparent);
+  opacity: .6;
+}
+.chart-candles {
+  position: absolute;
+  bottom: 30px; left: 20px; right: 20px;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: calc(100% - 60px);
+}
+.candle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  flex: 1;
+}
+.candle-wick {
+  width: 1px;
+  background: var(--text-muted);
+  min-height: 4px;
+}
+.candle-body {
+  width: 6px;
+  min-height: 3px;
+  border-radius: 1px;
+}
+.candle.bull .candle-body { background: var(--green); }
+.candle.bear .candle-body { background: var(--red); }
+.candle.bull .candle-wick { background: var(--green-dim); }
+.candle.bear .candle-wick { background: var(--red-dim); }
+
+/* Connecting line overlay */
+.chart-line-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* Volume bars at bottom */
+.chart-volume {
+  position: absolute;
+  bottom: 0; left: 20px; right: 20px;
+  height: 24px;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+}
+.vol-bar { flex: 1; border-radius: 1px 1px 0 0; opacity: .4; min-height: 2px; }
+.vol-bar.bull { background: var(--green); }
+.vol-bar.bear { background: var(--red); }
+
+/* ── Signal Gauge Panel ─────────────────────────────────── */
+.gauge-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 14px 10px;
+}
+.gauge-svg { width: 180px; height: 100px; overflow: visible; }
+
+.gauge-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+  margin-top: 12px;
+}
+.gauge-metric { text-align: center; }
+.gauge-metric-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+.gauge-metric-val {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.analysis-block {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-subtle);
+}
+.analysis-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--blue);
+  margin-bottom: 4px;
+}
+.analysis-text {
+  font-size: 11px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.levels-block {
+  padding: 8px 14px 10px;
+  border-top: 1px solid var(--border-subtle);
+}
+.levels-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  margin-bottom: 6px;
+}
+.level-row {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 0;
+  color: var(--text-secondary);
+}
+.level-row span:last-child { color: var(--text-primary); font-weight: 600; }
+
+/* ── News Panel ─────────────────────────────────── */
+.news-tabs {
+  display: flex;
+  gap: 0;
+}
+.news-tab {
+  flex: 1;
+  text-align: center;
+  padding: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-bottom: 2px solid transparent;
+  transition: all .15s;
+}
+.news-tab.active { color: var(--text-primary); background: var(--blue-bg); border-bottom-color: var(--blue); }
+
+.news-list { display: flex; flex-direction: column; }
+.news-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background .15s;
+  cursor: pointer;
+}
+.news-item:hover { background: var(--bg-elevated); }
+.news-time {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-muted);
+  min-width: 32px;
+  padding-top: 2px;
+  flex-shrink: 0;
+}
+.news-content { flex: 1; }
+.news-headline { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
+
+.news-badge {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.badge-high   { background: var(--red-bg);   color: var(--red);   border: 1px solid rgba(255,23,68,.2); }
+.badge-medium { background: var(--amber-bg); color: var(--amber); border: 1px solid rgba(255,171,0,.2); }
+.badge-low    { background: var(--green-bg); color: var(--green); border: 1px solid rgba(0,230,118,.2); }
+.badge-neutral{ background: var(--bg-elevated); color: var(--text-muted); border: 1px solid var(--border-default); }
+
+/* ── Bottom Row ─────────────────────────────────── */
+.bottom-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 10px;
+}
+
+/* ── Events Table ─────────────────────────────────── */
+.events-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.events-table th {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--text-muted);
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-default);
+  font-weight: 600;
+}
+.events-table td {
+  padding: 7px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  vertical-align: middle;
+}
+.events-table tr:hover td { background: var(--bg-elevated); }
+.td-time { color: var(--cyan); font-weight: 600; }
+.flag-icon { font-size: 13px; }
+
+/* ── Performance Panel ─────────────────────────────────── */
+.perf-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.perf-cell {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+.perf-cell-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--text-muted);
+  margin-bottom: 3px;
+}
+.perf-cell-val {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.perf-cell-val.green { color: var(--green); }
+.perf-cell-val.red   { color: var(--red); }
+
+.mini-chart {
+  width: 100%;
+  height: 50px;
+  position: relative;
+  margin-top: 8px;
+  background: rgba(0,0,0,.2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.mini-chart-line {
+  position: absolute;
+  inset: 0;
+}
+
+/* ── Pipeline / Log Panel ─────────────────────────────────── */
+.log-list { display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; overflow-y: auto; max-height: 200px; }
+.log-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.log-time { color: var(--text-muted); min-width: 40px; flex-shrink: 0; }
+.log-ok   { color: var(--green); font-weight: 700; }
+.log-err  { color: var(--red); font-weight: 700; }
+.log-warn { color: var(--amber); font-weight: 700; }
+.log-text { color: var(--text-secondary); }
+.log-dot-ok  { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+.log-dot-err { width: 6px; height: 6px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
+
+/* ── Trading Manual Bar ─────────────────────────────────── */
+.trading-bar {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.bar-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.bar-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.field-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  color: var(--text-muted);
+}
+
+.q-select, .q-input {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 5px 10px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color .15s;
+  height: 28px;
+  -webkit-appearance: none;
+}
+.q-select:focus, .q-input:focus { border-color: var(--blue); }
+.q-input { width: 70px; }
+
+.bar-spacer { flex: 1; }
+
+.btn-buy {
+  background: linear-gradient(135deg, #00c853, #00e676);
+  color: #001a09;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 8px 24px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: none;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  box-shadow: 0 0 16px rgba(0,230,118,0.25);
+  transition: all .15s;
+  line-height: 1.1;
+}
+.btn-buy:hover { box-shadow: 0 0 24px rgba(0,230,118,0.45); transform: translateY(-1px); }
+
+.btn-sell {
+  background: linear-gradient(135deg, #d50000, #ff1744);
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 8px 24px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: none;
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  box-shadow: 0 0 16px rgba(255,23,68,0.25);
+  transition: all .15s;
+  line-height: 1.1;
+}
+.btn-sell:hover { box-shadow: 0 0 24px rgba(255,23,68,0.45); transform: translateY(-1px); }
+
+.btn-cancel {
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 8px 20px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1px solid var(--border-default);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  transition: all .15s;
+}
+.btn-cancel:hover { border-color: var(--text-muted); color: var(--text-secondary); }
+
+.btn-sub { font-size: 8px; display: block; font-weight: 400; opacity: .7; letter-spacing: 0; }
+
+/* ── Status Badge ─────────────────────────────────── */
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.status-badge.neutral { background: rgba(120,144,156,.15); color: #90a4ae; border: 1px solid rgba(120,144,156,.3); }
+.status-badge.bull    { background: var(--green-bg); color: var(--green); border: 1px solid rgba(0,230,118,.3); }
+.status-badge.bear    { background: var(--red-bg);   color: var(--red);   border: 1px solid rgba(255,23,68,.3); }
+
+/* ── Utility ─────────────────────────────────── */
+.txt-green  { color: var(--green); }
+.txt-red    { color: var(--red); }
+.txt-amber  { color: var(--amber); }
+.txt-blue   { color: var(--blue); }
+.txt-cyan   { color: var(--cyan); }
+.txt-muted  { color: var(--text-muted); }
+.txt-mono   { font-family: var(--font-mono); }
+.fw-700     { font-weight: 700; }
+
+/* ── Animations ─────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.panel, .kpi-card, .trading-bar {
+  animation: fadeUp .3s ease both;
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ══════════════════════════════════════════
+       TOPBAR
+  ══════════════════════════════════════════ -->
+  <header class="topbar">
+    <div class="logo">
+      <div class="logo-icon">Q</div>
+      <div class="logo-text">
+        <div class="logo-name">QUANT</div>
+        <div class="logo-sub">AI Trading System</div>
+      </div>
+    </div>
+
+    <div class="topbar-status">
+      <div class="status-dot"></div>
+      <div>
+        <div class="status-label">SISTEMA ACTIVO</div>
+        <div class="status-sub">Modo: Trading Real · Bloqueado por defecto</div>
+      </div>
+    </div>
+
+    <div class="topbar-spacer"></div>
+
+    <div class="topbar-meta">
+      Última actualización: <span id="last-update">--:--:--</span>
+    </div>
+
+    <button class="btn btn-ghost" onclick="refreshData()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Actualizar
+    </button>
+    <button class="btn btn-primary">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Habilitar Trading
+    </button>
+    <button class="btn btn-ghost">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Configuración
+    </button>
+  </header>
+
+  <!-- ══════════════════════════════════════════
+       SIDEBAR
+  ══════════════════════════════════════════ -->
+  <nav class="sidebar">
+    <div class="sidebar-nav">
+      <!-- Nav Items — add/remove as needed -->
+      <div class="nav-item active" onclick="setActive(this)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-item" onclick="setActive(this)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+        Mercados
+      </div>
+      <div class="nav-item" onclick="setActive(this)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+        Noticias & Macro
+      </div>
+      <div class="nav-item" onclick="setActive(this)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Análisis IA
+      </div>
+      <div class="nav-item" onclick="setActive(this)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Trading Manual
+      </div>
+      <div class="nav-item" onclick="setActive(this)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        Órdenes
+      </div>
+      <div class="nav-item" onclick="setActive(this)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        Posiciones
+      </div>
+      <div class="nav-item" onclick="setActive(this)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Historial
+      </div>
+      <div class="nav-item" onclick="setActive(this)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        Backtesting
+      </div>
+      <div class="nav-item" onclick="setActive(this)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        Alertas
+      </div>
+      <div class="nav-item" onclick="setActive(this)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Configuración
+      </div>
+    </div>
+
+    <!-- System Status -->
+    <div class="sidebar-footer">
+      <div class="system-status-title">Estado del Sistema</div>
+      <div class="system-status-group">
+        <div class="system-row"><span>Conexión Binance</span><span class="dot-on"></span></div>
+        <div class="system-row"><span>DeepSeek AI</span><span class="dot-on"></span></div>
+        <div class="system-row"><span>Finnhub</span><span class="dot-on"></span></div>
+        <div class="system-row"><span>Alpha Vantage</span><span class="dot-on"></span></div>
+        <div class="system-row"><span>MT5 Terminal</span><span class="dot-on"></span></div>
+      </div>
+    </div>
+
+    <div class="user-chip">
+      <div class="user-avatar">Q</div>
+      <div>
+        <div class="user-name">Quant <span style="font-family:var(--font-mono);font-size:8px;background:var(--blue-bg);color:var(--blue);border:1px solid rgba(41,121,255,.3);padding:1px 5px;border-radius:2px;font-weight:700;letter-spacing:.5px;">ADMIN</span></div>
+        <div class="user-role">Rol: Administrador</div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ══════════════════════════════════════════
+       MAIN CONTENT
+  ══════════════════════════════════════════ -->
+  <main class="main-content">
+
+    <!-- ── KPI Row ─────────────────────────────────── -->
+    <div class="kpi-row">
+
+      <!-- Activo Principal -->
+      <div class="kpi-card">
+        <div class="kpi-label">Activo Principal</div>
+        <!-- ★ CONNECT: data-field="symbol" -->
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="kpi-primary" id="kpi-symbol">AUDCAD</div>
+          <span style="font-family:var(--font-mono);font-size:9px;background:var(--blue-bg);color:var(--blue);border:1px solid rgba(41,121,255,.3);padding:2px 6px;border-radius:3px;font-weight:700;">M1</span>
+        </div>
+        <div class="kpi-sub" id="kpi-asset-name">Australian Dollar / Canadian Dollar</div>
+      </div>
+
+      <!-- Precio Actual -->
+      <div class="kpi-card">
+        <div class="kpi-label">Precio Actual</div>
+        <!-- ★ CONNECT: data-field="price" -->
+        <div class="kpi-primary" id="kpi-price">0.97832</div>
+        <div class="kpi-change up" id="kpi-change">+0.00124 (+0.13%)</div>
+      </div>
+
+      <!-- Spread -->
+      <div class="kpi-card">
+        <div class="kpi-label">Spread</div>
+        <!-- ★ CONNECT: data-field="spread" -->
+        <div class="kpi-primary" id="kpi-spread">1.2 <span style="font-size:12px;font-weight:400;color:var(--text-muted);">pips</span></div>
+        <div class="kpi-sub txt-green" id="kpi-spread-level">Bajo</div>
+      </div>
+
+      <!-- Barras -->
+      <div class="kpi-card">
+        <div class="kpi-label">Barras</div>
+        <!-- ★ CONNECT: data-field="bars_total" -->
+        <div class="kpi-primary" id="kpi-bars">99,535</div>
+        <div class="kpi-sub" id="kpi-bars-today">Hoy: 24,535</div>
+      </div>
+
+      <!-- Hora Servidor -->
+      <div class="kpi-card">
+        <div class="kpi-label">Hora del Servidor</div>
+        <div class="kpi-primary" id="kpi-time">--:--:--</div>
+        <div class="kpi-sub" id="kpi-date">--/--/----</div>
+      </div>
+
+      <!-- Memoria / Trades -->
+      <div class="kpi-card">
+        <div class="kpi-label">Memoria / Trades</div>
+        <!-- ★ CONNECT: data-field="memory_trades" -->
+        <div class="kpi-primary" id="kpi-trades" style="font-size:14px;">0 msg · 0 trades</div>
+        <div class="kpi-sub" id="kpi-activity">Sin actividad reciente</div>
+      </div>
+    </div>
+
+    <!-- ── Mid Row ─────────────────────────────────── -->
+    <div class="mid-row">
+
+      <!-- Chart Panel -->
+      <div class="panel chart-panel" style="min-height:320px;">
+        <div class="panel-header">
+          <div class="panel-title" id="chart-title">Gráfico en Tiempo Real · AUDCAD · M1</div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <!-- Timeframe Buttons -->
+            <div class="chart-controls" id="tf-controls">
+              <button class="tf-btn active" onclick="setTF(this,'M1')">M1</button>
+              <button class="tf-btn" onclick="setTF(this,'M5')">M5</button>
+              <button class="tf-btn" onclick="setTF(this,'M15')">M15</button>
+              <button class="tf-btn" onclick="setTF(this,'H1')">H1</button>
+              <button class="tf-btn" onclick="setTF(this,'H4')">H4</button>
+              <button class="tf-btn" onclick="setTF(this,'D1')">D1</button>
+            </div>
+            <div class="chart-divider"></div>
+            <button class="tf-btn">Indicadores</button>
+            <button class="tf-btn" onclick="expandChart()">⛶</button>
+          </div>
+        </div>
+
+        <!-- OHLC Bar -->
+        <div class="chart-ohlc">
+          <span>O <span class="ohlc-val" id="ohlc-o">0.97821</span></span>
+          <span>H <span class="ohlc-val" id="ohlc-h">0.97835</span></span>
+          <span>L <span class="ohlc-val" id="ohlc-l">0.97818</span></span>
+          <span>C <span class="ohlc-val" id="ohlc-c">0.97832</span></span>
+          <span class="ohlc-chg" id="ohlc-chg">+0.00011 (+0.01%)</span>
+          <span>Vol <span class="ohlc-val" id="ohlc-vol">125</span></span>
+        </div>
+
+        <!-- Chart Canvas Area — replace with your charting lib -->
+        <div class="chart-area" id="chart-container">
+          <div class="chart-placeholder">
+            <div class="chart-grid"></div>
+            <div class="chart-price-line"></div>
+            <div class="chart-candles" id="chart-candles">
+              <!-- Generated by JS below — replace with Lightweight Charts / Plotly / etc. -->
+            </div>
+            <div class="chart-volume" id="chart-volume"></div>
+            <!-- 
+              ★ CONNECT YOUR CHART HERE
+              Suggested libraries:
+              - TradingView Lightweight Charts (free, npm)
+              - Plotly.js (good for Python Flask/FastAPI)
+              - ApexCharts
+              
+              Example (Lightweight Charts):
+              const chart = createChart(document.getElementById('chart-container'), { ... });
+              const candleSeries = chart.addCandlestickSeries();
+              candleSeries.setData(yourOHLCData);
+            -->
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:.15;">
+              <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);">[ CHART AREA — conectar librería ]</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Signal / Gauge Panel -->
+      <div class="panel" style="min-height:320px;">
+        <div class="panel-header">
+          <div class="panel-title">Señal IA</div>
+          <!-- ★ CONNECT: data-field="signal_status" -->
+          <span class="status-badge neutral" id="signal-badge">NEUTRAL</span>
+        </div>
+
+        <div class="gauge-wrapper">
+          <!-- SVG Gauge — driven by JS -->
+          <svg class="gauge-svg" viewBox="0 0 180 100" id="gauge-svg">
+            <defs>
+              <linearGradient id="gaugeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%"   stop-color="#ff1744"/>
+                <stop offset="40%"  stop-color="#ffab00"/>
+                <stop offset="100%" stop-color="#00e676"/>
+              </linearGradient>
+            </defs>
+            <!-- Track -->
+            <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="#1e2d45" stroke-width="12" stroke-linecap="round"/>
+            <!-- Fill -->
+            <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="url(#gaugeGrad)" stroke-width="12" stroke-linecap="round"
+              stroke-dasharray="220" stroke-dashoffset="0" id="gauge-fill"/>
+            <!-- Needle -->
+            <line id="gauge-needle" x1="90" y1="90" x2="90" y2="30"
+              stroke="white" stroke-width="2" stroke-linecap="round"
+              transform="rotate(-50, 90, 90)"/>
+            <circle cx="90" cy="90" r="5" fill="white" opacity=".9"/>
+            <!-- Value text -->
+            <text id="gauge-value" x="90" y="72" text-anchor="middle"
+              font-family="JetBrains Mono, monospace" font-size="22" font-weight="700" fill="#e8edf5">62</text>
+            <text x="90" y="84" text-anchor="middle"
+              font-family="JetBrains Mono, monospace" font-size="9" fill="#607d9e" letter-spacing="1">/100</text>
+            <text x="90" y="98" text-anchor="middle"
+              font-family="JetBrains Mono, monospace" font-size="8" fill="#4a6080" letter-spacing="1.5">CONFIANZA</text>
+          </svg>
+
+          <div class="gauge-metrics">
+            <div class="gauge-metric">
+              <div class="gauge-metric-label">Dirección</div>
+              <!-- ★ CONNECT: data-field="direction" -->
+              <div class="gauge-metric-val txt-muted" id="signal-direction">NEUTRAL</div>
+            </div>
+            <div class="gauge-metric">
+              <div class="gauge-metric-label">Fuerza</div>
+              <!-- ★ CONNECT: data-field="strength" -->
+              <div class="gauge-metric-val txt-amber" id="signal-strength">MEDIA</div>
+            </div>
+            <div class="gauge-metric">
+              <div class="gauge-metric-label">Volatilidad</div>
+              <!-- ★ CONNECT: data-field="volatility" -->
+              <div class="gauge-metric-val txt-cyan" id="signal-volatility">BAJA</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="analysis-block">
+          <div class="analysis-title">Resumen del análisis</div>
+          <!-- ★ CONNECT: data-field="ai_summary" -->
+          <div class="analysis-text" id="signal-summary">
+            Estructura de mercado lateral. Sin confirmación clara.<br>
+            Esperar ruptura de rango o noticias relevantes.
+          </div>
+        </div>
+
+        <div class="levels-block">
+          <div class="levels-title">Niveles clave</div>
+          <div class="level-row"><span>Resistencia</span><span id="lvl-resistance">0.97980</span></div>
+          <div class="level-row"><span>Soporte</span><span id="lvl-support">0.97670</span></div>
+          <div class="level-row"><span>Punto Pivote</span><span id="lvl-pivot">0.97820</span></div>
+        </div>
+      </div>
+
+      <!-- News Panel -->
+      <div class="panel" style="min-height:320px;">
+        <div class="panel-header">
+          <div class="panel-title">Noticias & Macro (Tiempo Real)</div>
+        </div>
+        <div style="border-bottom:1px solid var(--border-subtle);">
+          <div style="display:flex;">
+            <button class="news-tab active" onclick="switchNewsTab(this,'finnhub')">Finnhub</button>
+            <button class="news-tab" onclick="switchNewsTab(this,'alpha')">Alpha Vantage</button>
+          </div>
+        </div>
+        <!-- ★ CONNECT: populate dynamically with your news feed data -->
+        <div class="news-list" id="news-list">
+          <div class="news-item">
+            <div class="news-time">16:58</div>
+            <div class="news-content"><div class="news-headline">BoC mantiene tasas sin cambios en abril</div></div>
+            <span class="news-badge badge-high">Alto</span>
+          </div>
+          <div class="news-item">
+            <div class="news-time">16:45</div>
+            <div class="news-content"><div class="news-headline">Dólar canadiense se fortalece tras datos de inflación</div></div>
+            <span class="news-badge badge-medium">Medio</span>
+          </div>
+          <div class="news-item">
+            <div class="news-time">16:30</div>
+            <div class="news-content"><div class="news-headline">Ventas minoristas de Canadá sorprenden al alza</div></div>
+            <span class="news-badge badge-medium">Medio</span>
+          </div>
+          <div class="news-item">
+            <div class="news-time">16:15</div>
+            <div class="news-content"><div class="news-headline">AUDUSD cae por aversión al riesgo global</div></div>
+            <span class="news-badge badge-low">Bajo</span>
+          </div>
+          <div class="news-item">
+            <div class="news-time">16:02</div>
+            <div class="news-content"><div class="news-headline">PMI manufacturero de China por debajo de lo esperado</div></div>
+            <span class="news-badge badge-medium">Medio</span>
+          </div>
+        </div>
+        <div style="padding:8px 14px;border-top:1px solid var(--border-subtle);">
+          <a href="#" style="font-family:var(--font-mono);font-size:10px;color:var(--blue);text-decoration:none;">Ver todas las noticias →</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Bottom Row ─────────────────────────────────── -->
+    <div class="bottom-row">
+
+      <!-- Economic Events -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Eventos Económicos Próximos</div>
+        </div>
+        <div class="panel-body" style="padding:0;overflow:auto;">
+          <!-- ★ CONNECT: populate rows with your economic calendar data -->
+          <table class="events-table" id="events-table">
+            <thead>
+              <tr>
+                <th>Hora</th>
+                <th>País</th>
+                <th>Evento</th>
+                <th>Impacto</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody id="events-tbody">
+              <tr>
+                <td class="td-time">12:30</td>
+                <td><span class="flag-icon">🇺🇸</span> USD</td>
+                <td>PIB Trimestral (QoQ)</td>
+                <td><span class="news-badge badge-high">Alto</span></td>
+                <td style="color:var(--green);font-family:var(--font-mono);font-size:10px;">En 1h 27m</td>
+              </tr>
+              <tr>
+                <td class="td-time">14:00</td>
+                <td><span class="flag-icon">🇨🇦</span> CAD</td>
+                <td>Decisión de Tasa de Interés</td>
+                <td><span class="news-badge badge-high">Alto</span></td>
+                <td style="color:var(--green);font-family:var(--font-mono);font-size:10px;">En 2h 57m</td>
+              </tr>
+              <tr>
+                <td class="td-time">14:30</td>
+                <td><span class="flag-icon">🇺🇸</span> USD</td>
+                <td>Solicitudes de Desempleo</td>
+                <td><span class="news-badge badge-medium">Medio</span></td>
+                <td style="color:var(--amber);font-family:var(--font-mono);font-size:10px;">En 3h 27m</td>
+              </tr>
+              <tr>
+                <td class="td-time">15:45</td>
+                <td><span class="flag-icon">🇺🇸</span> USD</td>
+                <td>PMI Manufacturero</td>
+                <td><span class="news-badge badge-medium">Medio</span></td>
+                <td style="color:var(--amber);font-family:var(--font-mono);font-size:10px;">En 4h 42m</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Performance -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Rendimiento (Hoy)</div>
+        </div>
+        <div class="panel-body">
+          <div class="perf-grid">
+            <div class="perf-cell">
+              <div class="perf-cell-label">P&L Diario</div>
+              <!-- ★ CONNECT: data-field="pnl_daily" -->
+              <div class="perf-cell-val green" id="perf-pnl">+0.00 USD</div>
+              <div style="font-family:var(--font-mono);font-size:9px;color:var(--text-muted);">0.00%</div>
+            </div>
+            <div class="perf-cell">
+              <div class="perf-cell-label">Trades Ganadores</div>
+              <!-- ★ CONNECT: data-field="win_trades" -->
+              <div class="perf-cell-val" id="perf-wins">0 (0%)</div>
+            </div>
+            <div class="perf-cell">
+              <div class="perf-cell-label">Drawdown</div>
+              <!-- ★ CONNECT: data-field="drawdown" -->
+              <div class="perf-cell-val" id="perf-dd">0.00%</div>
+            </div>
+            <div class="perf-cell">
+              <div class="perf-cell-label">Sharpe Ratio</div>
+              <!-- ★ CONNECT: data-field="sharpe" -->
+              <div class="perf-cell-val" id="perf-sharpe">0.00</div>
+            </div>
+            <div class="perf-cell">
+              <div class="perf-cell-label">Factor Beneficio</div>
+              <!-- ★ CONNECT: data-field="profit_factor" -->
+              <div class="perf-cell-val" id="perf-pf">0.00</div>
+            </div>
+            <div class="perf-cell">
+              <div class="perf-cell-label">Expectativa</div>
+              <!-- ★ CONNECT: data-field="expectancy" -->
+              <div class="perf-cell-val" id="perf-exp">0.00</div>
+            </div>
+          </div>
+
+          <!-- Mini P&L Chart -->
+          <div class="mini-chart" id="mini-chart-container">
+            <svg class="mini-chart-line" viewBox="0 0 280 44" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- ★ CONNECT: update path d with P&L time series -->
+              <polyline id="pnl-sparkline" points="0,22 30,22 60,22 90,22 120,22 150,22 180,22 210,22 240,22 280,22"
+                fill="none" stroke="#2979ff" stroke-width="1.5" opacity=".6"/>
+              <line x1="0" y1="22" x2="280" y2="22" stroke="#1e2d45" stroke-width="1" stroke-dasharray="4,4"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pipeline / Log -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title">Pipeline de Eventos</div>
+          <a href="#" style="font-family:var(--font-mono);font-size:10px;color:var(--blue);text-decoration:none;">Ver todo</a>
+        </div>
+        <!-- ★ CONNECT: stream your backend logs here -->
+        <div class="log-list" id="log-list">
+          <div class="log-item">
+            <span class="log-time">17:02:33</span>
+            <span class="log-dot-ok"></span>
+            <span class="log-ok">OK</span>
+            <span class="log-text">Quant inicializada en ventana local</span>
+          </div>
+          <div class="log-item">
+            <span class="log-time">17:02:32</span>
+            <span class="log-dot-ok"></span>
+            <span class="log-ok">OK</span>
+            <span class="log-text">AUDCAD M1 cargado</span>
+          </div>
+          <div class="log-item">
+            <span class="log-time">17:02:31</span>
+            <span class="log-dot-ok"></span>
+            <span class="log-ok">OK</span>
+            <span class="log-text">99,535 barras cargadas</span>
+          </div>
+          <div class="log-item">
+            <span class="log-time">17:02:30</span>
+            <span class="log-dot-ok"></span>
+            <span class="log-ok">OK</span>
+            <span class="log-text">Alpha Vantage: Conectado</span>
+          </div>
+          <div class="log-item">
+            <span class="log-time">17:02:29</span>
+            <span class="log-dot-ok"></span>
+            <span class="log-ok">OK</span>
+            <span class="log-text">Finnhub: Conectado</span>
+          </div>
+          <div class="log-item">
+            <span class="log-time">17:02:28</span>
+            <span class="log-dot-ok"></span>
+            <span class="log-ok">OK</span>
+            <span class="log-text">DeepSeek AI: Conectado</span>
+          </div>
+          <div class="log-item">
+            <span class="log-time">17:02:27</span>
+            <span class="log-dot-ok"></span>
+            <span class="log-ok">OK</span>
+            <span class="log-text">Binance: Conectado</span>
+          </div>
+          <div class="log-item">
+            <span class="log-time">17:02:26</span>
+            <span class="log-dot-ok"></span>
+            <span class="log-ok">OK</span>
+            <span class="log-text">Sistema iniciado correctamente</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Trading Manual Bar ─────────────────────────────────── -->
+    <div class="trading-bar">
+      <span class="bar-label">Trading Manual</span>
+
+      <div class="bar-field">
+        <span class="field-label">Venue</span>
+        <!-- ★ CONNECT: populate options from your venues list -->
+        <select class="q-select" id="venue-select">
+          <option>BINANCE</option>
+          <option>MT5</option>
+          <option>PAPER</option>
+        </select>
+      </div>
+
+      <div class="bar-field">
+        <span class="field-label">Símbolo</span>
+        <!-- ★ CONNECT: set value from current symbol -->
+        <select class="q-select" id="symbol-select">
+          <option>AUDCAD</option>
+          <option>USDJPY</option>
+          <option>EURUSD</option>
+          <option>GBPUSD</option>
+        </select>
+      </div>
+
+      <div class="bar-field">
+        <span class="field-label">Cantidad</span>
+        <!-- ★ CONNECT: data-field="lot_size" -->
+        <input class="q-input" type="number" id="qty-input" value="0.01" step="0.01" min="0.01">
+      </div>
+
+      <div class="bar-field">
+        <span class="field-label">Tipo</span>
+        <select class="q-select" id="order-type-select">
+          <option>Market</option>
+          <option>Limit</option>
+          <option>Stop</option>
+        </select>
+      </div>
+
+      <div class="bar-spacer"></div>
+
+      <button class="btn-buy" onclick="placeOrder('BUY')">
+        BUY
+        <span class="btn-sub">Confirmo compra</span>
+      </button>
+      <button class="btn-sell" onclick="placeOrder('SELL')">
+        SELL
+        <span class="btn-sub">Confirmo venta</span>
+      </button>
+      <button class="btn-cancel" onclick="cancelOrder()">
+        CANCELAR
+        <span class="btn-sub">Limpiar</span>
+      </button>
+    </div>
+
+  </main>
+</div>
+
+<!-- ============================================================
+     JAVASCRIPT — Clock, UI interactions, Fake chart
+     ============================================================ -->
+<script>
+/* ── Clock ─────────────────────────────────── */
+function updateClock() {
+  const now = new Date();
+  const t = now.toTimeString().slice(0,8);
+  const d = now.toLocaleDateString('es-CO', {day:'2-digit',month:'2-digit',year:'numeric'});
+  document.getElementById('kpi-time').textContent = t;
+  document.getElementById('kpi-date').textContent = d;
+  document.getElementById('last-update').textContent = t;
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+/* ── Sidebar Nav ─────────────────────────────────── */
+function setActive(el) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  el.classList.add('active');
+}
+
+/* ── Timeframe Buttons ─────────────────────────────────── */
+function setTF(el, tf) {
+  document.querySelectorAll('#tf-controls .tf-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('chart-title').textContent = `Gráfico en Tiempo Real · AUDCAD · ${tf}`;
+  // ★ CONNECT: trigger chart data reload for this timeframe
+  console.log('Timeframe seleccionado:', tf);
+}
+
+/* ── News Tabs ─────────────────────────────────── */
+function switchNewsTab(el, source) {
+  document.querySelectorAll('.news-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  // ★ CONNECT: reload news from selected source
+  console.log('Fuente de noticias:', source);
+}
+
+/* ── Refresh Button ─────────────────────────────────── */
+function refreshData() {
+  // ★ CONNECT: trigger full data refresh from Python backend
+  console.log('Refrescando datos...');
+  addLogEntry('OK', 'Actualización manual solicitada');
+}
+
+/* ── Trading Actions ─────────────────────────────────── */
+function placeOrder(side) {
+  const symbol = document.getElementById('symbol-select').value;
+  const qty    = document.getElementById('qty-input').value;
+  const venue  = document.getElementById('venue-select').value;
+  const type   = document.getElementById('order-type-select').value;
+  // ★ CONNECT: send order to your Python trading engine
+  console.log(`${side} ${qty} ${symbol} @ ${venue} [${type}]`);
+  addLogEntry('OK', `Orden ${side} enviada: ${qty} ${symbol}`);
+}
+function cancelOrder() {
+  document.getElementById('qty-input').value = '0.01';
+  // ★ CONNECT: cancel pending orders
+}
+
+/* ── Gauge Update ─────────────────────────────────── */
+function updateGauge(value) {
+  // value: 0–100
+  const totalArc = 220;
+  const dashOffset = totalArc - (value / 100) * totalArc;
+  document.getElementById('gauge-fill').setAttribute('stroke-dashoffset', dashOffset);
+  document.getElementById('gauge-value').textContent = value;
+
+  // Needle: maps 0→-90deg, 100→+90deg
+  const angle = -90 + (value / 100) * 180;
+  document.getElementById('gauge-needle').setAttribute('transform', `rotate(${angle}, 90, 90)`);
+}
+updateGauge(62); // ★ CONNECT: pass your AI signal confidence score
+
+/* ── Signal Badge Color ─────────────────────────────────── */
+function updateSignal(direction, confidence) {
+  const badge = document.getElementById('signal-badge');
+  badge.className = 'status-badge';
+  if (direction === 'BUY' || direction === 'LONG')  { badge.classList.add('bull'); badge.textContent = 'ALCISTA'; }
+  else if (direction === 'SELL' || direction === 'SHORT') { badge.classList.add('bear'); badge.textContent = 'BAJISTA'; }
+  else { badge.classList.add('neutral'); badge.textContent = 'NEUTRAL'; }
+}
+
+/* ── Add Log Entry ─────────────────────────────────── */
+function addLogEntry(status, message) {
+  const list = document.getElementById('log-list');
+  const now = new Date().toTimeString().slice(0,8);
+  const cls = status === 'OK' ? 'log-dot-ok' : 'log-dot-err';
+  const statusCls = status === 'OK' ? 'log-ok' : 'log-err';
+  const item = document.createElement('div');
+  item.className = 'log-item';
+  item.innerHTML = `
+    <span class="log-time">${now}</span>
+    <span class="${cls}"></span>
+    <span class="${statusCls}">${status}</span>
+    <span class="log-text">${message}</span>
+  `;
+  list.prepend(item);
+  if (list.children.length > 20) list.lastChild.remove();
+}
+
+/* ── Demo Candle Chart (replace with real chart lib) ─────────────────────────────────── */
+function drawDemoChart() {
+  const container = document.getElementById('chart-candles');
+  const volContainer = document.getElementById('chart-volume');
+  const raw = Array.from({length: 60}, (_, i) => {
+    const base = 0.978 + Math.sin(i * 0.18) * 0.002 + (Math.random() - 0.5) * 0.001;
+    const range = Math.random() * 0.0015;
+    const bull = Math.random() > 0.45;
+    return { open: base, close: bull ? base + range * 0.6 : base - range * 0.6,
+             high: base + range, low: base - range, bull };
+  });
+  const maxRange = Math.max(...raw.map(c => c.high - c.low));
+  const maxPrice = Math.max(...raw.map(c => c.high));
+  const minPrice = Math.min(...raw.map(c => c.low));
+  const priceRange = maxPrice - minPrice;
+  const h = 200;
+
+  container.innerHTML = '';
+  volContainer.innerHTML = '';
+  raw.forEach(c => {
+    const bodyH = Math.max(Math.abs(c.close - c.open) / priceRange * h, 2);
+    const wickTopH = (c.high - Math.max(c.open, c.close)) / priceRange * h;
+    const wickBotH = (Math.min(c.open, c.close) - c.low) / priceRange * h;
+    const candle = document.createElement('div');
+    candle.className = `candle ${c.bull ? 'bull' : 'bear'}`;
+    candle.innerHTML = `
+      <div class="candle-wick" style="height:${Math.max(wickTopH,2)}px"></div>
+      <div class="candle-body" style="height:${bodyH}px"></div>
+      <div class="candle-wick" style="height:${Math.max(wickBotH,2)}px"></div>
+    `;
+    container.appendChild(candle);
+    const vol = document.createElement('div');
+    vol.className = `vol-bar ${c.bull ? 'bull' : 'bear'}`;
+    vol.style.height = `${4 + Math.random() * 18}px`;
+    volContainer.appendChild(vol);
+  });
+}
+drawDemoChart();
+
+/* ── KPI Live Update (example) ─────────────────────────────────── */
+// ★ CONNECT: replace this with your WebSocket / polling logic
+// Example for Flask-SocketIO:
+//   const socket = io();
+//   socket.on('tick', data => updateKPIs(data));
+//
+function updateKPIs(data) {
+  if (data.price)    document.getElementById('kpi-price').textContent = data.price;
+  if (data.change)   document.getElementById('kpi-change').textContent = data.change;
+  if (data.spread)   document.getElementById('kpi-spread').textContent = data.spread;
+  if (data.confidence) updateGauge(data.confidence);
+  if (data.direction) {
+    document.getElementById('signal-direction').textContent = data.direction;
+    updateSignal(data.direction, data.confidence);
+  }
+  if (data.ai_summary) document.getElementById('signal-summary').textContent = data.ai_summary;
+  if (data.resistance) document.getElementById('lvl-resistance').textContent = data.resistance;
+  if (data.support)    document.getElementById('lvl-support').textContent = data.support;
+  if (data.pivot)      document.getElementById('lvl-pivot').textContent = data.pivot;
+  if (data.pnl)        document.getElementById('perf-pnl').textContent = data.pnl;
+}
+
+/* ── Chart Expand ─────────────────────────────────── */
+function expandChart() {
+  // ★ CONNECT: open chart in full-screen modal
+  console.log('Expandir gráfico');
+}
+</script>
+</body>
+</html>

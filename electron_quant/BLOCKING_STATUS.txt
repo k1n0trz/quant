@@ -1,0 +1,247 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                        🚨 BLOCKING ISSUE 🚨                                ║
+║              Frontend paused - Awaiting Backend API Contract                 ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+DATE: 2026-05-06
+STATUS: ⏳ PAUSED - WAITING FOR CODEX
+REASON: API Contract Desynchronization Risk
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+PROBLEM STATEMENT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Frontend and Backend are out of sync on API contract:
+
+  Frontend Current State:
+    • Has assumed endpoints (/api/bot/trading-real/on, etc)
+    • Has assumed response formats
+    • Has stub implementations
+    • No validation against real backend
+
+  Backend Current State:
+    • Endpoints may be different
+    • Response formats undefined
+    • Field names unknown
+    • Error codes undefined
+    • Status codes undefined
+
+  Risk:
+    ❌ Frontend code diverges from backend
+    ❌ Integration phase becomes chaotic
+    ❌ Debugging becomes difficult
+    ❌ Rework required when contract changes
+    ❌ Productivity drops
+
+  Solution:
+    ✅ Define API contract BEFORE coding more
+    ✅ Get exact endpoints from Codex
+    ✅ Get exact response formats from Codex
+    ✅ Get exact error handling from Codex
+    ✅ Frontend adapts to that contract
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT FRONTEND NEEDS FROM CODEX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ENDPOINT 1: POST /api/bot/trading-real/on
+  □ Exact path (could be different?)
+  □ Request body format (if any)
+  □ Response format (exact JSON)
+  □ Success HTTP status code
+  □ Error cases + codes
+
+ENDPOINT 2: POST /api/bot/trading-real/off
+  □ Path, body, response, codes
+
+ENDPOINT 3: POST /api/bot/training/on
+  □ Path, body, response, codes
+
+ENDPOINT 4: POST /api/bot/training/off
+  □ Path, body, response, codes
+
+ENDPOINT 5: POST /api/bot/kill-switch
+  □ Path, body, response, codes
+  □ Confirmation flow (if any)
+  □ Response after success
+
+DATA ENDPOINTS (For hero section):
+  □ GET /api/status (or different path?)
+  □ GET /api/trades (filtering, fields, etc)
+  □ GET /api/signals (or different?)
+
+GENERAL:
+  □ Base URL (localhost:3000? /api/? other?)
+  □ Port number
+  □ Authentication method (none? Bearer? Custom?)
+  □ CORS configuration
+  □ Rate limits (if any)
+  □ Response format standard (all have "ok" field?)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DELIVERABLE FROM CODEX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File: API_CONTRACT_TEMPLATE.md (in this directory)
+
+Format:
+  1. List each endpoint
+  2. Specify method (POST/GET/etc)
+  3. Specify path
+  4. Specify request body (if any)
+  5. Specify success response (full JSON)
+  6. Specify all error codes + responses
+  7. Answer all questions in template
+  8. Return completed form
+
+Example for one endpoint:
+
+  ENDPOINT: Enable Trading Real
+  METHOD: POST
+  PATH: /api/bot/trading-real/on
+  REQUEST BODY: {} (empty)
+  SUCCESS (HTTP 200):
+    {
+      "ok": true,
+      "trading_real_enabled": true,
+      "timestamp": "2026-05-06T14:30:00Z"
+    }
+  ERROR (HTTP 409 - Already enabled):
+    {
+      "ok": false,
+      "error": "Trading already enabled"
+    }
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT CLAUDE WILL DO AFTER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Once Codex delivers the completed API_CONTRACT_TEMPLATE.md:
+
+  1. Review exact endpoint specifications
+  2. Update frontend code to match EXACTLY
+  3. Replace assumed payloads with real ones
+  4. Add proper error handling for each code
+  5. Test endpoints with backend
+  6. Validate field names and types
+  7. Update hero section to use real data
+  8. Proceed to PHASE 2 with confidence
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TIMELINE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Right Now (2026-05-06):
+  ⏳ Codex implements endpoints
+  ⏳ Codex fills API_CONTRACT_TEMPLATE.md
+  ⏳ Claude waits
+
+After Codex Delivery:
+  1. Claude reviews contract (1 hour)
+  2. Claude updates frontend (2 hours)
+  3. Claude tests integration (1 hour)
+  4. PHASE 2 starts (Mobile responsive)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CODEX ACTION ITEMS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+For Backend Team (Codex):
+
+  [ ] Implement POST /api/bot/trading-real/on
+  [ ] Implement POST /api/bot/trading-real/off
+  [ ] Implement POST /api/bot/training/on
+  [ ] Implement POST /api/bot/training/off
+  [ ] Implement POST /api/bot/kill-switch
+  [ ] Implement GET /api/status (or alternative)
+  [ ] Implement GET /api/trades
+  [ ] Implement GET /api/signals
+  [ ] Test all endpoints
+  [ ] Fill API_CONTRACT_TEMPLATE.md completely
+  [ ] Return completed form to Claude
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CURRENT FRONTEND STATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Completed:
+  ✅ PHASE 0 - Infrastructure (testing page, modules, CSS)
+  ✅ PHASE 1 - Hero Integration (index.html, renderer.js updates)
+  ✅ Mock API layer (stubs that accept responses)
+
+On Hold (Waiting for Codex):
+  ⏳ PHASE 2 - Mobile Responsive Layout
+  ⏳ Real backend integration
+  ⏳ Error handling for actual API codes
+  ⏳ Data fetching and display
+
+Can Proceed Once:
+  ✅ API contract delivered
+  ✅ Endpoints tested by Codex
+  ✅ Response formats confirmed
+  ✅ Error codes documented
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHY THIS MATTERS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Without contract alignment:
+
+  ❌ Frontend codes against assumed API
+  ❌ Backend implements differently
+  ❌ Integration fails
+  ❌ Debugging is painful
+  ❌ Both teams rework code
+  ❌ Timeline slips
+  ❌ Frustration increases
+
+With contract alignment:
+
+  ✅ Frontend codes against REAL API
+  ✅ Backend implements to spec
+  ✅ Integration works first try
+  ✅ Debugging is straightforward
+  ✅ Zero rework needed
+  ✅ Timeline stays on track
+  ✅ Everyone is happy
+
+This is a small investment now that prevents massive pain later.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STATUS SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Frontend:  ✅ Ready to adapt to real API
+Backend:   ⏳ Pending API implementation + contract delivery
+Timeline:  ⏳ BLOCKED until contract is finalized
+
+Next Milestone:
+  Codex delivers: API_CONTRACT_TEMPLATE.md (fully filled)
+
+Then:
+  Claude adapts frontend + proceeds to PHASE 2
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DOCUMENT REFERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Codex should complete: API_CONTRACT_TEMPLATE.md
+Location: F:\Agentes\Barras\electron_quant\
+
+This file contains:
+  • Detailed specs for each endpoint
+  • Questions for Codex to answer
+  • Delivery checklist
+  • Template format for response
+
+⏳ WAITING FOR CODEX ⏳

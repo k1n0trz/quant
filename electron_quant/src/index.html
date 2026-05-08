@@ -84,7 +84,7 @@
 
       <section class="view active" id="view-dashboard">
         <!-- PHASE 1: Bot State Hero Section (MVP) -->
-        <section class="bot-state-hero">
+        <section class="bot-state-hero quant-status-bar">
           <div class="hero-header">
             <div class="hero-mark">◆</div>
             <h1>QUANT STATUS</h1>
@@ -176,7 +176,7 @@
         </section>
         <!-- END Hero Section -->
 
-        <div class="kpi-grid">
+        <div class="kpi-grid kpi-grid-compact">
           <div class="kpi-card asset-card">
             <div class="label">ACTIVO PRINCIPAL</div>
             <select id="platformSelect" class="platform-select">
@@ -216,8 +216,8 @@
           </div>
         </div>
 
-        <div class="dashboard-grid">
-          <section class="panel chart-panel">
+        <div class="dashboard-grid dashboard-grid-new">
+          <section class="panel chart-panel chart-main">
             <div class="panel-head">
               <h2 id="chartTitle">GRAFICO EN TIEMPO REAL - BTCUSDT - M1</h2>
               <button class="tiny-btn" id="expandChartBtn">↗</button>
@@ -240,7 +240,7 @@
             <canvas id="tradeChart"></canvas>
           </section>
 
-          <section class="panel signal-panel">
+          <section class="panel signal-panel signal-compact">
             <div class="panel-head"><h2>SENAL IA (DEEPSEEK)</h2><span class="badge neutral" id="signalBadge">NEUTRAL</span></div>
             <canvas id="gaugeCanvas"></canvas>
             <div class="signal-message" id="signalMessage">Buen momento para no hacer nada</div>

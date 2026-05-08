@@ -2234,3 +2234,211 @@ select:hover, input:hover, select:focus, input:focus {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* ============================================
+   PHASE 1 REDESIGN: Dashboard Visual Refactor
+   ============================================ */
+
+.content {
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 12px;
+}
+
+.chat-dock {
+  grid-column: 2;
+  grid-row: 1;
+  grid-template-rows: auto minmax(180px, 1fr) auto minmax(140px, 0.6fr) auto;
+}
+
+.view.active {
+  grid-column: 1;
+  grid-row: 1;
+  overflow: auto;
+  min-width: 0;
+  min-height: 0;
+  padding-right: 2px;
+}
+
+.bot-state-hero.quant-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  min-height: 44px;
+}
+
+.quant-status-bar .hero-header {
+  display: none;
+}
+
+.quant-status-bar .hero-body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.quant-status-bar .state-row,
+.quant-status-bar .state-metric {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  white-space: nowrap;
+}
+
+.quant-status-bar .mode-row {
+  order: 1;
+}
+
+.quant-status-bar .control-row:nth-of-type(2) {
+  order: 2;
+}
+
+.quant-status-bar .control-row:nth-of-type(3) {
+  order: 3;
+}
+
+.quant-status-bar .confidence {
+  order: 4;
+  gap: 10px;
+}
+
+.quant-status-bar .pnl-metric {
+  order: 5;
+}
+
+.quant-status-bar .last-action {
+  display: none;
+}
+
+.quant-status-bar .control-row {
+  padding: 8px 12px;
+  background: rgba(41,121,255,.06);
+  border: 1px solid rgba(41,121,255,.2);
+  border-radius: 5px;
+}
+
+.quant-status-bar .control-left,
+.quant-status-bar .control-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.quant-status-bar .control-left label,
+.quant-status-bar .state-row label,
+.quant-status-bar .state-metric label {
+  min-width: auto;
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: .5px;
+}
+
+.quant-status-bar .state-value {
+  font-weight: 900;
+  color: white;
+}
+
+.quant-status-bar .control-status {
+  font-weight: 800;
+}
+
+.quant-status-bar .metric-value {
+  font-weight: 900;
+  color: var(--green);
+}
+
+.quant-status-bar .metric-change {
+  display: none;
+}
+
+.quant-status-bar .confidence-bar {
+  display: none;
+}
+
+.quant-status-bar .hero-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  margin-left: auto;
+  border: 0;
+}
+
+.quant-status-bar .hero-footer span:last-child {
+  display: none;
+}
+
+.quant-status-bar .btn-secondary,
+.quant-status-bar .kill-switch {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quant-status-bar .toggle-btn {
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+.kpi-grid-compact {
+  grid-template-columns: 1.6fr 1fr 1fr 1fr 1.2fr;
+  margin-bottom: 12px;
+}
+
+.kpi-grid-compact .kpi-card {
+  min-height: 80px;
+  padding: 12px 14px;
+}
+
+.dashboard-grid-new {
+  height: calc(100vh - 360px);
+  min-height: 400px;
+  grid-template-columns: 2fr 0.8fr;
+  grid-template-rows: 1fr;
+  gap: 12px;
+}
+
+.chart-main {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(280px, 1fr);
+}
+
+.signal-compact {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  grid-template-rows: auto 100px auto auto minmax(60px, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.signal-compact #gaugeCanvas {
+  height: 100px;
+}
+
+.dashboard-grid-new .news-panel,
+.dashboard-grid-new .economic-panel,
+.dashboard-grid-new .manual-panel-inline,
+.dashboard-grid-new .recent-panel,
+.dashboard-grid-new .performance-panel {
+  display: none;
+}
+
+#gaugeCanvas {
+  width: 100%;
+  height: 120px;
+}

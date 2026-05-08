@@ -4,6 +4,13 @@ const { getConnectionsSummary, testBinanceConnection, testMt5Connection } = requ
 const { readTradesFromMemory } = require('../trades/trade-history-service');
 const { readSignalsFromMemory } = require('../signals/signal-history-service');
 const { readTrainingLogs } = require('../training/training-log-service');
+const {
+  getTrainingCoreStatus,
+  getTrainingCoreMetrics,
+  getTrainingCoreStrategies,
+  getTrainingCoreEquity,
+  getTrainingCoreEdge
+} = require('../training/training-core-service');
 const { ApiError, toErrorPayload } = require('../utils/errors');
 
 function response(status, body) {
@@ -82,6 +89,26 @@ function createApiRouter(context) {
 
       if (method === 'GET' && pathname === '/api/training/logs') {
         return response(200, readTrainingLogs(deps.readMemory, deps.readTrainingState));
+      }
+
+      if (method === 'GET' && pathname === '/api/training/core/status') {
+        return response(200, getTrainingCoreStatus(env, deps));
+      }
+
+      if (method === 'GET' && pathname === '/api/training/core/metrics') {
+        return response(200, getTrainingCoreMetrics(env, deps));
+      }
+
+      if (method === 'GET' && pathname === '/api/training/core/strategies') {
+        return response(200, getTrainingCoreStrategies(env, deps));
+      }
+
+      if (method === 'GET' && pathname === '/api/training/core/equity') {
+        return response(200, getTrainingCoreEquity(env, deps));
+      }
+
+      if (method === 'GET' && pathname === '/api/training/core/edge') {
+        return response(200, getTrainingCoreEdge(env, deps));
       }
 
       if (method === 'GET' && pathname === '/api/risk') {

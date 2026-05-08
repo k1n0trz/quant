@@ -945,6 +945,137 @@
           }
         }
       }
+    },
+    "/api/training/core/status": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "summary": "Get read-only Quant-Core training status",
+        "description": "Returns backend-first Quant-Core status without activating the autonomous scheduler, writing training records, touching Binance, or changing real trading state.",
+        "responses": {
+          "200": {
+            "description": "Get read-only Quant-Core training status returned successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "": "#/components/schemas/TrainingCoreStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/training/core/metrics": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "summary": "Get read-only Quant-Core training metrics",
+        "responses": {
+          "200": {
+            "description": "Get read-only Quant-Core training metrics returned successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "": "#/components/schemas/TrainingCoreMetricsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/training/core/strategies": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "summary": "Get read-only Quant-Core strategy registry",
+        "responses": {
+          "200": {
+            "description": "Get read-only Quant-Core strategy registry returned successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "": "#/components/schemas/TrainingCoreStrategiesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/training/core/equity": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "summary": "Get read-only Quant-Core training equity curve",
+        "responses": {
+          "200": {
+            "description": "Get read-only Quant-Core training equity curve returned successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "": "#/components/schemas/TrainingCoreEquityResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/training/core/edge": {
+      "get": {
+        "tags": [
+          "Training"
+        ],
+        "summary": "Get read-only Quant-Core edge diagnostics",
+        "responses": {
+          "200": {
+            "description": "Get read-only Quant-Core edge diagnostics returned successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "": "#/components/schemas/TrainingCoreEdgeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "": "#/components/responses/InternalError"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1506,6 +1637,429 @@
                 }
               }
             ]
+          }
+        }
+      },
+      "TrainingCoreSafety": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "readOnly",
+          "schedulerActive",
+          "writesPerformed",
+          "realTradingTouched"
+        ],
+        "properties": {
+          "readOnly": {
+            "type": "boolean",
+            "const": true
+          },
+          "schedulerActive": {
+            "type": "boolean",
+            "const": false
+          },
+          "writesPerformed": {
+            "type": "boolean",
+            "const": false
+          },
+          "realTradingTouched": {
+            "type": "boolean",
+            "const": false
+          }
+        }
+      },
+      "TrainingCoreStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "core",
+          "state",
+          "safety"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "core": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "mode",
+              "backendEnabled",
+              "schedulerActive",
+              "backendManaged",
+              "shadowModeReady"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "mode": {
+                "type": "string",
+                "const": "shadow"
+              },
+              "backendEnabled": {
+                "type": "boolean"
+              },
+              "schedulerActive": {
+                "type": "boolean",
+                "const": false
+              },
+              "backendManaged": {
+                "type": "boolean"
+              },
+              "shadowModeReady": {
+                "type": "boolean"
+              }
+            }
+          },
+          "state": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "version",
+              "mode",
+              "simulated",
+              "blockRealExecution",
+              "balanceStart",
+              "balance",
+              "positions",
+              "closedTrades",
+              "lessons",
+              "persistedAt"
+            ],
+            "properties": {
+              "version": {
+                "type": "integer"
+              },
+              "mode": {
+                "type": "string"
+              },
+              "simulated": {
+                "type": "boolean"
+              },
+              "blockRealExecution": {
+                "type": "boolean"
+              },
+              "balanceStart": {
+                "type": "number"
+              },
+              "balance": {
+                "type": "number"
+              },
+              "positions": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "closedTrades": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "lessons": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "persistedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "safety": {
+            "": "#/components/schemas/TrainingCoreSafety"
+          }
+        }
+      },
+      "TrainingCoreMetricSet": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "sampleSize",
+          "sampleStatus",
+          "wins",
+          "losses",
+          "winRate",
+          "netProfit",
+          "profitFactor",
+          "expectancy",
+          "equityCurve",
+          "edgeDegradation",
+          "stabilityScore",
+          "confidenceScore"
+        ],
+        "properties": {
+          "sampleSize": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sampleStatus": {
+            "type": "string",
+            "enum": [
+              "sufficient",
+              "insufficient"
+            ]
+          },
+          "wins": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "losses": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "winRate": {
+            "type": "number"
+          },
+          "netProfit": {
+            "type": "number"
+          },
+          "profitFactor": {
+            "type": "number"
+          },
+          "expectancy": {
+            "type": "number"
+          },
+          "equityCurve": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "edgeDegradation": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "stabilityScore": {
+            "type": "number"
+          },
+          "confidenceScore": {
+            "type": "number"
+          }
+        }
+      },
+      "TrainingCoreMetricsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "mode",
+          "metrics",
+          "safety"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "mode": {
+            "type": "string",
+            "const": "shadow"
+          },
+          "metrics": {
+            "": "#/components/schemas/TrainingCoreMetricSet"
+          },
+          "safety": {
+            "": "#/components/schemas/TrainingCoreSafety"
+          }
+        }
+      },
+      "TrainingCoreStrategy": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": [
+          "id",
+          "name",
+          "minScore",
+          "rrMin",
+          "backendExecutable",
+          "phase",
+          "rules"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "minScore": {
+            "type": "number"
+          },
+          "rrMin": {
+            "type": "number"
+          },
+          "backendExecutable": {
+            "type": "boolean",
+            "const": false
+          },
+          "phase": {
+            "type": "string",
+            "const": "shadow"
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "TrainingCoreStrategiesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "mode",
+          "strategies",
+          "safety"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "mode": {
+            "type": "string",
+            "const": "shadow"
+          },
+          "strategies": {
+            "type": "array",
+            "items": {
+              "": "#/components/schemas/TrainingCoreStrategy"
+            }
+          },
+          "safety": {
+            "": "#/components/schemas/TrainingCoreSafety"
+          }
+        }
+      },
+      "TrainingCoreEquityResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "mode",
+          "equity",
+          "safety"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "mode": {
+            "type": "string",
+            "const": "shadow"
+          },
+          "equity": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "balanceStart",
+              "balance",
+              "points",
+              "curve",
+              "maxDrawdown",
+              "maxDrawdownPct"
+            ],
+            "properties": {
+              "balanceStart": {
+                "type": "number"
+              },
+              "balance": {
+                "type": "number"
+              },
+              "points": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "curve": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "maxDrawdown": {
+                "type": "number"
+              },
+              "maxDrawdownPct": {
+                "type": "number"
+              }
+            }
+          },
+          "safety": {
+            "": "#/components/schemas/TrainingCoreSafety"
+          }
+        }
+      },
+      "TrainingCoreEdgeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ok",
+          "mode",
+          "edge",
+          "safety"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "const": true
+          },
+          "mode": {
+            "type": "string",
+            "const": "shadow"
+          },
+          "edge": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "sampleSize",
+              "sampleStatus",
+              "confidenceScore",
+              "stabilityScore",
+              "degradation",
+              "backendEnabled",
+              "schedulerActive"
+            ],
+            "properties": {
+              "sampleSize": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sampleStatus": {
+                "type": "string",
+                "enum": [
+                  "sufficient",
+                  "insufficient"
+                ]
+              },
+              "confidenceScore": {
+                "type": "number"
+              },
+              "stabilityScore": {
+                "type": "number"
+              },
+              "degradation": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "backendEnabled": {
+                "type": "boolean"
+              },
+              "schedulerActive": {
+                "type": "boolean",
+                "const": false
+              }
+            }
+          },
+          "safety": {
+            "": "#/components/schemas/TrainingCoreSafety"
           }
         }
       }

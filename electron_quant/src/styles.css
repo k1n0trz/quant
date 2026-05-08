@@ -76,15 +76,19 @@ button { cursor: pointer; }
   overflow: hidden;
   padding: 12px;
   display: grid;
-  grid-template-columns: 360px minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 12px;
   background: radial-gradient(circle at top right, rgba(41,121,255,.05), transparent 32%), var(--bg-base);
 }
-.view { display: none; min-height: 0; }
+.view {
+  display: none;
+  min-height: 0;
+}
+
 .view.active {
   display: block;
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 1;
   overflow: auto;
   min-width: 0;
@@ -184,14 +188,115 @@ select:hover, input:hover, select:focus, input:focus {
 }
 .symbol-option small { color: var(--text-muted); }
 
-.dashboard-grid {
-  height: calc(100vh - 265px);
-  min-height: 560px;
-  display: grid;
-  grid-template-columns: 1.65fr .82fr 1fr;
-  grid-template-rows: 1.5fr .86fr;
-  gap: 10px;
+/* REDESIGN: Status Bar Compacta */
+.quant-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  margin-bottom: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.status-item.trading-indicator,
+.status-item.training-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(41,121,255,.06);
+  border: 1px solid rgba(41,121,255,.2);
+  border-radius: 5px;
+}
+
+.status-label {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.status-item .state-value {
+  font-weight: 900;
+  color: white;
+}
+
+.status-item .control-status {
+  font-weight: 800;
+  color: var(--green);
+}
+
+.status-item.pnl-item .metric-value {
+  font-weight: 900;
+  color: var(--green);
+}
+
+.status-spacer {
+  flex: 1;
+}
+
+.quant-status-bar .toggle-btn.tiny {
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+/* REDESIGN: KPI Grid Compacto */
+.kpi-grid-compact {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr 1.2fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.kpi-grid-compact .kpi-card {
+  min-height: 80px;
+  padding: 12px 14px;
+}
+
+/* REDESIGN: Dashboard Grid - Gráfica Protagonista */
+.dashboard-grid-new {
+  height: calc(100vh - 360px);
+  min-height: 400px;
+  display: grid;
+  grid-template-columns: 2fr 0.8fr;
+  grid-template-rows: 1fr;
+  gap: 12px;
+}
+
+.chart-main {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.signal-compact {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  grid-template-rows: auto 120px auto auto minmax(60px, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Legacy support - hide old dashboard-grid */
+.dashboard-grid {
+  display: none;
+}
+
 .chart-panel { grid-row: 1 / 3; }
 .signal-panel { grid-column: 2; grid-row: 1; }
 .news-panel { grid-column: 3; grid-row: 1 / 3; }
@@ -201,9 +306,13 @@ select:hover, input:hover, select:focus, input:focus {
 .panel h2, .view-head h1 { margin: 0; font-family: var(--font-mono); font-size: 13px; letter-spacing: .2px; }
 .chart-panel {
   display: grid;
-  grid-template-rows: auto auto auto auto minmax(310px, 1fr);
+  grid-template-rows: auto auto auto auto minmax(280px, 1fr);
   min-height: 0;
   overflow: hidden;
+}
+
+.chart-main {
+  grid-template-rows: auto auto auto auto minmax(280px, 1fr) !important;
 }
 .tf-row { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
 .tf { background: transparent; color: var(--text-secondary); padding: 7px 10px; border: 1px solid transparent; }
@@ -262,7 +371,14 @@ select:hover, input:hover, select:focus, input:focus {
 .badge.long { background: rgba(0,230,118,.12); color: var(--green); }
 .badge.short { background: rgba(255,23,68,.12); color: var(--red); }
 .badge.neutral { background: rgba(120,144,156,.16); color: var(--text-secondary); }
-#gaugeCanvas { width: 100%; height: 150px; }
+#gaugeCanvas {
+  width: 100%;
+  height: 120px;
+}
+
+.signal-compact #gaugeCanvas {
+  height: 100px;
+}
 .signal-message { margin: 2px 0 12px; padding: 12px; border-radius: 6px; text-align: center; font-family: var(--font-mono); font-size: 15px; font-weight: 900; background: rgba(41,121,255,.08); border: 1px solid var(--border-default); }
 .signal-message.buy { color: var(--green); background: rgba(0,230,118,.08); }
 .signal-message.sell { color: var(--red); background: rgba(255,23,68,.08); }
@@ -317,11 +433,11 @@ select:hover, input:hover, select:focus, input:focus {
   transition: border-color .18s ease, box-shadow .18s ease;
 }
 .chat-dock {
-  grid-column: 1;
-  grid-row: 1 / 3;
+  grid-column: 2;
+  grid-row: 1;
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(180px, 1.2fr) auto minmax(160px, .9fr) auto;
+  grid-template-rows: auto minmax(180px, 1fr) auto minmax(140px, 0.6fr) auto;
   position: relative;
 }
 .mini-pipeline-head {
@@ -887,6 +1003,183 @@ select:hover, input:hover, select:focus, input:focus {
   margin-bottom: 10px;
 }
 
+/* REDESIGN: Training Lab Header */
+.training-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.training-hero-compact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.training-hero-compact .training-mark {
+  font-size: 24px;
+  color: var(--cyan);
+  text-shadow: 0 0 12px rgba(0,229,255,.3);
+}
+
+.training-hero-compact h1 {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 1px;
+}
+
+.training-hero-compact h1 span {
+  background: rgba(41,121,255,.15);
+  color: var(--blue);
+  padding: 3px 7px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-size: 12px;
+}
+
+.training-hero-compact p {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* REDESIGN: Training KPIs Compactos */
+.training-kpis-compact {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.training-kpis-compact .kpi-card {
+  min-height: 72px;
+  padding: 10px 12px;
+}
+
+/* REDESIGN: Equity Panel Protagonista */
+.training-equity-panel {
+  margin-bottom: 12px;
+  min-height: 300px;
+  padding: 16px;
+}
+
+/* REDESIGN: Tab System */
+.training-tabs-container {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+  gap: 12px;
+}
+
+.tabs-header {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 8px;
+  overflow-x: auto;
+  flex-wrap: wrap;
+}
+
+.training-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid transparent;
+  transition: color .18s ease, border-color .18s ease;
+  cursor: pointer;
+}
+
+.training-tab:hover {
+  color: white;
+  border-bottom-color: rgba(0,229,255,.3);
+}
+
+.training-tab.active {
+  color: var(--cyan);
+  border-bottom-color: var(--cyan);
+}
+
+.tab-icon {
+  font-size: 14px;
+}
+
+/* Tab Content */
+.training-tab-content {
+  display: none;
+  min-height: 0;
+  overflow: auto;
+}
+
+.training-tab-content.active {
+  display: block;
+}
+
+.training-tab-content .panel {
+  padding: 16px;
+}
+
+/* Position Sub-tabs */
+.training-positions-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 8px;
+}
+
+.position-tab {
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary);
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  border-bottom: 2px solid transparent;
+  transition: color .18s ease, border-color .18s ease;
+  cursor: pointer;
+}
+
+.position-tab:hover {
+  color: white;
+}
+
+.position-tab.active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+
+.position-tab-content {
+  display: none;
+}
+
+.position-tab-content.active {
+  display: block;
+}
+
+/* Strategy Ranking */
+.strategy-ranking {
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Training Grid Legacy (para mobile) */
 .training-grid {
   display: grid;
   grid-template-columns: 1.15fr 1.3fr 1fr;
@@ -1428,6 +1721,176 @@ select:hover, input:hover, select:focus, input:focus {
   .kpi-value {
     font-size: 18px;
   }
+}
+
+/* ============================================
+   PHASE 1 REDESIGN: Dashboard Visual Refactor
+   ============================================ */
+
+/* Status Bar Compact (Horizontal) */
+.quant-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  margin-bottom: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.status-item.trading-indicator,
+.status-item.training-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(41,121,255,.06);
+  border: 1px solid rgba(41,121,255,.2);
+  border-radius: 5px;
+}
+
+.status-label {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.status-item .state-value {
+  font-weight: 900;
+  color: white;
+}
+
+.status-item .control-status {
+  font-weight: 800;
+  color: var(--green);
+}
+
+.status-item.pnl-item .metric-value {
+  font-weight: 900;
+  color: var(--green);
+}
+
+.status-spacer {
+  flex: 1;
+}
+
+.quant-status-bar .toggle-btn.tiny {
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+/* KPI Grid Compact (5 columns) */
+.kpi-grid-compact {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr 1fr 1.2fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.kpi-grid-compact .kpi-card {
+  min-height: 80px;
+  padding: 12px 14px;
+}
+
+/* Dashboard Grid New (Chart protagonist 70%, Signal 30%) */
+.dashboard-grid-new {
+  height: calc(100vh - 360px);
+  min-height: 400px;
+  display: grid;
+  grid-template-columns: 2fr 0.8fr;
+  grid-template-rows: 1fr;
+  gap: 12px;
+}
+
+.chart-main {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto auto auto minmax(280px, 1fr) !important;
+}
+
+.signal-compact {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  grid-template-rows: auto 100px auto auto minmax(60px, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.signal-compact #gaugeCanvas {
+  height: 100px;
+}
+
+/* Hide old dashboard-grid */
+.dashboard-grid {
+  display: none !important;
+}
+
+.kpi-grid {
+  display: none !important;
+}
+
+/* Update .content grid: Chat on right (340px) */
+.content {
+  grid-column: 2;
+  grid-row: 2;
+  overflow: hidden;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 12px;
+  background: radial-gradient(circle at top right, rgba(41,121,255,.05), transparent 32%), var(--bg-base);
+}
+
+/* Update view positioning */
+.view {
+  display: none;
+  min-height: 0;
+}
+
+.view.active {
+  display: block;
+  grid-column: 1;
+  grid-row: 1;
+  overflow: auto;
+  min-width: 0;
+  padding-right: 2px;
+}
+
+/* Chat dock: Right side */
+.chat-dock {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(180px, 1fr) auto minmax(140px, 0.6fr) auto;
+}
+
+/* Gauge canvas size */
+#gaugeCanvas {
+  width: 100%;
+  height: 120px;
+}
+
+.signal-compact #gaugeCanvas {
+  height: 100px;
 }
 
 /* ═══════════════════════════════════════════════════════════════════

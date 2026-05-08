@@ -83,81 +83,45 @@
       </section>
 
       <section class="view active" id="view-dashboard">
-        <!-- PHASE 1: Bot State Hero Section (MVP) -->
-        <section class="bot-state-hero quant-status-bar">
-          <div class="hero-header">
-            <div class="hero-mark">◆</div>
-            <h1>QUANT STATUS</h1>
+        <!-- REDESIGN: Status Bar Compacta (Horizontal) -->
+        <div class="quant-status-bar">
+          <div class="status-item">
+            <span class="status-label">MODE</span>
+            <span class="state-value" id="botStateMode">IDLE</span>
           </div>
 
-          <div class="hero-body">
-            <!-- Mode Display -->
-            <div class="state-row mode-row">
-              <label>MODE</label>
-              <span class="state-value" id="botStateMode">IDLE</span>
-            </div>
-
-            <!-- Trading Real Control -->
-            <div class="state-row control-row">
-              <div class="control-left">
-                <label>TRADING REAL</label>
-                <div class="control-indicator">
-                  <span class="indicator-dot trading-live" id="tradingRealDot"></span>
-                  <span class="control-status" id="tradingRealStatus">OFF</span>
-                </div>
-              </div>
-              <button class="control-btn toggle-btn" id="tradingRealToggle" data-toggle="trading-real">
-                <span class="toggle-state">ENABLE</span>
-              </button>
-            </div>
-
-            <!-- Training Control -->
-            <div class="state-row control-row">
-              <div class="control-left">
-                <label>TRAINING</label>
-                <div class="control-indicator">
-                  <span class="indicator-dot training-sim" id="trainingDot"></span>
-                  <span class="control-status" id="trainingStatus">OFF</span>
-                </div>
-              </div>
-              <button class="control-btn toggle-btn" id="trainingToggle" data-toggle="training">
-                <span class="toggle-state">ENABLE</span>
-              </button>
-            </div>
-
-            <!-- P&L Metric -->
-            <div class="state-metric pnl-metric">
-              <label>P&L TODAY</label>
-              <span class="metric-value" id="botStatePnl">+$0.00</span>
-              <span class="metric-change" id="botStatePnlPct">0.00%</span>
-            </div>
-
-            <!-- Last Action -->
-            <div class="state-metric last-action">
-              <label>LAST ACTION</label>
-              <span class="action-text" id="botStateLastAction">No operations yet</span>
-            </div>
-
-            <!-- Confidence/Volatility -->
-            <div class="state-metric confidence">
-              <label>CONFIDENCE</label>
-              <div class="confidence-bar">
-                <div class="confidence-fill" id="confidenceFill" style="width: 0%"></div>
-              </div>
-              <span class="confidence-text" id="confidenceText">0%</span>
-            </div>
-          </div>
-
-          <div class="hero-footer">
-            <button class="btn-secondary" id="pauseTradingBtn">
-              <span>⏸</span>
-              <span>PAUSE</span>
-            </button>
-            <button class="btn-danger kill-switch" id="killSwitchBtn" title="Stop all real trading operations immediately">
-              <span>⚠</span>
-              <span>KILL SWITCH</span>
+          <div class="status-item trading-indicator">
+            <span class="indicator-dot trading-live" id="tradingRealDot"></span>
+            <span class="status-label">TRADING REAL</span>
+            <span class="control-status" id="tradingRealStatus">OFF</span>
+            <button class="toggle-btn tiny" id="tradingRealToggle" data-toggle="trading-real">
+              <span class="toggle-state">ENABLE</span>
             </button>
           </div>
+
+          <div class="status-item training-indicator">
+            <span class="indicator-dot training-sim" id="trainingDot"></span>
+            <span class="status-label">TRAINING</span>
+            <span class="control-status" id="trainingStatus">OFF</span>
+            <button class="toggle-btn tiny" id="trainingToggle" data-toggle="training">
+              <span class="toggle-state">ENABLE</span>
+            </button>
+          </div>
+
+          <div class="status-item">
+            <span class="status-label">CONFIDENCE</span>
+            <span id="confidenceText">0%</span>
+          </div>
+
+          <div class="status-item pnl-item">
+            <span class="status-label">P&L TODAY</span>
+            <span class="metric-value" id="botStatePnl">+$0.00</span>
+          </div>
+
+          <div class="status-spacer"></div>
+
+          <button class="btn-secondary" id="pauseTradingBtn" title="Pausa operaciones">⏸</button>
+          <button class="btn-danger kill-switch" id="killSwitchBtn" title="Stop all real trading">⚠</button>
 
           <!-- Kill Switch Confirmation Modal (hidden by default) -->
           <div class="kill-switch-confirm" id="killSwitchConfirm" style="display: none;">
@@ -173,10 +137,10 @@
               </div>
             </div>
           </div>
-        </section>
-        <!-- END Hero Section -->
+        </div>
 
-        <div class="kpi-grid kpi-grid-compact">
+        <!-- KPI GRID: Activo Principal + Sidekicks -->
+        <div class="kpi-grid-compact">
           <div class="kpi-card asset-card">
             <div class="label">ACTIVO PRINCIPAL</div>
             <select id="platformSelect" class="platform-select">
@@ -216,7 +180,49 @@
           </div>
         </div>
 
-        <div class="dashboard-grid dashboard-grid-new">
+        <div class="kpi-grid">
+          <div class="kpi-card asset-card">
+            <div class="label">ACTIVO PRINCIPAL</div>
+            <select id="platformSelect" class="platform-select">
+              <option value="BINANCE">BINANCE</option>
+              <option value="MT5">MT5</option>
+            </select>
+            <div class="symbol-combo" id="assetCombo">
+              <input id="assetSearch" autocomplete="off" spellcheck="false" placeholder="Buscar par..." />
+              <button id="assetDropBtn">⌄</button>
+              <div class="symbol-menu" id="assetMenu"></div>
+            </div>
+            <div class="sub" id="assetSub">Binance Spot - API</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="label">PRECIO ACTUAL</div>
+            <div class="kpi-value" id="priceNow">-</div>
+            <div class="positive" id="priceChange">-</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="label">SPREAD</div>
+            <div class="kpi-value" id="spreadNow">-</div>
+            <div class="sub" id="spreadSub">0.00%</div>
+          </div>
+
+          <div class="kpi-card">
+            <div class="label">HORA DEL SERVIDOR</div>
+            <div class="kpi-value" id="clockNow">--:--:--</div>
+            <div class="sub" id="dateNow">--/--/----</div>
+          </div>
+
+          <div class="kpi-card memory-card">
+            <div class="label">MEMORIA / TRADES</div>
+            <div class="kpi-value" id="memoryNow">0 msg - 0 trades</div>
+            <div class="sub">Persistente local</div>
+          </div>
+        </div>
+
+        <!-- REDESIGN: Dashboard Grid - Gráfica Protagonista -->
+        <div class="dashboard-grid-new">
+          <!-- GRÁFICA: Centro absoluto -->
           <section class="panel chart-panel chart-main">
             <div class="panel-head">
               <h2 id="chartTitle">GRAFICO EN TIEMPO REAL - BTCUSDT - M1</h2>
@@ -240,6 +246,7 @@
             <canvas id="tradeChart"></canvas>
           </section>
 
+          <!-- SIDEKICK: Señal IA pequeña -->
           <section class="panel signal-panel signal-compact">
             <div class="panel-head"><h2>SENAL IA (DEEPSEEK)</h2><span class="badge neutral" id="signalBadge">NEUTRAL</span></div>
             <canvas id="gaugeCanvas"></canvas>
@@ -252,7 +259,9 @@
             </div>
             <div class="analysis-box" id="signalSummary">Esperando datos vivos...</div>
           </section>
+        </div>
 
+        <div class="dashboard-grid">
           <section class="panel news-panel">
             <div class="panel-head"><h2>NOTICIAS & MACRO (TIEMPO REAL)</h2></div>
             <div class="tab-row">
@@ -260,16 +269,16 @@
               <button class="tab" id="alphaBtn">Alpha Vantage</button>
             </div>
             <div class="news-list" id="newsList"></div>
-            <button class="news-more" data-jump="news">Ver todas las noticias →</button>
+            <button class="news-more" data-jump="news">Ver todas las noticias â†’</button>
           </section>
 
           <section class="panel economic-panel">
             <div class="panel-head"><h2>PROXIMOS EVENTOS ECONOMICOS</h2></div>
             <div class="economic-list">
-              <div class="econ-row"><span>14:30</span><span>🇺🇸 USD</span><b>Solicitudes de Desempleo</b><em class="impact high">Alto</em><small>En 42m</small></div>
-              <div class="econ-row"><span>15:45</span><span>🇺🇸 USD</span><b>PMI Manufacturero</b><em class="impact mid">Medio</em><small>En 1h 57m</small></div>
-              <div class="econ-row"><span>16:00</span><span>🇨🇦 CAD</span><b>Decision de Tasa de Interes</b><em class="impact high">Alto</em><small>En 2h 12m</small></div>
-              <div class="econ-row"><span>16:30</span><span>🇺🇸 USD</span><b>PIB Trimestral (QoQ)</b><em class="impact high">Alto</em><small>En 3h 42m</small></div>
+              <div class="econ-row"><span>14:30</span><span>ðŸ‡ºðŸ‡¸ USD</span><b>Solicitudes de Desempleo</b><em class="impact high">Alto</em><small>En 42m</small></div>
+              <div class="econ-row"><span>15:45</span><span>ðŸ‡ºðŸ‡¸ USD</span><b>PMI Manufacturero</b><em class="impact mid">Medio</em><small>En 1h 57m</small></div>
+              <div class="econ-row"><span>16:00</span><span>ðŸ‡¨ðŸ‡¦ CAD</span><b>Decision de Tasa de Interes</b><em class="impact high">Alto</em><small>En 2h 12m</small></div>
+              <div class="econ-row"><span>16:30</span><span>ðŸ‡ºðŸ‡¸ USD</span><b>PIB Trimestral (QoQ)</b><em class="impact high">Alto</em><small>En 3h 42m</small></div>
             </div>
           </section>
 
@@ -279,12 +288,12 @@
               <label>VENUE<input id="manualVenueDisplay" value="BINANCE" readonly /></label>
               <label>SIMBOLO<input id="manualSymbolDisplay" value="BTCUSDT" readonly /></label>
               <label>TIPO<select id="orderType"><option value="MARKET">Market</option><option value="LIMIT">Limit</option></select></label>
-              <label>PRECIO LÍMITE<input id="limitPriceInput" type="number" step="any" min="0" placeholder="Solo para Limit" /></label>
+              <label>PRECIO LÃMITE<input id="limitPriceInput" type="number" step="any" min="0" placeholder="Solo para Limit" /></label>
               <label>STOP-LOSS<input id="stopLossInput" type="number" step="any" min="0" placeholder="Precio de stop" /></label>
               <label>RIESGO %<input id="riskPctInput" type="number" value="0.5" step="0.1" min="0.1" max="5" /></label>
               <label>CANTIDAD<input id="qtyInput" type="number" value="0.001" step="0.001" min="0" /></label>
               <label style="justify-content:center;align-items:flex-end">
-                <button class="ghost-btn" id="calcSizeBtn" style="width:100%;padding:6px 0">⟳ Calcular size</button>
+                <button class="ghost-btn" id="calcSizeBtn" style="width:100%;padding:6px 0">âŸ³ Calcular size</button>
               </label>
               <div id="sizeCalcInfo" style="grid-column:1/-1;font-size:12px;color:#8fa3c0;min-height:18px"></div>
               <label class="confirm-field" style="grid-column:1/-1">CONFIRMACION<input id="confirmInput" placeholder="CONFIRMO BUY BTCUSDT" /></label>
@@ -298,8 +307,8 @@
           <section class="panel recent-panel">
             <div class="panel-head"><h2>TRADES RECIENTES</h2></div>
             <div class="recent-head"><span>HORA</span><span>SIMBOLO</span><span>TIPO</span><span>CANTIDAD</span><span>PRECIO</span><span>RESULTADO</span></div>
-            <div class="empty-trades">⚙<b>Aun no hay trades</b><span>Cuando ejecutes operaciones, apareceran aqui.</span></div>
-            <button class="news-more" data-jump="history">Ver historial completo →</button>
+            <div class="empty-trades">âš™<b>Aun no hay trades</b><span>Cuando ejecutes operaciones, apareceran aqui.</span></div>
+            <button class="news-more" data-jump="history">Ver historial completo â†’</button>
           </section>
 
           <section class="panel performance-panel">
@@ -341,68 +350,118 @@
       </section>
 
       <section class="view" id="view-training">
-        <div class="training-top">
-          <div class="training-hero">
+        <!-- REDESIGN: Training Lab - Laboratorio Cognitivo -->
+        <div class="training-header">
+          <div class="training-hero-compact">
             <div class="training-mark">◎</div>
             <div>
-              <h1>TRAINING MODE <span>DEMO</span></h1>
-              <p>Datos reales de mercado + operaciones simuladas. Sin dinero real. Aprendizaje guardado en memoria.</p>
+              <h1>TRAINING LAB <span>DEMO</span></h1>
+              <p>Simulación con datos reales. Aprendizaje persistente.</p>
             </div>
           </div>
-          <div class="training-mode-pill"><span class="dot"></span> Modo: Training (Demo)</div>
+          <div class="training-mode-pill"><span class="dot"></span> Demo Mode</div>
         </div>
 
-        <div class="training-kpis">
-          <div class="kpi-card"><div class="label">EQUITY DEMO</div><div class="kpi-value" id="trainBalance">$100,000.00</div><div class="sub">Balance + P&L flotante</div></div>
+        <!-- KPI Row Compacta -->
+        <div class="training-kpis-compact">
+          <div class="kpi-card"><div class="label">EQUITY DEMO</div><div class="kpi-value" id="trainBalance">$100,000.00</div><div class="sub">Balance + P&L</div></div>
           <div class="kpi-card"><div class="label">P&L TOTAL</div><div class="kpi-value positive" id="trainTotalPnl">+0.00</div><div class="sub" id="trainTotalPct">0.00%</div></div>
-          <div class="kpi-card"><div class="label">P&L HOY</div><div class="kpi-value positive" id="trainTodayPnl">+0.00</div><div class="sub">Paper interno</div></div>
-          <div class="kpi-card"><div class="label">OPERACIONES</div><div class="kpi-value" id="trainOps">0</div><div class="sub" id="trainWinrate">0% winrate</div></div>
-          <div class="kpi-card"><div class="label">MODELOS ACTIVOS</div><div class="kpi-value" id="trainPairCount">0 / 20</div><div class="sub">10 intradia + 10 mediano</div></div>
-          <div class="kpi-card"><div class="label">NIVEL QUANT</div><div class="kpi-value" id="trainLevel">Noob</div><div class="sub" id="trainXp">0 XP</div></div>
+          <div class="kpi-card"><div class="label">P&L HOY</div><div class="kpi-value positive" id="trainTodayPnl">+0.00</div><div class="sub">Paper</div></div>
+          <div class="kpi-card"><div class="label">OPS</div><div class="kpi-value" id="trainOps">0</div><div class="sub" id="trainWinrate">0% wr</div></div>
+          <div class="kpi-card"><div class="label">MODELOS</div><div class="kpi-value" id="trainPairCount">0 / 20</div><div class="sub">Pares activos</div></div>
+          <div class="kpi-card"><div class="label">NIVEL</div><div class="kpi-value" id="trainLevel">Noob</div><div class="sub" id="trainXp">0 XP</div></div>
         </div>
 
-        <div class="training-grid">
-          <section class="panel training-pairs-panel">
-            <div class="panel-head"><h2>PARES EN TRAINING (REALES, GESTIONADOS POR QUANT)</h2><button class="tiny-btn" id="trainingReselectBtn">Revalidar pares</button></div>
-            <div class="training-disclaimer">Training solo usa <b>executeSimulatedTrade()</b>. Ordenes reales bloqueadas por modo.</div>
-            <div class="training-table" id="trainingPairsTable"></div>
-          </section>
+        <!-- EQUITY CURVE: Protagonista -->
+        <div class="panel training-equity-panel">
+          <div class="panel-head">
+            <h2>CURVA DE EQUITY (EVOLUCIÓN)</h2>
+            <button class="tiny-btn" id="trainingReselectBtn">Revalidar pares</button>
+          </div>
+          <canvas id="trainingEquityChart" style="width:100%;height:260px;background:#101927;border:1px solid var(--border-subtle);border-radius:4px;"></canvas>
+        </div>
 
-          <section class="panel training-positions-panel">
-            <div class="panel-head"><h2>POSICIONES ACTIVAS (DEMO)</h2><span class="training-caption">Intradía + mediano plazo</span></div>
-            <div class="positions-split">
-              <div>
-                <h3>CORTO PLAZO / INTRADIA</h3>
+        <!-- TAB SYSTEM: Contenido contextual -->
+        <div class="training-tabs-container">
+          <div class="tabs-header">
+            <button class="training-tab active" data-tab="pairs">
+              <span class="tab-icon">▥</span> PARES ACTIVOS
+            </button>
+            <button class="training-tab" data-tab="positions">
+              <span class="tab-icon">⊕</span> POSICIONES
+            </button>
+            <button class="training-tab" data-tab="strategy">
+              <span class="tab-icon">⭐</span> ESTRATEGIAS
+            </button>
+            <button class="training-tab" data-tab="lessons">
+              <span class="tab-icon">📚</span> LECCIONES
+            </button>
+            <button class="training-tab" data-tab="trades">
+              <span class="tab-icon">◷</span> OPERACIONES
+            </button>
+          </div>
+
+          <!-- TAB 1: Pares Activos -->
+          <div class="training-tab-content active" id="tab-pairs">
+            <div class="panel">
+              <div class="panel-head"><h2>PARES EN TRAINING (GESTIONADOS POR QUANT)</h2></div>
+              <div class="training-disclaimer">Training solo usa simulación. Ordenes reales bloqueadas.</div>
+              <div class="training-table" id="trainingPairsTable"></div>
+            </div>
+          </div>
+
+          <!-- TAB 2: Posiciones -->
+          <div class="training-tab-content" id="tab-positions">
+            <div class="panel">
+              <div class="panel-head"><h2>POSICIONES ACTIVAS (DEMO)</h2></div>
+              <div class="training-positions-tabs">
+                <button class="position-tab active" data-position-tab="intraday">INTRADAY</button>
+                <button class="position-tab" data-position-tab="swing">MEDIANO PLAZO</button>
+              </div>
+              <div id="positionsIntradayContent" class="position-tab-content active">
                 <div class="training-table" id="trainingPositionsShortTable"></div>
               </div>
-              <div>
-                <h3>MEDIANO PLAZO / 1-2 SEMANAS</h3>
+              <div id="positionsSwingContent" class="position-tab-content">
                 <div class="training-table" id="trainingPositionsSwingTable"></div>
               </div>
             </div>
-          </section>
+          </div>
 
-          <section class="panel training-advice-panel">
-            <div class="panel-head"><h2>CONSEJOS DE INVERSION (DATOS OBSERVADOS)</h2><span id="trainingUpdated">--:--:--</span></div>
-            <div class="training-advice-list" id="trainingAdviceList"></div>
-          </section>
-
-          <section class="panel training-memory-panel">
-            <div class="panel-head"><h2>PROGRESO, MEMORIA & APRENDIZAJE</h2><span id="trainPersistence">Persistencia local activa</span></div>
-            <div class="training-memory-grid">
-              <div><small>Lecciones guardadas</small><b id="trainLessons">0</b></div>
-              <div><small>Feed real</small><b id="trainFeedState">Validando</b></div>
-              <div><small>Ultima leccion</small><span id="trainLastLesson">Aun no hay trades cerrados.</span></div>
-              <div class="strategy-lab" id="trainingStrategyTable"></div>
-              <div class="level-table" id="trainingLevelTable"></div>
+          <!-- TAB 3: Estrategias -->
+          <div class="training-tab-content" id="tab-strategy">
+            <div class="panel">
+              <div class="panel-head"><h2>RANKING DE ESTRATEGIAS</h2></div>
+              <div class="strategy-ranking">
+                <div class="strategy-lab" id="trainingStrategyTable"></div>
+              </div>
             </div>
-          </section>
+          </div>
 
-          <section class="panel training-trades-panel">
-            <div class="panel-head"><h2>ULTIMAS OPERACIONES (DEMO)</h2></div>
-            <div class="training-table" id="trainingTradesTable"></div>
-          </section>
+          <!-- TAB 4: Lecciones -->
+          <div class="training-tab-content" id="tab-lessons">
+            <div class="panel">
+              <div class="panel-head"><h2>MEMORIA DE APRENDIZAJE</h2><span id="trainingUpdated">--:--:--</span></div>
+              <div class="training-memory-grid">
+                <div><small>Lecciones guardadas</small><b id="trainLessons">0</b></div>
+                <div><small>Última lección</small><span id="trainLastLesson">Aun no hay trades cerrados.</span></div>
+                <div><small>Feed real</small><b id="trainFeedState">Validando</b></div>
+                <div><small>Persistencia</small><b id="trainPersistence">Activa</b></div>
+              </div>
+              <div class="training-advice-list" id="trainingAdviceList"></div>
+            </div>
+          </div>
+
+          <!-- TAB 5: Operaciones -->
+          <div class="training-tab-content" id="tab-trades">
+            <div class="panel">
+              <div class="panel-head"><h2>ÚLTIMAS OPERACIONES (DEMO)</h2></div>
+              <div class="training-table" id="trainingTradesTable"></div>
+            </div>
+          </div>
         </div>
+
+        <!-- Level Table (oculto pero presente para JS) -->
+        <div style="display:none" id="trainingLevelTable"></div>
       </section>
 
       <section class="view" id="view-manual"><div class="view-head"><h1>Trading Manual</h1><p>La consola manual principal vive en el dashboard para evitar duplicados.</p></div><div class="panel full-panel empty-state">Usa el bloque Trading Manual del dashboard.</div></section>

@@ -375,6 +375,31 @@ function bindUi() {
   document.addEventListener('click', (e) => {
     if (!$('assetCombo').contains(e.target)) $('assetMenu').classList.remove('open');
   });
+
+  // Training Lab Tabs
+  document.querySelectorAll('.training-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const tabName = tab.dataset.tab;
+      document.querySelectorAll('.training-tab').forEach((t) => t.classList.remove('active'));
+      document.querySelectorAll('.training-tab-content').forEach((c) => c.classList.remove('active'));
+      tab.classList.add('active');
+      const content = document.getElementById(`tab-${tabName}`);
+      if (content) content.classList.add('active');
+    });
+  });
+
+  // Position Sub-tabs (Intraday / Swing)
+  document.querySelectorAll('.position-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const tabName = tab.dataset.positionTab;
+      document.querySelectorAll('.position-tab').forEach((t) => t.classList.remove('active'));
+      document.querySelectorAll('.position-tab-content').forEach((c) => c.classList.remove('active'));
+      tab.classList.add('active');
+      const contentId = tabName === 'intraday' ? 'positionsIntradayContent' : 'positionsSwingContent';
+      const content = document.getElementById(contentId);
+      if (content) content.classList.add('active');
+    });
+  });
 }
 
 function renderStatus() {

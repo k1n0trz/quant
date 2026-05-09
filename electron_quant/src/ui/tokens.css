@@ -7,6 +7,30 @@
    Loaded BEFORE lab.css, AFTER styles.css.
    ============================================================ */
 
+:root {
+  --shell-bg-base:     #050816;
+  --shell-bg-surface:  #0b1020;
+  --shell-glass:       rgba(17, 24, 39, 0.62);
+  --shell-glass-deep:  rgba(11, 16, 32, 0.72);
+  --shell-purple:      #8b5cf6;
+  --shell-purple-2:    #a855f7;
+  --shell-border:      rgba(139, 92, 246, 0.18);
+  --shell-border-strong: rgba(139, 92, 246, 0.34);
+  --shell-text:        #f8fafc;
+  --shell-text-dim:    #cbd5e1;
+  --shell-text-mute:   #94a3b8;
+  --shell-shadow-card:
+      0 1px 0 rgba(255,255,255,0.03) inset,
+      0 8px 28px -12px rgba(0,0,0,0.7),
+      0 0 0 1px rgba(139, 92, 246, 0.04);
+  --lab-border:        rgba(139, 92, 246, 0.18);
+  --lab-text:          #f8fafc;
+  --lab-shadow-card:
+      0 1px 0 rgba(255,255,255,0.03) inset,
+      0 8px 28px -12px rgba(0,0,0,0.7),
+      0 0 0 1px rgba(139, 92, 246, 0.04);
+}
+
 .lab-shell {
   /* ---------- Surfaces ---------- */
   --bg-base:        #050816;

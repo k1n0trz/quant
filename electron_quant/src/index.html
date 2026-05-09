@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8" />
@@ -13,29 +13,43 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">◆</div>
+  <div class="app-shell app-shell--global">
+    <aside class="sidebar shell-sidebar">
+      <div class="brand brand--global">
+        <div class="brand-mark">â—†</div>
         <div>
           <div class="brand-title">QUANT</div>
-          <div class="brand-sub">AI TRADING SYSTEM</div>
+          <div class="brand-sub">GLOBAL MARKET OPERATIONS</div>
         </div>
       </div>
 
-      <nav class="nav" id="nav">
-        <button class="nav-item active" data-view="dashboard">⌂ Dashboard</button>
-        <button class="nav-item" data-view="lab">◬ Quant Lab <span class="lab-badge">v1</span></button>
-        <button class="nav-item" data-view="news">▤ Noticias & Macro</button>
-        <button class="nav-item" data-view="training">▱ Training</button>
-        <button class="nav-item" data-view="orders">▧ Ordenes</button>
-        <button class="nav-item" data-view="positions">⊕ Posiciones</button>
-        <button class="nav-item" data-view="history">◷ Rendimiento</button>
-        <button class="nav-item" data-view="backtest">▣ Backtesting</button>
-        <button class="nav-item" data-view="alerts">♢ Alertas</button>
-        <button class="nav-item" data-view="wallet">◈ Wallets</button>
-        <button class="nav-item" data-view="conversations">☰ Conversaciones</button>
-        <button class="nav-item" data-view="settings">⚙ Configuracion</button>
+            <nav class="nav nav--grouped" id="nav">
+        <section class="nav-group" data-nav-group="core">
+          <div class="nav-group-label">Core</div>
+          <button class="nav-item active" data-view="dashboard">Dashboard</button>
+          <button class="nav-item" data-view="news">Noticias & Macro</button>
+          <button class="nav-item" data-view="training">Training</button>
+        </section>
+
+        <section class="nav-group" data-nav-group="execution">
+          <div class="nav-group-label">Execution</div>
+          <button class="nav-item" data-view="orders">Ordenes</button>
+          <button class="nav-item" data-view="positions">Posiciones</button>
+          <button class="nav-item" data-view="wallet">Wallets</button>
+        </section>
+
+        <section class="nav-group" data-nav-group="analysis">
+          <div class="nav-group-label">Analysis</div>
+          <button class="nav-item" data-view="history">Rendimiento</button>
+          <button class="nav-item" data-view="backtest">Backtesting</button>
+          <button class="nav-item" data-view="conversations">Conversaciones</button>
+        </section>
+
+        <section class="nav-group" data-nav-group="system">
+          <div class="nav-group-label">System</div>
+          <button class="nav-item" data-view="alerts">Alertas</button>
+          <button class="nav-item" data-view="settings">Configuracion</button>
+        </section>
       </nav>
 
       <div class="user-card">
@@ -57,7 +71,7 @@
       </div>
     </aside>
 
-    <header class="topbar">
+    <header class="topbar shell-topbar">
       <div class="active-pill">
         <span class="dot"></span>
         <div>
@@ -67,15 +81,15 @@
       </div>
       <div class="top-spacer"></div>
       <div class="last-update">Ultima actualizacion: <span id="lastUpdate">--:--:--</span></div>
-      <span id="syncStatusBadge" style="font-size:11px;letter-spacing:.5px;cursor:default" title="Estado de sincronización MT5 con cloud"></span>
+      <span id="syncStatusBadge" style="font-size:11px;letter-spacing:.5px;cursor:default" title="Estado de sincronizaciÃ³n MT5 con cloud"></span>
       <button class="ghost-btn" id="topClearMemoryBtn">Limpiar memoria</button>
-      <button class="ghost-btn refresh-data" id="refreshBtn">⟳ Actualizar datos</button>
+      <button class="ghost-btn refresh-data" id="refreshBtn">âŸ³ Actualizar datos</button>
       <button class="primary-btn safety-hidden" id="enableTradingBtn">HABILITAR TRADING</button>
-      <a id="desktopDownloadBtn" href="#" style="display:none" class="ghost-btn">⬇ Descargar escritorio</a>
-      <button class="ghost-btn" data-jump="settings">⚙ Configuracion ⌄</button>
+      <a id="desktopDownloadBtn" href="#" style="display:none" class="ghost-btn">â¬‡ Descargar escritorio</a>
+      <button class="ghost-btn" data-jump="settings">âš™ Configuracion âŒ„</button>
     </header>
 
-    <main class="content">
+    <main class="content shell-content">
       <section class="panel chat-dock">
         <div class="chat-head">QUANT COPILOT <span>analista permanente</span></div>
         <div class="chat-log" id="chatLog"></div>
@@ -125,8 +139,8 @@
 
           <div class="status-spacer"></div>
 
-          <button class="btn-secondary" id="pauseTradingBtn" title="Pausa operaciones">⏸</button>
-          <button class="btn-danger kill-switch" id="killSwitchBtn" title="Stop all real trading">⚠</button>
+          <button class="btn-secondary" id="pauseTradingBtn" title="Pausa operaciones">â¸</button>
+          <button class="btn-danger kill-switch" id="killSwitchBtn" title="Stop all real trading">âš </button>
 
           <!-- Kill Switch Confirmation Modal (hidden by default) -->
           <div class="kill-switch-confirm" id="killSwitchConfirm" style="display: none;">
@@ -154,7 +168,7 @@
             </select>
             <div class="symbol-combo" id="assetCombo">
               <input id="assetSearch" autocomplete="off" spellcheck="false" placeholder="Buscar par..." />
-              <button id="assetDropBtn">⌄</button>
+              <button id="assetDropBtn">âŒ„</button>
               <div class="symbol-menu" id="assetMenu"></div>
             </div>
             <div class="sub" id="assetSub">Binance Spot - API</div>
@@ -194,7 +208,7 @@
             </select>
             <div class="symbol-combo" id="assetCombo">
               <input id="assetSearch" autocomplete="off" spellcheck="false" placeholder="Buscar par..." />
-              <button id="assetDropBtn">⌄</button>
+              <button id="assetDropBtn">âŒ„</button>
               <div class="symbol-menu" id="assetMenu"></div>
             </div>
             <div class="sub" id="assetSub">Binance Spot - API</div>
@@ -225,13 +239,13 @@
           </div>
         </div>
 
-        <!-- REDESIGN: Dashboard Grid - Gráfica Protagonista -->
+        <!-- REDESIGN: Dashboard Grid - GrÃ¡fica Protagonista -->
         <div class="dashboard-grid-new">
-          <!-- GRÁFICA: Centro absoluto -->
+          <!-- GRÃFICA: Centro absoluto -->
           <section class="panel chart-panel chart-main">
             <div class="panel-head">
               <h2 id="chartTitle">GRAFICO EN TIEMPO REAL - BTCUSDT - M1</h2>
-              <button class="tiny-btn" id="expandChartBtn">↗</button>
+              <button class="tiny-btn" id="expandChartBtn">â†—</button>
             </div>
             <div class="tf-row" id="tfRow">
               <button class="tf active" data-tf="M1">M1</button>
@@ -240,7 +254,7 @@
               <button class="tf" data-tf="H1">H1</button>
               <button class="tf" data-tf="H4">H4</button>
               <button class="tf" data-tf="D1">D1</button>
-              <span class="tool-label">↯ Indicadores</span>
+              <span class="tool-label">â†¯ Indicadores</span>
             </div>
             <div class="indicator-row">
               <label><input type="checkbox" id="sslChannelToggle" checked /> SSL Channel</label>
@@ -251,7 +265,7 @@
             <canvas id="tradeChart"></canvas>
           </section>
 
-          <!-- SIDEKICK: Señal IA pequeña -->
+          <!-- SIDEKICK: SeÃ±al IA pequeÃ±a -->
           <section class="panel signal-panel signal-compact">
             <div class="panel-head"><h2>SENAL IA (DEEPSEEK)</h2><span class="badge neutral" id="signalBadge">NEUTRAL</span></div>
             <canvas id="gaugeCanvas"></canvas>
@@ -274,16 +288,16 @@
               <button class="tab" id="alphaBtn">Alpha Vantage</button>
             </div>
             <div class="news-list" id="newsList"></div>
-            <button class="news-more" data-jump="news">Ver todas las noticias â†’</button>
+            <button class="news-more" data-jump="news">Ver todas las noticias Ã¢â€ â€™</button>
           </section>
 
           <section class="panel economic-panel">
             <div class="panel-head"><h2>PROXIMOS EVENTOS ECONOMICOS</h2></div>
             <div class="economic-list">
-              <div class="econ-row"><span>14:30</span><span>ðŸ‡ºðŸ‡¸ USD</span><b>Solicitudes de Desempleo</b><em class="impact high">Alto</em><small>En 42m</small></div>
-              <div class="econ-row"><span>15:45</span><span>ðŸ‡ºðŸ‡¸ USD</span><b>PMI Manufacturero</b><em class="impact mid">Medio</em><small>En 1h 57m</small></div>
-              <div class="econ-row"><span>16:00</span><span>ðŸ‡¨ðŸ‡¦ CAD</span><b>Decision de Tasa de Interes</b><em class="impact high">Alto</em><small>En 2h 12m</small></div>
-              <div class="econ-row"><span>16:30</span><span>ðŸ‡ºðŸ‡¸ USD</span><b>PIB Trimestral (QoQ)</b><em class="impact high">Alto</em><small>En 3h 42m</small></div>
+              <div class="econ-row"><span>14:30</span><span>Ã°Å¸â€¡ÂºÃ°Å¸â€¡Â¸ USD</span><b>Solicitudes de Desempleo</b><em class="impact high">Alto</em><small>En 42m</small></div>
+              <div class="econ-row"><span>15:45</span><span>Ã°Å¸â€¡ÂºÃ°Å¸â€¡Â¸ USD</span><b>PMI Manufacturero</b><em class="impact mid">Medio</em><small>En 1h 57m</small></div>
+              <div class="econ-row"><span>16:00</span><span>Ã°Å¸â€¡Â¨Ã°Å¸â€¡Â¦ CAD</span><b>Decision de Tasa de Interes</b><em class="impact high">Alto</em><small>En 2h 12m</small></div>
+              <div class="econ-row"><span>16:30</span><span>Ã°Å¸â€¡ÂºÃ°Å¸â€¡Â¸ USD</span><b>PIB Trimestral (QoQ)</b><em class="impact high">Alto</em><small>En 3h 42m</small></div>
             </div>
           </section>
 
@@ -293,14 +307,14 @@
               <label>VENUE<input id="manualVenueDisplay" value="BINANCE" readonly /></label>
               <label>SIMBOLO<input id="manualSymbolDisplay" value="BTCUSDT" readonly /></label>
               <label>TIPO<select id="orderType"><option value="MARKET">Market</option><option value="LIMIT">Limit</option></select></label>
-              <label>PRECIO LÃMITE<input id="limitPriceInput" type="number" step="any" min="0" placeholder="Solo para Limit" /></label>
+              <label>PRECIO LÃƒÂMITE<input id="limitPriceInput" type="number" step="any" min="0" placeholder="Solo para Limit" /></label>
               <label>STOP-LOSS<input id="stopLossInput" type="number" step="any" min="0" placeholder="Precio de stop" /></label>
-              <label data-pending="backend" title="Pendiente integración backend">TAKE-PROFIT<input id="takeProfitInput" type="number" step="any" min="0" placeholder="Precio objetivo" /></label>
+              <label data-pending="backend" title="Pendiente integraciÃ³n backend">TAKE-PROFIT<input id="takeProfitInput" type="number" step="any" min="0" placeholder="Precio objetivo" /></label>
               <label>RIESGO %<input id="riskPctInput" type="number" value="0.5" step="0.1" min="0.1" max="5" /></label>
               <label>CANTIDAD<input id="qtyInput" type="number" value="0.001" step="0.001" min="0" /></label>
-              <label data-pending="backend" title="Pendiente integración backend">MULTIPLICADOR<input id="multiplierInput" type="number" value="1" step="0.5" min="1" max="125" placeholder="1x" /></label>
+              <label data-pending="backend" title="Pendiente integraciÃ³n backend">MULTIPLICADOR<input id="multiplierInput" type="number" value="1" step="0.5" min="1" max="125" placeholder="1x" /></label>
               <label style="justify-content:center;align-items:flex-end">
-                <button class="ghost-btn" id="calcSizeBtn" style="width:100%;padding:6px 0">âŸ³ Calcular size</button>
+                <button class="ghost-btn" id="calcSizeBtn" style="width:100%;padding:6px 0">Ã¢Å¸Â³ Calcular size</button>
               </label>
               <div id="sizeCalcInfo" style="grid-column:1/-1;font-size:12px;color:#8fa3c0;min-height:18px"></div>
               <label class="confirm-field" style="grid-column:1/-1">CONFIRMACION<input id="confirmInput" placeholder="CONFIRMO BUY BTCUSDT" /></label>
@@ -309,14 +323,14 @@
               <button class="cancel-btn" id="cancelBtn">CANCELAR<span>Limpiar</span></button>
             </div>
             <div id="orderResultBox" style="margin-top:10px;font-size:13px;display:none"></div>
-            <div class="manual-pending-note" style="margin-top:10px;padding:6px 10px;border-left:2px solid #4a6080;font-size:11px;color:#8fa3c0;font-style:italic;line-height:1.45">TAKE-PROFIT y MULTIPLICADOR aún no se transmiten al backend. Quedan capturados localmente hasta que el contrato de orden los acepte.</div>
+            <div class="manual-pending-note" style="margin-top:10px;padding:6px 10px;border-left:2px solid #4a6080;font-size:11px;color:#8fa3c0;font-style:italic;line-height:1.45">TAKE-PROFIT y MULTIPLICADOR aÃºn no se transmiten al backend. Quedan capturados localmente hasta que el contrato de orden los acepte.</div>
           </section>
 
           <section class="panel recent-panel">
             <div class="panel-head"><h2>TRADES RECIENTES</h2></div>
             <div class="recent-head"><span>HORA</span><span>SIMBOLO</span><span>TIPO</span><span>CANTIDAD</span><span>PRECIO</span><span>RESULTADO</span></div>
-            <div class="empty-trades">âš™<b>Aun no hay trades</b><span>Cuando ejecutes operaciones, apareceran aqui.</span></div>
-            <button class="news-more" data-jump="history">Ver historial completo â†’</button>
+            <div class="empty-trades">Ã¢Å¡â„¢<b>Aun no hay trades</b><span>Cuando ejecutes operaciones, apareceran aqui.</span></div>
+            <button class="news-more" data-jump="history">Ver historial completo Ã¢â€ â€™</button>
           </section>
 
           <section class="panel performance-panel">
@@ -335,27 +349,27 @@
       </section>
 
       <!-- ============================================================
-           Quant Lab v1 — coexistente con #view-dashboard.
-           Markup placeholder con datos sintéticos para validar shell;
-           H3-H4 conectarán los endpoints reales auditados en H0.
+           Purple workspace preview â€” coexistente con #view-dashboard.
+           Markup placeholder con datos sintÃ©ticos para validar shell;
+           H3-H4 conectarÃ¡n los endpoints reales auditados en H0.
            ============================================================ -->
       <section class="view lab-shell" id="view-lab">
 
         <header class="lab-topbar">
           <div class="lab-brand">
             <div class="lab-brand-mark">Q</div>
-            <div class="lab-brand-name"><b>QUANT</b> <span>· Lab</span></div>
+            <div class="lab-brand-name"><b>QUANT</b> <span>Â· Lab</span></div>
           </div>
           <div class="lab-topbar-divider"></div>
-          <nav class="lab-crumbs"><span>Training</span> <span>›</span> <b>Monitor</b></nav>
+          <nav class="lab-crumbs"><span>Training</span> <span>â€º</span> <b>Monitor</b></nav>
           <div class="lab-topbar-spacer"></div>
           <div class="lab-pill-group">
-            <div class="lab-pill is-on" id="labPillScheduler" title="Scheduler activo · ticks cada 60s"><span class="dot"></span> Scheduler · 60s</div>
+            <div class="lab-pill is-on" id="labPillScheduler" title="Scheduler activo Â· ticks cada 60s"><span class="dot"></span> Scheduler Â· 60s</div>
             <div class="lab-pill is-on" id="labPillTraining" title="Training shadow encendido"><span class="dot"></span> Training ON</div>
             <div class="lab-pill is-off" id="labPillTradingReal" title="Trading real bloqueado"><span class="dot"></span> Trading Real OFF</div>
-            <div class="lab-pill is-warn" id="labPillMode" title="Modo shadow — sin ejecución real"><span class="dot"></span> Shadow</div>
+            <div class="lab-pill is-warn" id="labPillMode" title="Modo shadow â€” sin ejecuciÃ³n real"><span class="dot"></span> Shadow</div>
           </div>
-          <button class="lab-kill-btn" id="labKillBtn" title="Kill switch — detiene trading real (3s confirmación)">⚠ Kill switch</button>
+          <button class="lab-kill-btn" id="labKillBtn" title="Kill switch â€” detiene trading real (3s confirmaciÃ³n)">âš  Kill switch</button>
         </header>
 
         <main class="lab-main">
@@ -364,18 +378,18 @@
             <div class="lab-hero-meta">
               <div class="lab-eyebrow">
                 <span class="tag">Shadow</span>
-                <span>Training balance · BINANCE · USDT</span>
+                <span>Training balance Â· BINANCE Â· USDT</span>
               </div>
               <h1 class="lab-hero-title">Equity bajo entrenamiento</h1>
               <div class="lab-hero-balance" id="labHeroBalance">$10,847.23<small>USDT</small></div>
               <div class="lab-deltas">
-                <div class="lab-delta"><span class="lbl">P&L hoy</span><span class="val up" id="labPnlToday">+$184.36 · +1.73%</span></div>
-                <div class="lab-delta"><span class="lbl">P&L 7d</span><span class="val up" id="labPnl7d">+$847.23 · +8.47%</span></div>
-                <div class="lab-delta"><span class="lbl">Drawdown máx</span><span class="val down" id="labMaxDd">−$312.18 · −2.95%</span></div>
+                <div class="lab-delta"><span class="lbl">P&L hoy</span><span class="val up" id="labPnlToday">+$184.36 Â· +1.73%</span></div>
+                <div class="lab-delta"><span class="lbl">P&L 7d</span><span class="val up" id="labPnl7d">+$847.23 Â· +8.47%</span></div>
+                <div class="lab-delta"><span class="lbl">Drawdown mÃ¡x</span><span class="val down" id="labMaxDd">âˆ’$312.18 Â· âˆ’2.95%</span></div>
               </div>
               <div class="lab-kpi-row">
                 <div class="lab-kpi"><span class="lbl">Win rate</span><span class="val" id="labKpiWinRate">62.4<small style="color:var(--lab-text-mute);font-size:11px">%</small></span><span class="sub" id="labKpiWinRateSub">87/139 trades</span></div>
-                <div class="lab-kpi"><span class="lbl">Profit factor</span><span class="val" id="labKpiPf">1.84</span><span class="sub">∑win / ∑loss</span></div>
+                <div class="lab-kpi"><span class="lbl">Profit factor</span><span class="val" id="labKpiPf">1.84</span><span class="sub">âˆ‘win / âˆ‘loss</span></div>
                 <div class="lab-kpi"><span class="lbl">Expectancy</span><span class="val" id="labKpiExpectancy">$6.09</span><span class="sub">por trade</span></div>
                 <div class="lab-kpi"><span class="lbl">Sample</span><span class="val" id="labKpiSample" style="color:var(--lab-green)">139</span><span class="sub" id="labKpiSampleStatus">sufficient</span></div>
                 <div class="lab-kpi"><span class="lbl">Confidence</span><span class="val" id="labKpiConfidence">0.71</span><span class="sub" id="labKpiStability">stability 0.83</span></div>
@@ -384,7 +398,7 @@
             </div>
             <div>
               <div class="lab-chart-head">
-                <h3>Equity curve · shadow</h3>
+                <h3>Equity curve Â· shadow</h3>
                 <div class="lab-chart-tabs">
                   <button class="lab-chart-tab" data-range="1D">1D</button>
                   <button class="lab-chart-tab" data-range="1W">1W</button>
@@ -409,12 +423,12 @@
               <div class="lab-panel-body">
                 <table class="lab-t" id="labOpenTable">
                   <thead><tr>
-                    <th>Símbolo</th><th>Side</th><th class="num">Entry</th><th class="num">Mark</th>
+                    <th>SÃ­mbolo</th><th>Side</th><th class="num">Entry</th><th class="num">Mark</th>
                     <th class="num">P&L</th><th>Edad</th><th>Strategy</th>
                   </tr></thead>
                   <tbody>
                     <tr><td><span class="lab-sym"><span class="ic">BTC</span> BTCUSDT</span></td><td><span class="lab-side long">LONG</span></td><td class="num">63 410.20</td><td class="num">63 884.50</td><td class="num pnl up">+$47.43</td><td class="mono" style="color:var(--lab-text-mute)">14m</td><td class="mono">ssl-hybrid-htf</td></tr>
-                    <tr><td><span class="lab-sym"><span class="ic">ETH</span> ETHUSDT</span></td><td><span class="lab-side long">LONG</span></td><td class="num">3 211.45</td><td class="num">3 198.10</td><td class="num pnl down">−$13.35</td><td class="mono" style="color:var(--lab-text-mute)">1h 02m</td><td class="mono">atr-breakout</td></tr>
+                    <tr><td><span class="lab-sym"><span class="ic">ETH</span> ETHUSDT</span></td><td><span class="lab-side long">LONG</span></td><td class="num">3 211.45</td><td class="num">3 198.10</td><td class="num pnl down">âˆ’$13.35</td><td class="mono" style="color:var(--lab-text-mute)">1h 02m</td><td class="mono">atr-breakout</td></tr>
                     <tr><td><span class="lab-sym"><span class="ic">SOL</span> SOLUSDT</span></td><td><span class="lab-side short">SHORT</span></td><td class="num">152.84</td><td class="num">150.21</td><td class="num pnl up">+$26.30</td><td class="mono" style="color:var(--lab-text-mute)">23m</td><td class="mono">mean-reversion-15m</td></tr>
                   </tbody>
                 </table>
@@ -424,11 +438,11 @@
             <div class="lab-panel" style="grid-column: span 5;">
               <div class="lab-panel-head"><h2>Strategy ranking</h2><span class="count" id="labStratCount">5</span></div>
               <div class="lab-panel-body" id="labStratList" style="padding-bottom:8px;">
-                <div class="lab-strat-row"><div class="lab-strat-rank gold">1</div><div class="lab-strat-name"><b>ssl-hybrid-htf</b><span>42 trades · 71.4% wins</span></div><div class="lab-strat-stat"><span class="v" style="color:var(--lab-green)">+$418.70</span><span class="l">net P&L</span></div><div class="lab-strat-stat"><span class="v">2.31</span><span class="l">PF</span></div><div class="lab-strat-bar"><span style="width:92%"></span></div></div>
-                <div class="lab-strat-row"><div class="lab-strat-rank silver">2</div><div class="lab-strat-name"><b>atr-breakout</b><span>38 trades · 60.5% wins</span></div><div class="lab-strat-stat"><span class="v" style="color:var(--lab-green)">+$214.18</span><span class="l">net P&L</span></div><div class="lab-strat-stat"><span class="v">1.74</span><span class="l">PF</span></div><div class="lab-strat-bar"><span style="width:74%"></span></div></div>
-                <div class="lab-strat-row"><div class="lab-strat-rank">3</div><div class="lab-strat-name"><b>mean-reversion-15m</b><span>31 trades · 58.1% wins</span></div><div class="lab-strat-stat"><span class="v" style="color:var(--lab-green)">+$132.04</span><span class="l">net P&L</span></div><div class="lab-strat-stat"><span class="v">1.52</span><span class="l">PF</span></div><div class="lab-strat-bar"><span style="width:62%"></span></div></div>
-                <div class="lab-strat-row"><div class="lab-strat-rank">4</div><div class="lab-strat-name"><b>vwap-fade-1h</b><span>18 trades · 55.6% wins</span></div><div class="lab-strat-stat"><span class="v" style="color:var(--lab-green)">+$58.41</span><span class="l">net P&L</span></div><div class="lab-strat-stat"><span class="v">1.28</span><span class="l">PF</span></div><div class="lab-strat-bar"><span style="width:48%"></span></div></div>
-                <div class="lab-strat-row"><div class="lab-strat-rank">5</div><div class="lab-strat-name"><b>orderblock-h4</b><span>10 trades · 40.0% wins</span></div><div class="lab-strat-stat"><span class="v" style="color:var(--lab-red)">−$24.10</span><span class="l">net P&L</span></div><div class="lab-strat-stat"><span class="v">0.84</span><span class="l">PF</span></div><div class="lab-strat-bar"><span class="warn" style="width:18%"></span></div></div>
+                <div class="lab-strat-row"><div class="lab-strat-rank gold">1</div><div class="lab-strat-name"><b>ssl-hybrid-htf</b><span>42 trades Â· 71.4% wins</span></div><div class="lab-strat-stat"><span class="v" style="color:var(--lab-green)">+$418.70</span><span class="l">net P&L</span></div><div class="lab-strat-stat"><span class="v">2.31</span><span class="l">PF</span></div><div class="lab-strat-bar"><span style="width:92%"></span></div></div>
+                <div class="lab-strat-row"><div class="lab-strat-rank silver">2</div><div class="lab-strat-name"><b>atr-breakout</b><span>38 trades Â· 60.5% wins</span></div><div class="lab-strat-stat"><span class="v" style="color:var(--lab-green)">+$214.18</span><span class="l">net P&L</span></div><div class="lab-strat-stat"><span class="v">1.74</span><span class="l">PF</span></div><div class="lab-strat-bar"><span style="width:74%"></span></div></div>
+                <div class="lab-strat-row"><div class="lab-strat-rank">3</div><div class="lab-strat-name"><b>mean-reversion-15m</b><span>31 trades Â· 58.1% wins</span></div><div class="lab-strat-stat"><span class="v" style="color:var(--lab-green)">+$132.04</span><span class="l">net P&L</span></div><div class="lab-strat-stat"><span class="v">1.52</span><span class="l">PF</span></div><div class="lab-strat-bar"><span style="width:62%"></span></div></div>
+                <div class="lab-strat-row"><div class="lab-strat-rank">4</div><div class="lab-strat-name"><b>vwap-fade-1h</b><span>18 trades Â· 55.6% wins</span></div><div class="lab-strat-stat"><span class="v" style="color:var(--lab-green)">+$58.41</span><span class="l">net P&L</span></div><div class="lab-strat-stat"><span class="v">1.28</span><span class="l">PF</span></div><div class="lab-strat-bar"><span style="width:48%"></span></div></div>
+                <div class="lab-strat-row"><div class="lab-strat-rank">5</div><div class="lab-strat-name"><b>orderblock-h4</b><span>10 trades Â· 40.0% wins</span></div><div class="lab-strat-stat"><span class="v" style="color:var(--lab-red)">âˆ’$24.10</span><span class="l">net P&L</span></div><div class="lab-strat-stat"><span class="v">0.84</span><span class="l">PF</span></div><div class="lab-strat-bar"><span class="warn" style="width:18%"></span></div></div>
               </div>
             </div>
           </section>
@@ -439,18 +453,18 @@
               <div class="lab-panel-body">
                 <table class="lab-t" id="labTradesTable">
                   <thead><tr>
-                    <th>Cerrado</th><th>Símbolo</th><th>Side</th>
-                    <th class="num">Entry → Exit</th><th class="num">P&L</th><th class="num">R:R</th><th>Strategy</th>
+                    <th>Cerrado</th><th>SÃ­mbolo</th><th>Side</th>
+                    <th class="num">Entry â†’ Exit</th><th class="num">P&L</th><th class="num">R:R</th><th>Strategy</th>
                   </tr></thead>
                   <tbody>
-                    <tr><td class="mono" style="color:var(--lab-text-mute)">14:42:18</td><td><span class="lab-sym"><span class="ic">BTC</span> BTC</span></td><td><span class="lab-side long">L</span></td><td class="num">63 120 → 63 488</td><td class="num pnl up">+$36.80</td><td class="num">2.4R</td><td class="mono">ssl-hybrid-htf</td></tr>
-                    <tr><td class="mono" style="color:var(--lab-text-mute)">14:18:02</td><td><span class="lab-sym"><span class="ic">ETH</span> ETH</span></td><td><span class="lab-side short">S</span></td><td class="num">3 244 → 3 218</td><td class="num pnl up">+$26.10</td><td class="num">1.8R</td><td class="mono">mean-reversion-15m</td></tr>
-                    <tr><td class="mono" style="color:var(--lab-text-mute)">13:51:44</td><td><span class="lab-sym"><span class="ic">SOL</span> SOL</span></td><td><span class="lab-side long">L</span></td><td class="num">151.2 → 149.8</td><td class="num pnl down">−$14.00</td><td class="num">−1.0R</td><td class="mono">atr-breakout</td></tr>
-                    <tr><td class="mono" style="color:var(--lab-text-mute)">13:22:09</td><td><span class="lab-sym"><span class="ic">BNB</span> BNB</span></td><td><span class="lab-side long">L</span></td><td class="num">582.4 → 591.7</td><td class="num pnl up">+$18.45</td><td class="num">1.6R</td><td class="mono">ssl-hybrid-htf</td></tr>
-                    <tr><td class="mono" style="color:var(--lab-text-mute)">12:48:12</td><td><span class="lab-sym"><span class="ic">XRP</span> XRP</span></td><td><span class="lab-side short">S</span></td><td class="num">0.5142 → 0.5189</td><td class="num pnl down">−$9.20</td><td class="num">−1.0R</td><td class="mono">vwap-fade-1h</td></tr>
-                    <tr><td class="mono" style="color:var(--lab-text-mute)">12:11:27</td><td><span class="lab-sym"><span class="ic">ADA</span> ADA</span></td><td><span class="lab-side long">L</span></td><td class="num">0.4421 → 0.4498</td><td class="num pnl up">+$7.70</td><td class="num">1.1R</td><td class="mono">atr-breakout</td></tr>
-                    <tr><td class="mono" style="color:var(--lab-text-mute)">11:55:48</td><td><span class="lab-sym"><span class="ic">DOG</span> DOGE</span></td><td><span class="lab-side long">L</span></td><td class="num">0.1331 → 0.1342</td><td class="num pnl up">+$4.12</td><td class="num">0.6R</td><td class="mono">mean-reversion-15m</td></tr>
-                    <tr><td class="mono" style="color:var(--lab-text-mute)">11:22:01</td><td><span class="lab-sym"><span class="ic">AVA</span> AVAX</span></td><td><span class="lab-side short">S</span></td><td class="num">36.21 → 35.14</td><td class="num pnl up">+$21.40</td><td class="num">2.1R</td><td class="mono">orderblock-h4</td></tr>
+                    <tr><td class="mono" style="color:var(--lab-text-mute)">14:42:18</td><td><span class="lab-sym"><span class="ic">BTC</span> BTC</span></td><td><span class="lab-side long">L</span></td><td class="num">63 120 â†’ 63 488</td><td class="num pnl up">+$36.80</td><td class="num">2.4R</td><td class="mono">ssl-hybrid-htf</td></tr>
+                    <tr><td class="mono" style="color:var(--lab-text-mute)">14:18:02</td><td><span class="lab-sym"><span class="ic">ETH</span> ETH</span></td><td><span class="lab-side short">S</span></td><td class="num">3 244 â†’ 3 218</td><td class="num pnl up">+$26.10</td><td class="num">1.8R</td><td class="mono">mean-reversion-15m</td></tr>
+                    <tr><td class="mono" style="color:var(--lab-text-mute)">13:51:44</td><td><span class="lab-sym"><span class="ic">SOL</span> SOL</span></td><td><span class="lab-side long">L</span></td><td class="num">151.2 â†’ 149.8</td><td class="num pnl down">âˆ’$14.00</td><td class="num">âˆ’1.0R</td><td class="mono">atr-breakout</td></tr>
+                    <tr><td class="mono" style="color:var(--lab-text-mute)">13:22:09</td><td><span class="lab-sym"><span class="ic">BNB</span> BNB</span></td><td><span class="lab-side long">L</span></td><td class="num">582.4 â†’ 591.7</td><td class="num pnl up">+$18.45</td><td class="num">1.6R</td><td class="mono">ssl-hybrid-htf</td></tr>
+                    <tr><td class="mono" style="color:var(--lab-text-mute)">12:48:12</td><td><span class="lab-sym"><span class="ic">XRP</span> XRP</span></td><td><span class="lab-side short">S</span></td><td class="num">0.5142 â†’ 0.5189</td><td class="num pnl down">âˆ’$9.20</td><td class="num">âˆ’1.0R</td><td class="mono">vwap-fade-1h</td></tr>
+                    <tr><td class="mono" style="color:var(--lab-text-mute)">12:11:27</td><td><span class="lab-sym"><span class="ic">ADA</span> ADA</span></td><td><span class="lab-side long">L</span></td><td class="num">0.4421 â†’ 0.4498</td><td class="num pnl up">+$7.70</td><td class="num">1.1R</td><td class="mono">atr-breakout</td></tr>
+                    <tr><td class="mono" style="color:var(--lab-text-mute)">11:55:48</td><td><span class="lab-sym"><span class="ic">DOG</span> DOGE</span></td><td><span class="lab-side long">L</span></td><td class="num">0.1331 â†’ 0.1342</td><td class="num pnl up">+$4.12</td><td class="num">0.6R</td><td class="mono">mean-reversion-15m</td></tr>
+                    <tr><td class="mono" style="color:var(--lab-text-mute)">11:22:01</td><td><span class="lab-sym"><span class="ic">AVA</span> AVAX</span></td><td><span class="lab-side short">S</span></td><td class="num">36.21 â†’ 35.14</td><td class="num pnl up">+$21.40</td><td class="num">2.1R</td><td class="mono">orderblock-h4</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -459,11 +473,11 @@
             <div class="lab-panel" style="grid-column: span 5;">
               <div class="lab-panel-head"><h2>Recent lessons</h2><span class="count" id="labLessonsCount">5</span></div>
               <div class="lab-panel-body" id="labLessonsList" style="padding:0;">
-                <div class="lab-lesson win"><div class="tl"><div class="d"></div></div><div class="body"><div class="meta"><b>BTCUSDT · LONG</b> · 14:42 · ssl-hybrid-htf · <span style="color:var(--lab-green)">+2.4R</span></div><p>HTF aligned con bias bullish, entry en pullback a EMA21 con confirmación SSL hybrid. Mantener regla.</p></div></div>
-                <div class="lab-lesson loss"><div class="tl"><div class="d"></div></div><div class="body"><div class="meta"><b>SOLUSDT · LONG</b> · 13:51 · atr-breakout · <span style="color:var(--lab-red)">−1.0R</span></div><p>Breakout falso en sesión asia. Volumen ratio 0.62 — debajo del mínimo viable. Revisar gate de volumen.</p></div></div>
-                <div class="lab-lesson win"><div class="tl"><div class="d"></div></div><div class="body"><div class="meta"><b>ETHUSDT · SHORT</b> · 14:18 · mean-reversion-15m · <span style="color:var(--lab-green)">+1.8R</span></div><p>Reversión limpia desde banda superior con divergencia bajista en RSI. Tamaño correcto, salida por TP1.</p></div></div>
-                <div class="lab-lesson loss"><div class="tl"><div class="d"></div></div><div class="body"><div class="meta"><b>XRPUSDT · SHORT</b> · 12:48 · vwap-fade-1h · <span style="color:var(--lab-red)">−1.0R</span></div><p>Setup correcto pero stop demasiado ajustado (1.2× ATR). Promediar ATR a 1.6× en zonas de baja volatilidad.</p></div></div>
-                <div class="lab-lesson win"><div class="tl"><div class="d"></div></div><div class="body"><div class="meta"><b>AVAXUSDT · SHORT</b> · 11:22 · orderblock-h4 · <span style="color:var(--lab-green)">+2.1R</span></div><p>Rechazo claro en order block H4 con FVG sin mitigar. La estrategia mejora con confirmación de volumen.</p></div></div>
+                <div class="lab-lesson win"><div class="tl"><div class="d"></div></div><div class="body"><div class="meta"><b>BTCUSDT Â· LONG</b> Â· 14:42 Â· ssl-hybrid-htf Â· <span style="color:var(--lab-green)">+2.4R</span></div><p>HTF aligned con bias bullish, entry en pullback a EMA21 con confirmaciÃ³n SSL hybrid. Mantener regla.</p></div></div>
+                <div class="lab-lesson loss"><div class="tl"><div class="d"></div></div><div class="body"><div class="meta"><b>SOLUSDT Â· LONG</b> Â· 13:51 Â· atr-breakout Â· <span style="color:var(--lab-red)">âˆ’1.0R</span></div><p>Breakout falso en sesiÃ³n asia. Volumen ratio 0.62 â€” debajo del mÃ­nimo viable. Revisar gate de volumen.</p></div></div>
+                <div class="lab-lesson win"><div class="tl"><div class="d"></div></div><div class="body"><div class="meta"><b>ETHUSDT Â· SHORT</b> Â· 14:18 Â· mean-reversion-15m Â· <span style="color:var(--lab-green)">+1.8R</span></div><p>ReversiÃ³n limpia desde banda superior con divergencia bajista en RSI. TamaÃ±o correcto, salida por TP1.</p></div></div>
+                <div class="lab-lesson loss"><div class="tl"><div class="d"></div></div><div class="body"><div class="meta"><b>XRPUSDT Â· SHORT</b> Â· 12:48 Â· vwap-fade-1h Â· <span style="color:var(--lab-red)">âˆ’1.0R</span></div><p>Setup correcto pero stop demasiado ajustado (1.2Ã— ATR). Promediar ATR a 1.6Ã— en zonas de baja volatilidad.</p></div></div>
+                <div class="lab-lesson win"><div class="tl"><div class="d"></div></div><div class="body"><div class="meta"><b>AVAXUSDT Â· SHORT</b> Â· 11:22 Â· orderblock-h4 Â· <span style="color:var(--lab-green)">+2.1R</span></div><p>Rechazo claro en order block H4 con FVG sin mitigar. La estrategia mejora con confirmaciÃ³n de volumen.</p></div></div>
               </div>
             </div>
           </section>
@@ -478,23 +492,23 @@
                 </div>
               </div>
               <div class="lab-cand-grid" id="labCandGrid">
-                <div class="lab-cand"><div class="lab-cand-head"><span class="lab-sym"><span class="ic">BTC</span> BTCUSDT</span><span class="lab-cand-bias long">LONG</span></div><div class="lab-cand-conf">78<span class="pct">% conf</span></div><div class="lab-cand-strat">ssl-hybrid-htf · M15</div><div class="lab-cand-meter"><div class="m"><span>HTF align</span><b>0.84</b></div><div class="m"><span>Pattern</span><b>0.71</b></div><div class="m"><span>Vol ratio</span><b>1.42×</b></div><div class="m"><span>Pair score</span><b>0.88</b></div></div></div>
-                <div class="lab-cand"><div class="lab-cand-head"><span class="lab-sym"><span class="ic">ETH</span> ETHUSDT</span><span class="lab-cand-bias long">LONG</span></div><div class="lab-cand-conf">71<span class="pct">% conf</span></div><div class="lab-cand-strat">atr-breakout · M15</div><div class="lab-cand-meter"><div class="m"><span>HTF align</span><b>0.74</b></div><div class="m"><span>Pattern</span><b>0.68</b></div><div class="m"><span>Vol ratio</span><b>1.18×</b></div><div class="m"><span>Pair score</span><b>0.81</b></div></div></div>
-                <div class="lab-cand"><div class="lab-cand-head"><span class="lab-sym"><span class="ic">SOL</span> SOLUSDT</span><span class="lab-cand-bias short">SHORT</span></div><div class="lab-cand-conf">66<span class="pct">% conf</span></div><div class="lab-cand-strat">mean-reversion-15m</div><div class="lab-cand-meter"><div class="m"><span>HTF align</span><b>0.61</b></div><div class="m"><span>Pattern</span><b>0.79</b></div><div class="m"><span>Vol ratio</span><b>1.08×</b></div><div class="m"><span>Pair score</span><b>0.72</b></div></div></div>
-                <div class="lab-cand"><div class="lab-cand-head"><span class="lab-sym"><span class="ic">BNB</span> BNBUSDT</span><span class="lab-cand-bias long">LONG</span></div><div class="lab-cand-conf">63<span class="pct">% conf</span></div><div class="lab-cand-strat">ssl-hybrid-htf · H1</div><div class="lab-cand-meter"><div class="m"><span>HTF align</span><b>0.78</b></div><div class="m"><span>Pattern</span><b>0.55</b></div><div class="m"><span>Vol ratio</span><b>0.94×</b></div><div class="m"><span>Pair score</span><b>0.69</b></div></div></div>
+                <div class="lab-cand"><div class="lab-cand-head"><span class="lab-sym"><span class="ic">BTC</span> BTCUSDT</span><span class="lab-cand-bias long">LONG</span></div><div class="lab-cand-conf">78<span class="pct">% conf</span></div><div class="lab-cand-strat">ssl-hybrid-htf Â· M15</div><div class="lab-cand-meter"><div class="m"><span>HTF align</span><b>0.84</b></div><div class="m"><span>Pattern</span><b>0.71</b></div><div class="m"><span>Vol ratio</span><b>1.42Ã—</b></div><div class="m"><span>Pair score</span><b>0.88</b></div></div></div>
+                <div class="lab-cand"><div class="lab-cand-head"><span class="lab-sym"><span class="ic">ETH</span> ETHUSDT</span><span class="lab-cand-bias long">LONG</span></div><div class="lab-cand-conf">71<span class="pct">% conf</span></div><div class="lab-cand-strat">atr-breakout Â· M15</div><div class="lab-cand-meter"><div class="m"><span>HTF align</span><b>0.74</b></div><div class="m"><span>Pattern</span><b>0.68</b></div><div class="m"><span>Vol ratio</span><b>1.18Ã—</b></div><div class="m"><span>Pair score</span><b>0.81</b></div></div></div>
+                <div class="lab-cand"><div class="lab-cand-head"><span class="lab-sym"><span class="ic">SOL</span> SOLUSDT</span><span class="lab-cand-bias short">SHORT</span></div><div class="lab-cand-conf">66<span class="pct">% conf</span></div><div class="lab-cand-strat">mean-reversion-15m</div><div class="lab-cand-meter"><div class="m"><span>HTF align</span><b>0.61</b></div><div class="m"><span>Pattern</span><b>0.79</b></div><div class="m"><span>Vol ratio</span><b>1.08Ã—</b></div><div class="m"><span>Pair score</span><b>0.72</b></div></div></div>
+                <div class="lab-cand"><div class="lab-cand-head"><span class="lab-sym"><span class="ic">BNB</span> BNBUSDT</span><span class="lab-cand-bias long">LONG</span></div><div class="lab-cand-conf">63<span class="pct">% conf</span></div><div class="lab-cand-strat">ssl-hybrid-htf Â· H1</div><div class="lab-cand-meter"><div class="m"><span>HTF align</span><b>0.78</b></div><div class="m"><span>Pattern</span><b>0.55</b></div><div class="m"><span>Vol ratio</span><b>0.94Ã—</b></div><div class="m"><span>Pair score</span><b>0.69</b></div></div></div>
               </div>
             </div>
           </section>
 
           <section class="lab-health">
             <div class="lab-h-cell"><span class="lbl">Loop scheduler</span><span class="val v-flag" id="labHealthScheduler"><span class="dot purple"></span><span style="color:#DDD6FE">Active</span></span><span class="sub" id="labHealthSchedulerSub">interval 60 000 ms</span></div>
-            <div class="lab-h-cell"><span class="lbl">Ticks run</span><span class="val" id="labHealthTicks">1 284</span><span class="sub" id="labHealthTicksSub">skipped 7 · last 14:48:21</span></div>
-            <div class="lab-h-cell"><span class="lbl">Context source</span><span class="val" id="labHealthContext">ticker · 100%</span><span class="sub" id="labHealthContextSub">mt5 fallback 0 · stale 0</span></div>
-            <div class="lab-h-cell"><span class="lbl">Sample status</span><span class="val" id="labHealthSample" style="color:var(--lab-green)">Sufficient</span><span class="sub" id="labHealthSampleSub">139 trades · ≥30 ✓</span></div>
+            <div class="lab-h-cell"><span class="lbl">Ticks run</span><span class="val" id="labHealthTicks">1 284</span><span class="sub" id="labHealthTicksSub">skipped 7 Â· last 14:48:21</span></div>
+            <div class="lab-h-cell"><span class="lbl">Context source</span><span class="val" id="labHealthContext">ticker Â· 100%</span><span class="sub" id="labHealthContextSub">mt5 fallback 0 Â· stale 0</span></div>
+            <div class="lab-h-cell"><span class="lbl">Sample status</span><span class="val" id="labHealthSample" style="color:var(--lab-green)">Sufficient</span><span class="sub" id="labHealthSampleSub">139 trades Â· â‰¥30 âœ“</span></div>
             <div class="lab-h-cell"><span class="lbl">Real trading</span><span class="val v-flag" id="labHealthRealTrading"><span class="dot off"></span><span style="color:var(--lab-text-mute)">Untouched</span></span><span class="sub">read-only verified</span></div>
           </section>
 
-          <div class="lab-footer-hint">Quant Lab v1 · placeholder con datos sintéticos · endpoints reales se cablean en H3-H4</div>
+          <div class="lab-footer-hint">Purple workspace preview Â· placeholder con datos sintÃ©ticos Â· endpoints reales se cablean en H3-H4</div>
         </main>
 
         <aside class="lab-chat">
@@ -507,14 +521,14 @@
             </div>
           </div>
           <div class="lab-chat-body" id="labChatBody">
-            <div class="lab-msg-day">9 de mayo · sesión de hoy</div>
-            <div class="lab-msg bot"><div class="av">Q</div><div class="bubble">Hola, soy Quant. ¿En qué te ayudo? Puedo resumir performance, explicar una entrada o auditar una estrategia.<span class="ts">18:32</span></div></div>
-            <div class="lab-msg user"><div class="av">U</div><div class="bubble">Muéstrame el rendimiento de hoy.<span class="ts">18:32</span></div></div>
-            <div class="lab-msg bot"><div class="av">Q</div><div class="bubble">Sesión <b>shadow</b>, 24 trades cerrados:<div class="card-mini"><div class="row"><span class="l">P&L hoy</span><span class="v up">+$184.36 (+1.73%)</span></div><div class="row"><span class="l">Trades</span><span class="v">24</span></div><div class="row"><span class="l">Win rate</span><span class="v">62.4%</span></div><div class="row"><span class="l">Profit factor</span><span class="v">1.84</span></div></div><span class="ts">18:33</span></div></div>
+            <div class="lab-msg-day">9 de mayo Â· sesiÃ³n de hoy</div>
+            <div class="lab-msg bot"><div class="av">Q</div><div class="bubble">Hola, soy Quant. Â¿En quÃ© te ayudo? Puedo resumir performance, explicar una entrada o auditar una estrategia.<span class="ts">18:32</span></div></div>
+            <div class="lab-msg user"><div class="av">U</div><div class="bubble">MuÃ©strame el rendimiento de hoy.<span class="ts">18:32</span></div></div>
+            <div class="lab-msg bot"><div class="av">Q</div><div class="bubble">SesiÃ³n <b>shadow</b>, 24 trades cerrados:<div class="card-mini"><div class="row"><span class="l">P&L hoy</span><span class="v up">+$184.36 (+1.73%)</span></div><div class="row"><span class="l">Trades</span><span class="v">24</span></div><div class="row"><span class="l">Win rate</span><span class="v">62.4%</span></div><div class="row"><span class="l">Profit factor</span><span class="v">1.84</span></div></div><span class="ts">18:33</span></div></div>
           </div>
           <div class="lab-chat-input">
             <div class="field">
-              <input type="text" id="labChatInput" placeholder="Escribe tu mensaje…" />
+              <input type="text" id="labChatInput" placeholder="Escribe tu mensajeâ€¦" />
               <button class="lab-chat-send" id="labChatSend" title="Enviar">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8 L14 2 L9 14 L7.5 9 Z"/></svg>
               </button>
@@ -542,7 +556,7 @@
       <section class="view" id="view-wallet">
         <div class="view-head"><h1>Wallet</h1><p>Saldos reales separados por Binance Spot, Funding, Earn y MT5.</p></div>
         <div class="panel full-panel wallet-view-panel">
-          <div class="panel-head"><h2>WALLET - BINANCE / MT5</h2><button class="tiny-btn" id="walletRefresh">⟳</button></div>
+          <div class="panel-head"><h2>WALLET - BINANCE / MT5</h2><button class="tiny-btn" id="walletRefresh">âŸ³</button></div>
           <div class="wallet-grid" id="walletGrid"></div>
         </div>
       </section>
@@ -551,10 +565,10 @@
         <!-- REDESIGN: Training Lab - Laboratorio Cognitivo -->
         <div class="training-header">
           <div class="training-hero-compact">
-            <div class="training-mark">◎</div>
+            <div class="training-mark">â—Ž</div>
             <div>
               <h1>TRAINING LAB <span>DEMO</span></h1>
-              <p>Simulación con datos reales. Aprendizaje persistente.</p>
+              <p>SimulaciÃ³n con datos reales. Aprendizaje persistente.</p>
             </div>
           </div>
           <div class="training-mode-pill"><span class="dot"></span> Demo Mode</div>
@@ -576,7 +590,7 @@
         <!-- EQUITY CURVE: Protagonista -->
         <div class="panel training-equity-panel">
           <div class="panel-head">
-            <h2>CURVA DE EQUITY (EVOLUCIÓN)</h2>
+            <h2>CURVA DE EQUITY (EVOLUCIÃ“N)</h2>
             <button class="tiny-btn" id="trainingReselectBtn">Revalidar pares</button>
           </div>
           <canvas id="trainingEquityChart" style="width:100%;height:260px;background:#101927;border:1px solid var(--border-subtle);border-radius:4px;"></canvas>
@@ -586,19 +600,19 @@
         <div class="training-tabs-container">
           <div class="tabs-header">
             <button class="training-tab active" data-tab="pairs">
-              <span class="tab-icon">▥</span> PARES ACTIVOS
+              <span class="tab-icon">â–¥</span> PARES ACTIVOS
             </button>
             <button class="training-tab" data-tab="positions">
-              <span class="tab-icon">⊕</span> POSICIONES
+              <span class="tab-icon">âŠ•</span> POSICIONES
             </button>
             <button class="training-tab" data-tab="strategy">
-              <span class="tab-icon">⭐</span> ESTRATEGIAS
+              <span class="tab-icon">â­</span> ESTRATEGIAS
             </button>
             <button class="training-tab" data-tab="lessons">
-              <span class="tab-icon">📚</span> LECCIONES
+              <span class="tab-icon">ðŸ“š</span> LECCIONES
             </button>
             <button class="training-tab" data-tab="trades">
-              <span class="tab-icon">◷</span> OPERACIONES
+              <span class="tab-icon">â—·</span> OPERACIONES
             </button>
           </div>
 
@@ -606,7 +620,7 @@
           <div class="training-tab-content active" id="tab-pairs">
             <div class="panel">
               <div class="panel-head"><h2>PARES EN TRAINING (GESTIONADOS POR QUANT)</h2></div>
-              <div class="training-disclaimer">Training solo usa simulación. Ordenes reales bloqueadas.</div>
+              <div class="training-disclaimer">Training solo usa simulaciÃ³n. Ordenes reales bloqueadas.</div>
               <div class="training-table" id="trainingPairsTable"></div>
             </div>
           </div>
@@ -644,7 +658,7 @@
               <div class="panel-head"><h2>MEMORIA DE APRENDIZAJE</h2><span id="trainingUpdated">--:--:--</span></div>
               <div class="training-memory-grid">
                 <div><small>Lecciones guardadas</small><b id="trainLessons">0</b></div>
-                <div><small>Última lección</small><span id="trainLastLesson">Aun no hay trades cerrados.</span></div>
+                <div><small>Ãšltima lecciÃ³n</small><span id="trainLastLesson">Aun no hay trades cerrados.</span></div>
                 <div><small>Feed real</small><b id="trainFeedState">Validando</b></div>
                 <div><small>Persistencia</small><b id="trainPersistence">Activa</b></div>
               </div>
@@ -655,7 +669,7 @@
           <!-- TAB 5: Operaciones -->
           <div class="training-tab-content" id="tab-trades">
             <div class="panel">
-              <div class="panel-head"><h2>ÚLTIMAS OPERACIONES (DEMO)</h2></div>
+              <div class="panel-head"><h2>ÃšLTIMAS OPERACIONES (DEMO)</h2></div>
               <div class="training-table" id="trainingTradesTable"></div>
             </div>
           </div>
@@ -671,7 +685,7 @@
         <div class="panel full-panel">
           <div class="panel-head">
             <h2>HISTORIAL DE ORDENES</h2>
-            <button class="tiny-btn" id="ordersRefreshBtn">⟳ Actualizar</button>
+            <button class="tiny-btn" id="ordersRefreshBtn">âŸ³ Actualizar</button>
           </div>
           <div class="orders-filter-row" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
             <button class="tab active" data-orders-filter="all" id="ordersFilterAll">Todas</button>
@@ -690,8 +704,8 @@
 
         <div class="panel full-panel" style="margin-bottom:18px">
           <div class="panel-head">
-            <h2>MT5 — POSICIONES ABIERTAS</h2>
-            <button class="tiny-btn" id="positionsRefreshBtn">⟳ Actualizar todo</button>
+            <h2>MT5 â€” POSICIONES ABIERTAS</h2>
+            <button class="tiny-btn" id="positionsRefreshBtn">âŸ³ Actualizar todo</button>
           </div>
           <div id="mt5AccountBadge" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:13px;color:#8fa3c0"></div>
           <div class="orders-head" style="display:grid;grid-template-columns:80px 100px 70px 80px 90px 90px 80px 80px 1fr;gap:6px;padding:6px 10px;background:#0d1520;border-radius:4px;font-size:11px;color:#8fa3c0;font-weight:600;text-transform:uppercase;letter-spacing:.04em">
@@ -701,7 +715,7 @@
         </div>
 
         <div class="panel full-panel">
-          <div class="panel-head"><h2>BINANCE — ORDENES ABIERTAS (PENDIENTES)</h2></div>
+          <div class="panel-head"><h2>BINANCE â€” ORDENES ABIERTAS (PENDIENTES)</h2></div>
           <div class="orders-head" style="display:grid;grid-template-columns:120px 100px 70px 90px 100px 100px 1fr;gap:6px;padding:6px 10px;background:#0d1520;border-radius:4px;font-size:11px;color:#8fa3c0;font-weight:600;text-transform:uppercase;letter-spacing:.04em">
             <span>ID Orden</span><span>Simbolo</span><span>Lado</span><span>Tipo</span><span>Cantidad</span><span>Precio</span><span>Estado</span>
           </div>
@@ -713,14 +727,14 @@
         <div class="panel full-panel">
           <div class="panel-head" style="display:flex;align-items:center;justify-content:space-between">
             <h2>SESIONES GUARDADAS</h2>
-            <button class="primary-btn" id="newConvBtn" style="padding:5px 14px;font-size:13px">+ Nueva conversación</button>
+            <button class="primary-btn" id="newConvBtn" style="padding:5px 14px;font-size:13px">+ Nueva conversaciÃ³n</button>
           </div>
           <div id="convList" style="margin-top:8px"></div>
         </div>
-        <!-- Diálogo de renombrar (inline) -->
+        <!-- DiÃ¡logo de renombrar (inline) -->
         <div id="convRenameBox" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#0f1923;border:1px solid #2e4268;border-radius:10px;padding:24px 28px;z-index:9999;min-width:340px">
-          <p style="color:#c5d3e8;margin:0 0 12px;font-weight:600">Renombrar conversación</p>
-          <input id="convRenameInput" style="width:100%;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:6px;padding:8px 12px;font-size:14px;box-sizing:border-box" placeholder="Nuevo nombre…" />
+          <p style="color:#c5d3e8;margin:0 0 12px;font-weight:600">Renombrar conversaciÃ³n</p>
+          <input id="convRenameInput" style="width:100%;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:6px;padding:8px 12px;font-size:14px;box-sizing:border-box" placeholder="Nuevo nombreâ€¦" />
           <div style="display:flex;gap:10px;margin-top:14px">
             <button class="primary-btn" id="convRenameSaveBtn">Guardar</button>
             <button class="ghost-btn"   id="convRenameCancelBtn">Cancelar</button>
@@ -729,17 +743,17 @@
       </section>
       <section class="view" id="view-history"><div class="view-head"><h1>Rendimiento</h1><p>Bitacora de acciones, senales y decisiones.</p></div><div class="panel full-panel"><div class="pipeline-list tall" id="historyList"></div></div></section>
       <section class="view" id="view-backtest">
-        <div class="view-head"><h1>Backtesting</h1><p>Carga tu historial de trades desde MT5 o Binance y obtén estadísticas completas con validación walk-forward 70/30.</p></div>
+        <div class="view-head"><h1>Backtesting</h1><p>Carga tu historial de trades desde MT5 o Binance y obtÃ©n estadÃ­sticas completas con validaciÃ³n walk-forward 70/30.</p></div>
 
         <div class="panel full-panel" style="margin-bottom:18px">
           <div class="panel-head"><h2>CARGAR HISTORIAL DE TRADES</h2></div>
           <p style="color:#8fa3c0;font-size:13px;margin:0 0 14px">
-            En MT5: <b>Ver → Terminal → Historial de cuenta → clic derecho → Guardar como informe detallado</b> y elige formato CSV.<br>
-            En Binance: <b>Órdenes → Historial de órdenes → Exportar</b>.
+            En MT5: <b>Ver â†’ Terminal â†’ Historial de cuenta â†’ clic derecho â†’ Guardar como informe detallado</b> y elige formato CSV.<br>
+            En Binance: <b>Ã“rdenes â†’ Historial de Ã³rdenes â†’ Exportar</b>.
           </p>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
             <button class="primary-btn" id="backtestSelectBtn">Seleccionar CSV...</button>
-            <span id="backtestFileName" style="color:#8fa3c0;font-size:13px">Ningún archivo seleccionado</span>
+            <span id="backtestFileName" style="color:#8fa3c0;font-size:13px">NingÃºn archivo seleccionado</span>
             <button class="ghost-btn" id="backtestRunBtn" style="display:none">Analizar</button>
           </div>
         </div>
@@ -773,7 +787,7 @@
         </div>
 
         <div id="backtestEmpty" class="panel full-panel empty-state" style="margin-top:0">
-          Selecciona un archivo CSV para comenzar el análisis.
+          Selecciona un archivo CSV para comenzar el anÃ¡lisis.
         </div>
       </section>
       <section class="view" id="view-alerts">
@@ -782,15 +796,15 @@
         <div class="panel full-panel" style="margin-bottom:18px">
           <div class="panel-head"><h2>CONFIGURACION DE EMAIL</h2></div>
           <p style="color:#8fa3c0;font-size:13px;margin:0 0 14px">
-            Usa una <b>Contraseña de aplicación</b> de Google (no tu contraseña normal).<br>
-            En tu cuenta Google: <b>Seguridad → Verificación en 2 pasos → Contraseñas de aplicaciones</b> → crear una para "Correo / Windows".
+            Usa una <b>ContraseÃ±a de aplicaciÃ³n</b> de Google (no tu contraseÃ±a normal).<br>
+            En tu cuenta Google: <b>Seguridad â†’ VerificaciÃ³n en 2 pasos â†’ ContraseÃ±as de aplicaciones</b> â†’ crear una para "Correo / Windows".
           </p>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
             <label style="font-size:13px;color:#8fa3c0">Email destino<br>
               <input id="alertEmailTo" type="email" value="kinotrance@gmail.com" style="width:100%;margin-top:4px;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:5px;padding:7px 10px;font-size:13px;box-sizing:border-box" /></label>
             <label style="font-size:13px;color:#8fa3c0">Gmail (remitente)<br>
               <input id="alertSmtpUser" type="email" placeholder="tucuenta@gmail.com" style="width:100%;margin-top:4px;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:5px;padding:7px 10px;font-size:13px;box-sizing:border-box" /></label>
-            <label style="font-size:13px;color:#8fa3c0">Contraseña de aplicación Google<br>
+            <label style="font-size:13px;color:#8fa3c0">ContraseÃ±a de aplicaciÃ³n Google<br>
               <input id="alertSmtpPass" type="password" placeholder="xxxx xxxx xxxx xxxx" style="width:100%;margin-top:4px;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:5px;padding:7px 10px;font-size:13px;box-sizing:border-box" /></label>
             <div style="display:flex;flex-direction:column;justify-content:flex-end;gap:8px">
               <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#8fa3c0;cursor:pointer">
@@ -812,7 +826,7 @@
         <div class="panel full-panel">
           <div class="panel-head">
             <h2>HISTORIAL DE ALERTAS ENVIADAS</h2>
-            <button class="tiny-btn" id="alertLogRefreshBtn">⟳</button>
+            <button class="tiny-btn" id="alertLogRefreshBtn">âŸ³</button>
           </div>
           <div class="orders-head" style="display:grid;grid-template-columns:160px 1fr;gap:8px;padding:6px 10px;background:#0d1520;border-radius:4px;font-size:11px;color:#8fa3c0;font-weight:600;text-transform:uppercase">
             <span>Fecha / Hora</span><span>Asunto</span>
@@ -825,16 +839,16 @@
         <div class="panel full-panel">
           <div class="panel-head"><h2>INSTRUCCIONES PERSONALIZADAS PARA QUANT</h2></div>
           <p style="color:#8fa3c0;font-size:13px;margin:0 0 12px">Estas instrucciones se inyectan al inicio de cada conversacion. Dile a Quant como debe comportarse, que priorizar o como comunicarse contigo.</p>
-          <textarea id="customInstructionsInput" placeholder="Ej: Responde siempre en español. Prioriza crypto sobre forex. Se conciso y directo. No uses listas largas." style="width:100%;min-height:200px;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:6px;padding:12px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
+          <textarea id="customInstructionsInput" placeholder="Ej: Responde siempre en espaÃ±ol. Prioriza crypto sobre forex. Se conciso y directo. No uses listas largas." style="width:100%;min-height:200px;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:6px;padding:12px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
           <div style="display:flex;align-items:center;gap:14px;margin-top:10px">
             <button class="primary-btn" id="saveCustomInstructionsBtn">Guardar instrucciones</button>
             <span id="customInstructionsStatus" style="color:#8fa3c0;font-size:13px"></span>
           </div>
-          <div class="panel-head" style="margin-top:28px"><h2>CALIBRACIÓN NOCTURNA</h2></div>
-          <p style="color:#8fa3c0;font-size:13px;margin:0 0 12px">Calcula <b>live_wr / hist_wr</b> desde todo el historial JSONL y persiste los ratios en <code>calibration.json</code>. Se ejecuta automáticamente cada hora; también puedes forzarla aquí.</p>
+          <div class="panel-head" style="margin-top:28px"><h2>CALIBRACIÃ“N NOCTURNA</h2></div>
+          <p style="color:#8fa3c0;font-size:13px;margin:0 0 12px">Calcula <b>live_wr / hist_wr</b> desde todo el historial JSONL y persiste los ratios en <code>calibration.json</code>. Se ejecuta automÃ¡ticamente cada hora; tambiÃ©n puedes forzarla aquÃ­.</p>
           <div style="display:flex;align-items:center;gap:14px;margin-top:4px">
             <button class="primary-btn" id="runCalibrationBtn">Recalibrar ahora</button>
-            <span id="calibrationStatus" style="color:#8fa3c0;font-size:13px">—</span>
+            <span id="calibrationStatus" style="color:#8fa3c0;font-size:13px">â€”</span>
           </div>
           <div id="calibrationDetail" style="margin-top:10px;font-size:13px;color:#8fa3c0"></div>
           <div class="panel-head" style="margin-top:28px"><h2>APIS DE ESTA SESION</h2></div>

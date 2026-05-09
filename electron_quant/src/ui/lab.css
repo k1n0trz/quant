@@ -47,6 +47,25 @@
 /* ============================================================
    Lab shell — everything below is scoped to .lab-shell
    ============================================================ */
+.app-shell--global .shell-sidebar,
+.app-shell--global .shell-topbar,
+.app-shell--global .chat-dock {
+  background: linear-gradient(180deg, rgba(17,24,39,0.62), rgba(11,16,32,0.62));
+  border: 1px solid var(--shell-border, var(--lab-border));
+  box-shadow: var(--shell-shadow-card, var(--lab-shadow-card));
+}
+
+.app-shell--global .shell-sidebar {
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+.app-shell--global .shell-topbar,
+.app-shell--global .chat-dock {
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
 .lab-shell {
   font-family: var(--lab-font-sans);
   font-size: 13px;

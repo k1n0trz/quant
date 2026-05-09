@@ -2905,3 +2905,143 @@ select:hover, input:hover, select:focus, input:focus {
   width: 100%;
   height: 120px;
 }
+
+/* Task 1: global shell foundation */
+.app-shell--global {
+  min-height: 100vh;
+  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-rows: 72px minmax(0, 1fr);
+  background:
+    radial-gradient(1100px 600px at 18% -8%, rgba(139, 92, 246, 0.18), transparent 60%),
+    radial-gradient(900px 500px at 100% 110%, rgba(168, 85, 247, 0.10), transparent 55%),
+    var(--shell-bg-base, #050816);
+  color: var(--shell-text, var(--text-primary));
+}
+
+.app-shell--global .shell-sidebar {
+  padding: 14px 12px 12px;
+  gap: 12px;
+  background: transparent;
+  border-right: 1px solid transparent;
+}
+
+.app-shell--global .brand--global {
+  min-height: 88px;
+  height: auto;
+  padding: 18px 18px 16px;
+  border-bottom: 1px solid rgba(139, 92, 246, 0.08);
+}
+
+.app-shell--global .brand-mark {
+  color: #d8b4fe;
+  text-shadow: 0 0 18px rgba(168, 85, 247, 0.42);
+}
+
+.app-shell--global .brand-title,
+.app-shell--global .chat-head,
+.app-shell--global .panel h2,
+.app-shell--global .view-head h1 {
+  color: var(--shell-text, var(--text-primary));
+}
+
+.app-shell--global .brand-sub,
+.app-shell--global .last-update,
+.app-shell--global .chat-head span,
+.app-shell--global .sub,
+.app-shell--global .tool-label {
+  color: var(--shell-text-mute, var(--text-secondary));
+}
+
+.app-shell--global .nav {
+  gap: 14px;
+  padding: 6px 4px 0;
+}
+
+.app-shell--global .nav-group {
+  display: grid;
+  gap: 6px;
+}
+
+.app-shell--global .nav-group-label {
+  padding: 0 14px;
+  color: rgba(216, 180, 254, 0.72);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.app-shell--global .nav-item {
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: var(--shell-text-dim, var(--text-secondary));
+  padding: 12px 14px;
+}
+
+.app-shell--global .nav-item:hover {
+  background: rgba(139, 92, 246, 0.12);
+  border-color: rgba(139, 92, 246, 0.24);
+  color: var(--shell-text, #fff);
+}
+
+.app-shell--global .nav-item.active {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.92), rgba(91, 33, 182, 0.92));
+  border-color: rgba(196, 181, 253, 0.28);
+  box-shadow: 0 14px 30px -18px rgba(139, 92, 246, 0.9);
+}
+
+.app-shell--global .shell-topbar {
+  padding: 0 18px;
+  gap: 14px;
+  background: transparent;
+  border-bottom: 1px solid transparent;
+}
+
+.app-shell--global .active-pill {
+  min-width: 0;
+  background: rgba(11, 16, 32, 0.62);
+  border: 1px solid rgba(139, 92, 246, 0.16);
+}
+
+.app-shell--global .dot {
+  background: #a855f7;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.65);
+}
+
+.app-shell--global .shell-content {
+  padding: 14px;
+  gap: 14px;
+  background: transparent;
+  grid-template-columns: minmax(0, 1fr) 360px;
+}
+
+.app-shell--global .side-card,
+.app-shell--global .user-card,
+.app-shell--global .kpi-card,
+.app-shell--global .panel,
+.app-shell--global .chat-dock,
+.app-shell--global .trade-bar,
+.app-shell--global .active-pill {
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.62), rgba(11, 16, 32, 0.62));
+  border: 1px solid rgba(139, 92, 246, 0.18);
+  box-shadow:
+    0 1px 0 rgba(255,255,255,0.03) inset,
+    0 8px 28px -12px rgba(0,0,0,0.7),
+    0 0 0 1px rgba(139, 92, 246, 0.04);
+}
+
+.app-shell--global .side-title,
+.app-shell--global .label,
+.app-shell--global .status-label {
+  color: rgba(216, 180, 254, 0.86);
+}
+
+.app-shell--global .chat-log,
+.app-shell--global .analysis-box,
+.app-shell--global .mini-pipeline,
+.app-shell--global #tradeChart,
+.app-shell--global #perfChart {
+  background: rgba(5, 8, 22, 0.7);
+  border-color: rgba(139, 92, 246, 0.16);
+}

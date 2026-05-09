@@ -111,6 +111,20 @@ test('training diagnostics tracks missing strategy attribution', () => {
   assert.deepEqual(diagnostics.missingFields.strategy[0].index, 0);
 });
 
+test('training diagnostics supports traceable and legacy closed trades together', () => {
+  const diagnostics = computeTrainingDiagnostics([
+    { symbol: 'ETHUSD', direction: 'LONG', pnl_demo: -2 },
+    { trace: { strategy_id: 'trendMomentum' }, symbol: 'BTCUSD', side: 'LONG', pnl: 8 },
+    { strategy_id: 'ictCrt', symbol: 'XAUUSD', side: 'SHORT', pnl: 4 }
+  ]);
+
+  assert.equal(diagnostics.summary.totalTrades, 3);
+  assert.equal(diagnostics.summary.unknownStrategyTrades, 1);
+  assert.equal(diagnostics.summary.unknownStrategyRate, 0.3333);
+  assert.equal(diagnostics.byStrategy.trendMomentum.sampleSize, 1);
+  assert.equal(diagnostics.byStrategy.ictCrt.sampleSize, 1);
+});
+
 test('training diagnostics tracks missing symbol and side defensively', () => {
   const diagnostics = computeTrainingDiagnostics([
     { strategy_id: 'ictCrt', pnl_demo: 0 },

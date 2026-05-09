@@ -31,6 +31,7 @@ const { createDefaultBotState, mergeBotState } = require('./backend/services/bot
 const { createDefaultRiskConfig, assertTradingRealCanBeEnabled, validateRiskConfig } = require('./backend/risk/risk-policy');
 const { createApiRouter } = require('./backend/routes/api-router');
 const { createReadOnlyTrainingStateReader } = require('./backend/training/training-state');
+const { normalizeTrainingStateTraceability } = require('./backend/training/training-traceability');
 
 const BINANCE_BASE = 'https://api.binance.com';
 let timeOffsetMs = 0;
@@ -422,7 +423,7 @@ function readTrainingStateSnapshot() {
 function writeTrainingState(payload) {
   ensureMemoryDir();
   const state = {
-    ...payload,
+    ...normalizeTrainingStateTraceability(payload),
     persistedAt: new Date().toISOString(),
     file: trainingStateFile
   };

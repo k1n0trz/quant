@@ -67,7 +67,7 @@ function computeEdgeDegradation(trades) {
 function groupByStrategy(trades, options = {}) {
   const groups = {};
   for (const trade of trades) {
-    const id = trade?.strategy_id || trade?.strategyId || 'unknown';
+    const id = trade?.strategy_id || trade?.strategyId || trade?.trace?.strategy_id || trade?.trace?.strategyId || 'unknown';
     if (!groups[id]) groups[id] = [];
     groups[id].push(trade);
   }

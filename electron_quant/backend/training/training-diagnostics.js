@@ -18,20 +18,24 @@ function firstText(...values) {
 }
 
 function strategyId(trade = {}) {
-  return firstText(trade.strategy_id, trade.strategyId, trade.strategy) || 'unknown';
+  const trace = trade.trace && typeof trade.trace === 'object' ? trade.trace : {};
+  return firstText(trade.strategy_id, trade.strategyId, trade.strategy, trace.strategy_id, trace.strategyId, trace.strategy) || 'unknown';
 }
 
 function symbolId(trade = {}) {
-  return firstText(trade.symbol, trade.pair, trade.instrument) || 'unknown';
+  const trace = trade.trace && typeof trade.trace === 'object' ? trade.trace : {};
+  return firstText(trade.symbol, trade.pair, trade.instrument, trace.symbol) || 'unknown';
 }
 
 function sideId(trade = {}) {
-  const side = firstText(trade.direction, trade.side, trade.order_side);
+  const trace = trade.trace && typeof trade.trace === 'object' ? trade.trace : {};
+  const side = firstText(trade.direction, trade.side, trade.order_side, trace.direction, trace.side);
   return side ? side.toUpperCase() : 'unknown';
 }
 
 function timeframeId(trade = {}) {
-  return firstText(trade.timeframe, trade.tf, trade.period, trade.horizon) || 'unknown';
+  const trace = trade.trace && typeof trade.trace === 'object' ? trade.trace : {};
+  return firstText(trade.timeframe, trade.tf, trade.period, trade.horizon, trace.timeframe, trace.tf, trace.period, trace.horizon) || 'unknown';
 }
 
 function tradeTimestamp(trade = {}) {

@@ -21,6 +21,21 @@ test('status route exposes safe operational summary', async () => {
   assert.equal(res.body.bot.trainingEnabled, true);
 });
 
+test('healthz route exposes public backend heartbeat', async () => {
+  const context = createBackendContext({
+    botState: createDefaultBotState(),
+    riskConfig: createDefaultRiskConfig()
+  });
+  const router = createApiRouter(context);
+
+  const res = await router.dispatch({ method: 'GET', pathname: '/healthz' });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+  assert.equal(res.body.service, 'quant-backend');
+  assert.ok(typeof res.body.ts === 'string' && res.body.ts.length > 0);
+});
+
 test('trading real on route refuses invalid risk configuration', async () => {
   const context = createBackendContext({
     botState: createDefaultBotState(),

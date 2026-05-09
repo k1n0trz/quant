@@ -2273,7 +2273,13 @@ function startLocalWebServer() {
     activeWebPort = port;
     webServer = http.createServer(async (req, res) => {
       const url = new URL(req.url, `http://localhost:${activeWebPort}`);
-      if (url.pathname === '/healthz') return handleApi(req, res, url);
+      if (url.pathname === '/healthz') {
+        return sendJson(res, {
+          ok: true,
+          service: 'quant-backend',
+          ts: new Date().toISOString()
+        });
+      }
 
       // ── Login endpoint ────────────────────────────────────────────────
       if (url.pathname === '/auth/login' && req.method === 'POST') {

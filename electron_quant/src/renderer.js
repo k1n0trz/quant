@@ -285,6 +285,7 @@ async function boot() {
   await loadTrainingState();
   await initTrainingMode(false);
   await runSelfAudit();
+  await updateHeroSection();
 
   // ── Al arrancar: si training local está vacío, intenta traer datos del cloud ──
   if (window.quant.pullCloudData && state.env?.syncConfigured) {

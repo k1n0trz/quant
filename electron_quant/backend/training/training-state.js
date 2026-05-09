@@ -34,6 +34,20 @@ function objectOrEmpty(value) {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
+function hasCompatibleTrainingShape(source) {
+  return (
+    Array.isArray(source.closedTrades) ||
+    Array.isArray(source.positions) ||
+    Array.isArray(source.lessons) ||
+    Object.keys(objectOrEmpty(source.strategyStats)).length > 0 ||
+    Object.keys(objectOrEmpty(source.strategies)).length > 0 ||
+    Number.isFinite(Number(source.balanceStart)) ||
+    Number.isFinite(Number(source.balance)) ||
+    typeof source.mode === 'string' ||
+    typeof source.version !== 'undefined'
+  );
+}
+
 function normalizeTrainingState(raw = {}, now = new Date().toISOString()) {
   const defaults = createDefaultTrainingState(now);
   const source = objectOrEmpty(raw);
@@ -60,7 +74,40 @@ function normalizeTrainingState(raw = {}, now = new Date().toISOString()) {
     pairCooldowns: objectOrEmpty(source.pairCooldowns),
     xp: Number.isFinite(Number(source.xp)) ? Number(source.xp) : defaults.xp,
     targets,
-    persistedAt: now
+    persistedAt: source.persistedAt || now
+  };
+}
+
+function unavailableTrainingState(reason, source = {}) {
+  return {
+    available: false,
+    reason,
+    state: createDefaultTrainingState(),
+    raw: null,
+    source: {
+      ...source,
+      compatible: false
+    }
+  };
+}
+
+function createTrainingStateSnapshot(raw, source = {}) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return unavailableTrainingState(source.reason || 'training_state_shape_incompatible', source);
+  }
+  if (!hasCompatibleTrainingShape(raw)) {
+    return unavailableTrainingState('training_state_shape_incompatible', source);
+  }
+  return {
+    available: true,
+    reason: null,
+    state: normalizeTrainingState(raw),
+    raw,
+    source: {
+      ...source,
+      compatible: true,
+      closedTradesPath: Array.isArray(raw.closedTrades) ? 'closedTrades' : null
+    }
   };
 }
 
@@ -92,6 +139,44 @@ function createTrainingStateStore(filePath) {
   };
 }
 
+function createReadOnlyTrainingStateReader(filePath) {
+  function readSnapshot() {
+    if (!fs.existsSync(filePath)) {
+      return unavailableTrainingState('training_state_file_missing', { filePath, exists: false });
+    }
+
+    let rawText = '';
+    try {
+      rawText = fs.readFileSync(filePath, 'utf8');
+    } catch (error) {
+      return unavailableTrainingState('training_state_read_failed', {
+        filePath,
+        exists: true,
+        error: String(error?.message || error)
+      });
+    }
+
+    if (!rawText.trim()) {
+      return unavailableTrainingState('training_state_empty', { filePath, exists: true });
+    }
+
+    try {
+      return createTrainingStateSnapshot(JSON.parse(rawText), { filePath, exists: true });
+    } catch (error) {
+      return unavailableTrainingState('training_state_json_invalid', {
+        filePath,
+        exists: true,
+        error: String(error?.message || error)
+      });
+    }
+  }
+
+  return {
+    filePath,
+    readSnapshot
+  };
+}
+
 function isBackendTrainingEnabled(env = {}) {
   return String(env.TRAINING_BACKEND_ENABLED || 'false').toLowerCase() === 'true';
 }
@@ -99,6 +184,8 @@ function isBackendTrainingEnabled(env = {}) {
 module.exports = {
   createDefaultTrainingState,
   normalizeTrainingState,
+  createTrainingStateSnapshot,
+  createReadOnlyTrainingStateReader,
   createTrainingStateStore,
   isBackendTrainingEnabled
 };

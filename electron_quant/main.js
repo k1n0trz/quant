@@ -30,6 +30,7 @@ const { createJsonStore } = require('./backend/memory/json-store');
 const { createDefaultBotState, mergeBotState } = require('./backend/services/bot-state-service');
 const { createDefaultRiskConfig, assertTradingRealCanBeEnabled, validateRiskConfig } = require('./backend/risk/risk-policy');
 const { createApiRouter } = require('./backend/routes/api-router');
+const { createReadOnlyTrainingStateReader } = require('./backend/training/training-state');
 
 const BINANCE_BASE = 'https://api.binance.com';
 let timeOffsetMs = 0;
@@ -126,6 +127,7 @@ function resolveDataDir() {
 const memoryDir = resolveDataDir();
 const memoryFile = path.join(memoryDir, 'quant_memory.jsonl');
 const trainingStateFile = path.join(memoryDir, 'quant_training_state.json');
+const trainingStateReader = createReadOnlyTrainingStateReader(trainingStateFile);
 const customInstructionsFile = path.join(memoryDir, 'custom_instructions.json');
 const calibrationFile        = path.join(memoryDir, 'calibration.json');
 const conversationsDir       = path.join(memoryDir, 'conversations');
@@ -411,6 +413,10 @@ function readTrainingState() {
   } catch {
     return null;
   }
+}
+
+function readTrainingStateSnapshot() {
+  return trainingStateReader.readSnapshot();
 }
 
 function writeTrainingState(payload) {
@@ -1660,6 +1666,7 @@ async function handleApi(req, res, url) {
       deps: {
         readMemory,
         readTrainingState,
+        readTrainingStateSnapshot,
         syncBinanceTime: () => syncBinanceTime(),
         mt5AccountInfo: (envArg) => mt5Info(envArg)
       },

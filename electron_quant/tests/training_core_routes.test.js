@@ -7,6 +7,7 @@ const { createDefaultBotState } = require('../backend/services/bot-state-service
 const { createDefaultRiskConfig } = require('../backend/risk/risk-policy');
 const { createBackendContext } = require('../backend/server/backend-context');
 const { createApiRouter } = require('../backend/routes/api-router');
+const { createTrainingStateSnapshot } = require('../backend/training/training-state');
 
 function createRouterWithTrainingState(trainingState, env = {}) {
   const context = createBackendContext({
@@ -15,6 +16,18 @@ function createRouterWithTrainingState(trainingState, env = {}) {
     riskConfig: createDefaultRiskConfig(),
     deps: {
       readTrainingState: () => JSON.parse(JSON.stringify(trainingState))
+    }
+  });
+  return createApiRouter(context);
+}
+
+function createRouterWithTrainingSnapshot(snapshot, env = {}) {
+  const context = createBackendContext({
+    env,
+    botState: createDefaultBotState(),
+    riskConfig: createDefaultRiskConfig(),
+    deps: {
+      readTrainingStateSnapshot: () => JSON.parse(JSON.stringify(snapshot))
     }
   });
   return createApiRouter(context);
@@ -66,6 +79,60 @@ test('training core metrics exposes computed Quant-Core metrics', async () => {
   assert.equal(res.body.metrics.winRate, 0.6667);
   assert.equal(res.body.metrics.netProfit, 20);
   assert.equal(res.body.metrics.byStrategy.trendMomentum.sampleSize, 2);
+});
+
+test('training core reports unavailable state without breaking endpoints', async () => {
+  const router = createRouterWithTrainingSnapshot({
+    available: false,
+    reason: 'training_state_shape_incompatible',
+    state: null,
+    source: { filePath: 'quant_training_state.json' }
+  });
+
+  const status = await router.dispatch({ method: 'GET', pathname: '/api/training/core/status' });
+  const metrics = await router.dispatch({ method: 'GET', pathname: '/api/training/core/metrics' });
+  const equity = await router.dispatch({ method: 'GET', pathname: '/api/training/core/equity' });
+  const edge = await router.dispatch({ method: 'GET', pathname: '/api/training/core/edge' });
+
+  for (const res of [status, metrics, equity, edge]) {
+    assert.equal(res.status, 200);
+    assert.equal(res.body.ok, true);
+    assert.equal(res.body.available, false);
+    assert.equal(res.body.reason, 'training_state_shape_incompatible');
+  }
+  assert.equal(metrics.body.metrics.sampleSize, 0);
+  assert.equal(equity.body.equity.points, 0);
+  assert.equal(edge.body.edge.sampleSize, 0);
+});
+
+test('training core computes metrics from legacy closed trades snapshot', async () => {
+  const snapshot = createTrainingStateSnapshot({
+    balanceStart: 1000,
+    closedTrades: [
+      { symbol: 'XAUUSD', profit: 10, setup_tecnico_detectado: 'legacy-a' },
+      { symbol: 'EURUSD', pnl: -4, setup_tecnico_detectado: 'legacy-b' },
+      { symbol: 'GBPUSD', pnl_demo: 6, strategy_id: 'trendMomentum' }
+    ],
+    strategyStats: {
+      trendMomentum: { id: 'trendMomentum', closed: 1, wins: 1, pnl: 6, avgScore: 77 },
+      unknown: { id: 'unknown', closed: 2, wins: 1, pnl: 6, avgScore: 0 }
+    }
+  });
+  const router = createRouterWithTrainingSnapshot(snapshot);
+
+  const metrics = await router.dispatch({ method: 'GET', pathname: '/api/training/core/metrics' });
+  const strategies = await router.dispatch({ method: 'GET', pathname: '/api/training/core/strategies' });
+
+  assert.equal(metrics.status, 200);
+  assert.equal(metrics.body.available, true);
+  assert.equal(metrics.body.metrics.sampleSize, 3);
+  assert.equal(metrics.body.metrics.winRate, 0.6667);
+  assert.equal(metrics.body.metrics.expectancy, 4);
+  assert.equal(metrics.body.metrics.profitFactor, 4);
+  assert.equal(metrics.body.metrics.byStrategy.trendMomentum.sampleSize, 1);
+  assert.equal(strategies.body.available, true);
+  assert.equal(strategies.body.strategyRanking[0].id, 'trendMomentum');
+  assert.equal(strategies.body.strategyRanking[0].sampleSize, 1);
 });
 
 test('training core strategies exposes registry in shadow mode', async () => {

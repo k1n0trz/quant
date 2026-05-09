@@ -11,6 +11,7 @@ const {
   getTrainingCoreEquity,
   getTrainingCoreEdge
 } = require('../training/training-core-service');
+const { registerTrainingDemoClosedTrade } = require('../training/training-demo-writer-service');
 const { ApiError, toErrorPayload } = require('../utils/errors');
 
 function response(status, body) {
@@ -109,6 +110,11 @@ function createApiRouter(context) {
 
       if (method === 'GET' && pathname === '/api/training/core/edge') {
         return response(200, getTrainingCoreEdge(env, deps));
+      }
+
+      if (method === 'POST' && pathname === '/api/training/demo/closed-trade') {
+        const result = registerTrainingDemoClosedTrade(env, deps, body);
+        return response(result.status, result.body);
       }
 
       if (method === 'GET' && pathname === '/api/risk') {

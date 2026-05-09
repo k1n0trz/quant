@@ -33,6 +33,23 @@ function createRouterWithTrainingSnapshot(snapshot, env = {}) {
   return createApiRouter(context);
 }
 
+function createRouterWithTrainingWriter(trainingState, env = {}) {
+  const writes = [];
+  const context = createBackendContext({
+    env,
+    botState: createDefaultBotState(),
+    riskConfig: createDefaultRiskConfig(),
+    deps: {
+      readTrainingState: () => JSON.parse(JSON.stringify(trainingState)),
+      writeTrainingState: (nextState) => {
+        writes.push(JSON.parse(JSON.stringify(nextState)));
+        return { ok: true, persistedAt: '2026-05-09T16:00:00.000Z', file: 'fixture' };
+      }
+    }
+  });
+  return { router: createApiRouter(context), writes };
+}
+
 const sampleTrainingState = {
   version: 2,
   mode: 'training',
@@ -183,6 +200,113 @@ test('training core status reflects explicit backend feature flag without activa
   assert.equal(res.status, 200);
   assert.equal(res.body.core.backendEnabled, true);
   assert.equal(res.body.core.schedulerActive, false);
+});
+
+test('training demo closed trade endpoint is disabled by default and does not write', async () => {
+  const { router, writes } = createRouterWithTrainingWriter(sampleTrainingState);
+
+  const res = await router.dispatch({
+    method: 'POST',
+    pathname: '/api/training/demo/closed-trade',
+    body: {
+      openPosition: { signal_id: 'sig-disabled', direction: 'LONG', entry_price: 100, size_demo: 1 },
+      exitContext: { price: 101 },
+      signal: { bias: 'LONG', confidence: 70 }
+    }
+  });
+
+  assert.equal(res.status, 409);
+  assert.equal(res.body.ok, false);
+  assert.equal(res.body.available, false);
+  assert.equal(res.body.reason, 'training_backend_writer_disabled');
+  assert.equal(writes.length, 0);
+});
+
+test('training demo closed trade endpoint writes traceable closed trade when enabled', async () => {
+  const legacyTrade = { symbol: 'XAUUSD', pnl_demo: -4, setup_tecnico_detectado: 'legacy' };
+  const { router, writes } = createRouterWithTrainingWriter({
+    ...sampleTrainingState,
+    closedTrades: [legacyTrade]
+  }, { TRAINING_BACKEND_WRITER_ENABLED: 'true' });
+
+  const res = await router.dispatch({
+    method: 'POST',
+    pathname: '/api/training/demo/closed-trade',
+    body: {
+      openPosition: {
+        signal_id: 'sig-enabled',
+        strategy_id: 'trendMomentum',
+        direction: 'LONG',
+        symbol: 'BTCUSD',
+        entry_price: 100,
+        size_demo: 2,
+        fees_simuladas: 1,
+        spread_estimado: 0.5,
+        slippage_estimado: 0.25
+      },
+      exitContext: { price: 110 },
+      signal: { bias: 'SHORT', confidence: 54 }
+    }
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+  assert.equal(res.body.mode, 'internal');
+  assert.equal(res.body.closedTrade.signal_id, 'sig-enabled');
+  assert.equal(res.body.closedTrade.strategy_id, 'trendMomentum');
+  assert.equal(res.body.closedTrade.pnl_demo, 18.25);
+  assert.equal(res.body.closedTrade.exit_reason_code, 'signal_flip_or_edge_loss');
+  assert.equal(res.body.summary.closedTrades, 2);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].closedTrades[0].signal_id, 'sig-enabled');
+  assert.deepEqual(writes[0].closedTrades[1], legacyTrade);
+});
+
+test('training demo closed trade endpoint handles incomplete payload without 500', async () => {
+  const { router, writes } = createRouterWithTrainingWriter(sampleTrainingState, { TRAINING_BACKEND_WRITER_ENABLED: 'true' });
+
+  const res = await router.dispatch({
+    method: 'POST',
+    pathname: '/api/training/demo/closed-trade',
+    body: { exitContext: { price: 101 } }
+  });
+
+  assert.equal(res.status, 400);
+  assert.equal(res.body.ok, false);
+  assert.match(res.body.error, /openPosition/i);
+  assert.equal(writes.length, 0);
+});
+
+test('training demo closed trade endpoint refuses enabled writes without compatible state', async () => {
+  const writes = [];
+  const context = createBackendContext({
+    env: { TRAINING_BACKEND_WRITER_ENABLED: 'true' },
+    botState: createDefaultBotState(),
+    riskConfig: createDefaultRiskConfig(),
+    deps: {
+      readTrainingState: () => null,
+      writeTrainingState: (nextState) => {
+        writes.push(nextState);
+        return { ok: true };
+      }
+    }
+  });
+  const router = createApiRouter(context);
+
+  const res = await router.dispatch({
+    method: 'POST',
+    pathname: '/api/training/demo/closed-trade',
+    body: {
+      openPosition: { signal_id: 'sig-missing-state', direction: 'LONG', entry_price: 100, size_demo: 1 },
+      exitContext: { price: 101 },
+      signal: { bias: 'LONG', confidence: 70 }
+    }
+  });
+
+  assert.equal(res.status, 409);
+  assert.equal(res.body.ok, false);
+  assert.equal(res.body.reason, 'training_state_shape_incompatible');
+  assert.equal(writes.length, 0);
 });
 
 test('OpenAPI contract documents every read-only Quant-Core endpoint', () => {

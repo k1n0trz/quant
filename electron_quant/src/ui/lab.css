@@ -1,14 +1,15 @@
 /* ============================================================
-   Quant Lab — Component styles (Purple Edition)
+   Global shell + transitional training workspace styles
    ------------------------------------------------------------
-   ALL rules in this file are scoped under .lab-shell so the
-   existing dashboard (#view-dashboard) stays visually intact.
+   This file now styles both the Commit 1 global shell wrappers
+   and the legacy .lab-shell view that still coexists with the
+   dashboard during the transition. The dashboard stays intact.
    Loaded AFTER tokens.css.
    ============================================================ */
 
-/* ─── Coexistence: when Lab view is active, give it the whole
-       .content area and hide the legacy topbar + chat-dock.
-       :has() works in Electron's Chromium runtime.            */
+/* Transitional coexistence: when the legacy training workspace is
+   active, give it the whole .content area and hide the shell
+   topbar plus the dashboard chat dock. Electron supports :has(). */
 .app-shell:has(#view-lab.active) > .topbar { display: none; }
 .app-shell:has(#view-lab.active) > .content {
   grid-template-columns: minmax(0, 1fr);
@@ -18,8 +19,8 @@
 .app-shell:has(#view-lab.active) > .content > .chat-dock { display: none; }
 .app-shell:has(#view-lab.active) #view-lab { padding: 0; }
 
-/* When Lab is active, ensure no view scrollbar wraps the lab —
-   the lab manages its own scroll regions. */
+/* When the transitional workspace is active, ensure no view
+   scrollbar wraps it. The workspace manages its own scroll regions. */
 .app-shell:has(#view-lab.active) #view-lab.view.active {
   display: grid;
   grid-template-rows: auto 1fr;
@@ -28,7 +29,7 @@
   padding-right: 0;
 }
 
-/* ─── Lab nav badge (sidebar) ─── */
+/* Legacy lab nav badge, kept only for transitional markup. */
 .nav-item[data-view="lab"] .lab-badge {
   display: inline-block;
   margin-left: auto;
@@ -45,7 +46,9 @@
 }
 
 /* ============================================================
-   Lab shell — everything below is scoped to .lab-shell
+   Legacy training workspace - everything below is scoped to
+   .lab-shell, while the shell wrapper selectors above style the
+   Commit 1 global chrome.
    ============================================================ */
 .app-shell--global .shell-sidebar,
 .app-shell--global .shell-topbar,

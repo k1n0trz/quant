@@ -1,8 +1,9 @@
 /* ============================================================
-   Quant Lab — Design Tokens (Purple Edition)
+   Global shell + legacy training workspace tokens
    ------------------------------------------------------------
-   Scoped under .lab-shell so they NEVER leak into #view-dashboard
-   or any pre-existing component. Coexistence is mandatory.
+   Shared shell variables live on :root for the Commit 1 global
+   wrappers, while the .lab-shell block keeps the transitional
+   training workspace isolated from #view-dashboard.
 
    Loaded BEFORE lab.css, AFTER styles.css.
    ============================================================ */

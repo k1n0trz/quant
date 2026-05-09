@@ -3,6 +3,12 @@ const assert = require('node:assert/strict');
 
 const { computeTrainingMetrics } = require('../backend/training/metrics-engine');
 const { computeTrainingDiagnostics } = require('../backend/training/training-diagnostics');
+const {
+  normalizeOpenPosition,
+  calculateTrainingPnl,
+  buildClosedTradeFromPosition,
+  closeTrainingPosition
+} = require('../backend/training/training-closure-service');
 const { createStrategyRegistry } = require('../backend/training/strategy-registry');
 const { runStrategyPortfolio } = require('../backend/training/strategy-runner');
 
@@ -136,4 +142,108 @@ test('training diagnostics tracks missing symbol and side defensively', () => {
   assert.equal(diagnostics.byResult.breakeven.sampleSize, 1);
   assert.equal(diagnostics.missingFields.symbol.length, 1);
   assert.equal(diagnostics.missingFields.side.length, 1);
+});
+
+test('training closure service calculates LONG winner and loser like frontend close', () => {
+  const open = {
+    direction: 'LONG',
+    entry_price: 100,
+    size_demo: 2,
+    fees_simuladas: 1,
+    spread_estimado: 0.5,
+    slippage_estimado: 0.25
+  };
+
+  assert.equal(calculateTrainingPnl(open, { price: 110 }).pnl, 18.25);
+  assert.equal(calculateTrainingPnl(open, { price: 95 }).pnl, -11.75);
+});
+
+test('training closure service calculates SHORT winner and loser like frontend close', () => {
+  const open = {
+    direction: 'SHORT',
+    entry_price: 100,
+    size_demo: 2,
+    fees_simuladas: 1,
+    spread_estimado: 0.5,
+    slippage_estimado: 0.25
+  };
+
+  assert.equal(calculateTrainingPnl(open, { price: 90 }).pnl, 18.25);
+  assert.equal(calculateTrainingPnl(open, { price: 105 }).pnl, -11.75);
+});
+
+test('training closure service preserves traceable metadata on close', () => {
+  const open = {
+    signal_id: 'sig-1',
+    traceability_version: 1,
+    strategy_id: 'trendMomentum',
+    strategy_name: 'Trend Momentum / EMA-MACD',
+    source: 'renderer.training.position',
+    direction: 'LONG',
+    symbol: 'BTCUSD',
+    entry_price: 100,
+    size_demo: 1,
+    fees_simuladas: 0,
+    spread_estimado: 0,
+    slippage_estimado: 0,
+    confidence_at_entry: 72
+  };
+
+  const closed = buildClosedTradeFromPosition(open, { price: 112 }, { bias: 'SHORT', confidence: 55 }, {
+    closedAt: '2026-05-09T12:00:00.000Z',
+    lessonBuilder: () => ({ type: 'training_lesson', outcome: 'win' })
+  });
+
+  assert.equal(closed.signal_id, 'sig-1');
+  assert.equal(closed.strategy_id, 'trendMomentum');
+  assert.equal(closed.closed_at, '2026-05-09T12:00:00.000Z');
+  assert.equal(closed.closed_timestamp, '2026-05-09T12:00:00.000Z');
+  assert.equal(closed.exit_reason_code, 'signal_flip_or_edge_loss');
+  assert.equal(closed.pnl_demo, 12);
+  assert.equal(closed.pnl, 12);
+  assert.deepEqual(closed.lesson_learned, { type: 'training_lesson', outcome: 'win' });
+});
+
+test('training closure service supports legacy and partial positions without mutating input', () => {
+  const legacy = {
+    direction: 'SHORT',
+    entry_price: 100,
+    size_demo: 3,
+    pnl_demo: 0
+  };
+  const before = JSON.stringify(legacy);
+  const closed = buildClosedTradeFromPosition(legacy, { price: 99 }, { bias: 'SHORT', confidence: 61 }, {
+    closedAt: '2026-05-09T12:30:00.000Z'
+  });
+
+  assert.equal(JSON.stringify(legacy), before);
+  assert.equal(closed.direction, 'SHORT');
+  assert.equal(closed.pnl_demo, 3);
+  assert.equal(closed.exit_reason_code, 'demo_risk_management');
+  assert.equal(closed.motivo_salida, 'Gestion demo por objetivo/riesgo; confianza actual 61');
+});
+
+test('training closure service closes one position and returns immutable next state', () => {
+  const open = { id: 'a', symbol: 'BTCUSD', direction: 'LONG', entry_price: 100, size_demo: 1 };
+  const other = { id: 'b', symbol: 'ETHUSD', direction: 'LONG', entry_price: 10, size_demo: 1 };
+  const state = { positions: [open, other], closedTrades: [] };
+
+  const result = closeTrainingPosition(state, open, { price: 101 }, { bias: 'LONG', confidence: 70 }, {
+    closedAt: '2026-05-09T13:00:00.000Z'
+  });
+
+  assert.equal(result.closedTrade.pnl_demo, 1);
+  assert.equal(result.nextState.positions.length, 1);
+  assert.equal(result.nextState.positions[0], other);
+  assert.equal(result.nextState.closedTrades.length, 1);
+  assert.equal(state.positions.length, 2);
+  assert.equal(state.closedTrades.length, 0);
+});
+
+test('training closure service normalizes open position defensively', () => {
+  const open = normalizeOpenPosition({ side: 'short', entryPrice: '10', size: '2' });
+
+  assert.equal(open.direction, 'SHORT');
+  assert.equal(open.entry_price, 10);
+  assert.equal(open.size_demo, 2);
 });

@@ -1,4 +1,5 @@
 const { computeTrainingMetrics } = require('./metrics-engine');
+const { computeTrainingDiagnostics } = require('./training-diagnostics');
 const { createStrategyRegistry } = require('./strategy-registry');
 const {
   createDefaultTrainingState,
@@ -85,6 +86,7 @@ function getTrainingCoreStatus(env = {}, deps = {}) {
 function getTrainingCoreMetrics(_env = {}, deps = {}) {
   const snapshot = readCoreState(deps);
   const state = snapshot.state;
+  const closedTrades = state.closedTrades;
   return {
     ok: true,
     available: snapshot.available,
@@ -92,8 +94,11 @@ function getTrainingCoreMetrics(_env = {}, deps = {}) {
     mode: 'shadow',
     metrics: computeTrainingMetrics({
       balanceStart: state.balanceStart,
-      closedTrades: state.closedTrades
+      closedTrades
     }),
+    diagnostics: snapshot.available
+      ? computeTrainingDiagnostics(closedTrades, { balanceStart: state.balanceStart })
+      : computeTrainingDiagnostics([]),
     source: snapshot.source,
     safety: coreSafetySummary()
   };

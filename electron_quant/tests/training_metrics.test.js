@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { computeTrainingMetrics } = require('../backend/training/metrics-engine');
+const { computeTrainingDiagnostics } = require('../backend/training/training-diagnostics');
 const { createStrategyRegistry } = require('../backend/training/strategy-registry');
 const { runStrategyPortfolio } = require('../backend/training/strategy-runner');
 
@@ -76,4 +77,49 @@ test('strategy runner ranks provided shadow scores without mutating input', () =
   assert.equal(result.primary.bias, 'SHORT');
   assert.deepEqual(result.ranked.map((row) => row.id), ['trendMomentum', 'meanReversion']);
   assert.equal(input.strategyScores[0].score, 64);
+});
+
+test('training diagnostics computes breakdown by strategy and expectancy', () => {
+  const diagnostics = computeTrainingDiagnostics([
+    { strategy_id: 'trendMomentum', symbol: 'BTCUSDT', direction: 'LONG', timeframe: 'M15', pnl_demo: 10 },
+    { strategy_id: 'trendMomentum', symbol: 'BTCUSDT', direction: 'SHORT', timeframe: 'M15', pnl_demo: -4 },
+    { strategy: 'meanReversion', symbol: 'ETHUSDT', side: 'LONG', timeframe: 'H1', profit: 2 }
+  ], { balanceStart: 1000 });
+
+  assert.equal(diagnostics.summary.totalTrades, 3);
+  assert.equal(diagnostics.summary.unknownStrategyTrades, 0);
+  assert.equal(diagnostics.byStrategy.trendMomentum.sampleSize, 2);
+  assert.equal(diagnostics.byStrategy.trendMomentum.expectancy, 3);
+  assert.equal(diagnostics.byStrategy.trendMomentum.profitFactor, 2.5);
+  assert.equal(diagnostics.byStrategy.trendMomentum.maxDrawdownPct, 0.4);
+  assert.equal(diagnostics.summary.bestStrategyByExpectancy.id, 'trendMomentum');
+  assert.equal(diagnostics.byResult.win.sampleSize, 2);
+  assert.equal(diagnostics.byResult.loss.sampleSize, 1);
+  assert.equal(diagnostics.byTimeframe.M15.sampleSize, 2);
+});
+
+test('training diagnostics tracks missing strategy attribution', () => {
+  const diagnostics = computeTrainingDiagnostics([
+    { symbol: 'XAUUSD', direction: 'SHORT', pnl_demo: -5 },
+    { strategy_id: 'ictCrt', symbol: 'XAUUSD', direction: 'LONG', pnl_demo: 1 }
+  ]);
+
+  assert.equal(diagnostics.summary.totalTrades, 2);
+  assert.equal(diagnostics.summary.unknownStrategyTrades, 1);
+  assert.equal(diagnostics.summary.unknownStrategyRate, 0.5);
+  assert.equal(diagnostics.byStrategy.unknown.sampleSize, 1);
+  assert.deepEqual(diagnostics.missingFields.strategy[0].index, 0);
+});
+
+test('training diagnostics tracks missing symbol and side defensively', () => {
+  const diagnostics = computeTrainingDiagnostics([
+    { strategy_id: 'ictCrt', pnl_demo: 0 },
+    { strategy_id: 'ictCrt', symbol: 'EURUSD', side: 'LONG', pnl_demo: 3 }
+  ]);
+
+  assert.equal(diagnostics.bySymbol.unknown.sampleSize, 1);
+  assert.equal(diagnostics.bySide.unknown.sampleSize, 1);
+  assert.equal(diagnostics.byResult.breakeven.sampleSize, 1);
+  assert.equal(diagnostics.missingFields.symbol.length, 1);
+  assert.equal(diagnostics.missingFields.side.length, 1);
 });

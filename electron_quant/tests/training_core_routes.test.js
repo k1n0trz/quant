@@ -130,6 +130,9 @@ test('training core computes metrics from legacy closed trades snapshot', async 
   assert.equal(metrics.body.metrics.expectancy, 4);
   assert.equal(metrics.body.metrics.profitFactor, 4);
   assert.equal(metrics.body.metrics.byStrategy.trendMomentum.sampleSize, 1);
+  assert.equal(metrics.body.diagnostics.summary.totalTrades, 3);
+  assert.equal(metrics.body.diagnostics.summary.unknownStrategyTrades, 2);
+  assert.equal(metrics.body.diagnostics.summary.unknownStrategyRate, 0.6667);
   assert.equal(strategies.body.available, true);
   assert.equal(strategies.body.strategyRanking[0].id, 'trendMomentum');
   assert.equal(strategies.body.strategyRanking[0].sampleSize, 1);

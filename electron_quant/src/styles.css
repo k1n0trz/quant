@@ -2996,6 +2996,8 @@ select:hover, input:hover, select:focus, input:focus {
   gap: 14px;
   background: transparent;
   border-bottom: 1px solid transparent;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .app-shell--global .active-pill {
@@ -3029,6 +3031,22 @@ select:hover, input:hover, select:focus, input:focus {
     0 1px 0 rgba(255,255,255,0.03) inset,
     0 8px 28px -12px rgba(0,0,0,0.7),
     0 0 0 1px rgba(139, 92, 246, 0.04);
+}
+
+.app-shell--global .shell-sidebar,
+.app-shell--global .shell-topbar,
+.app-shell--global .chat-dock {
+  background: linear-gradient(180deg, rgba(17,24,39,0.62), rgba(11,16,32,0.62));
+  border: 1px solid var(--shell-border, rgba(139, 92, 246, 0.18));
+  box-shadow: var(--shell-shadow-card,
+    0 1px 0 rgba(255,255,255,0.03) inset,
+    0 8px 28px -12px rgba(0,0,0,0.7),
+    0 0 0 1px rgba(139, 92, 246, 0.04));
+}
+
+.app-shell--global .shell-sidebar {
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
 }
 
 .app-shell--global .side-title,

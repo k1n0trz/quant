@@ -1,9 +1,8 @@
 /* ============================================================
-   Global shell + transitional training workspace styles
+   Transitional legacy training workspace styles
    ------------------------------------------------------------
-   This file now styles both the Commit 1 global shell wrappers
-   and the legacy .lab-shell view that still coexists with the
-   dashboard during the transition. The dashboard stays intact.
+   This file only styles the dormant .lab-shell view that still
+   coexists with the dashboard during the Commit 1 transition.
    Loaded AFTER tokens.css.
    ============================================================ */
 
@@ -29,46 +28,10 @@
   padding-right: 0;
 }
 
-/* Legacy lab nav badge, kept only for transitional markup. */
-.nav-item[data-view="lab"] .lab-badge {
-  display: inline-block;
-  margin-left: auto;
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 1px 6px;
-  border-radius: 999px;
-  color: #DDD6FE;
-  background: rgba(139, 92, 246, 0.18);
-  border: 1px solid rgba(139, 92, 246, 0.34);
-  box-shadow: 0 0 10px -2px rgba(139, 92, 246, 0.4);
-}
-
 /* ============================================================
    Legacy training workspace - everything below is scoped to
-   .lab-shell, while the shell wrapper selectors above style the
-   Commit 1 global chrome.
+   .lab-shell.
    ============================================================ */
-.app-shell--global .shell-sidebar,
-.app-shell--global .shell-topbar,
-.app-shell--global .chat-dock {
-  background: linear-gradient(180deg, rgba(17,24,39,0.62), rgba(11,16,32,0.62));
-  border: 1px solid var(--shell-border, var(--lab-border));
-  box-shadow: var(--shell-shadow-card, var(--lab-shadow-card));
-}
-
-.app-shell--global .shell-sidebar {
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-}
-
-.app-shell--global .shell-topbar,
-.app-shell--global .chat-dock {
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
-
 .lab-shell {
   font-family: var(--lab-font-sans);
   font-size: 13px;
@@ -752,14 +715,6 @@
 .lab-shell .lab-kill-btn:focus-visible {
   outline-color: var(--lab-red);
   box-shadow: 0 0 0 4px var(--lab-red-soft), 0 0 18px -4px var(--lab-red-glow);
-}
-
-/* Sidebar nav focus-visible — applies to the lab nav item only,
-   so we never alter focus appearance for the legacy dashboard. */
-.nav-item[data-view="lab"]:focus-visible {
-  outline: 2px solid var(--purple);
-  outline-offset: 2px;
-  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.18);
 }
 
 /* ─── Custom scrollbars (chat body + main) ─── */

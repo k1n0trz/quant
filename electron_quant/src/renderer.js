@@ -1351,6 +1351,117 @@ function renderMarketTable() {
   document.querySelectorAll('.market-row').forEach((r) => r.addEventListener('click', () => { setSymbol(r.dataset.symbol); setView('dashboard'); }));
 }
 
+const trainingDemoWriterClient =
+  window.QuantTrainingDemoWriter && typeof window.QuantTrainingDemoWriter.createTrainingDemoWriterClient === 'function'
+    ? window.QuantTrainingDemoWriter.createTrainingDemoWriterClient()
+    : null;
+
+async function shadowWriteTrainingClosedTrade(openPosition, closedTrade, pair, signal) {
+  if (!trainingDemoWriterClient) return { ok: false, fallback: true, reason: 'client_unavailable', mode: 'fallback_legacy', acceptAtomic: false };
+  const exitContext = {
+    price: pair.price,
+    exit_price: closedTrade.exit_price,
+    symbol: pair.symbol,
+    venue: pair.venue,
+    spreadPct: pair.spreadPct,
+    volatilityPct: signal.volatilityPct
+  };
+  const result = await trainingDemoWriterClient.writeClosedTradeShadow({
+    openPosition: openPosition,
+    exitContext: exitContext,
+    signal: signal,
+    options: {
+      closedAt: closedTrade.closed_timestamp,
+      maxClosedTrades: 80
+    }
+  });
+  if (result.ok) {
+    logEvent('OK', result.acceptAtomic ? 'Training backend writer: atomic close aceptado' : 'Training backend writer: shadow write registrado');
+    return result;
+  }
+  if (result.reason === 'disabled') {
+    logEvent('OK', 'Training backend writer: backend desactivado, fallback local');
+    return result;
+  }
+  if (result.warning) {
+    logEvent('WARN', result.warning);
+  }
+  return result;
+}
+
+function removeTrainingPositionByBackendResponse(openPosition, backendBody) {
+  const removedPositionId = backendBody?.removedPositionId;
+  const removedSignalId = backendBody?.removedSignalId;
+  state.training.positions = state.training.positions.filter((position) => {
+    if (removedPositionId && position.id === removedPositionId) return false;
+    if (removedSignalId && (position.signal_id === removedSignalId || position.signalId === removedSignalId)) return false;
+    return position !== openPosition;
+  });
+}
+
+async function acceptBackendAtomicTrainingClose(openPosition, pair, backendResult) {
+  const backendBody = backendResult?.body || {};
+  const backendClosedTrade = backendBody.closedTrade;
+  if (!backendClosedTrade) return false;
+
+  removeTrainingPositionByBackendResponse(openPosition, backendBody);
+  state.training.closedTrades = [
+    backendClosedTrade,
+    ...state.training.closedTrades.filter((trade) => trade !== backendClosedTrade && trade?.closed_at !== backendClosedTrade.closed_at)
+  ].slice(0, 80);
+  computeWfCalibration();
+  state.training.balance = Number(backendBody.balanceAfter || state.training.balance);
+  state.training.xp += Math.max(4, Math.round(Math.abs(Number(backendClosedTrade.pnl_demo || 0)) / 4) + (Number(backendClosedTrade.pnl_demo || 0) >= 0 ? 14 : 8));
+  state.training.pairCooldowns[`${pair.venue}:${pair.symbol}:${openPosition.horizon || 'intraday'}`] = Date.now() + 30 * 1000;
+
+  if (backendBody.lessonPending !== true && backendClosedTrade.lesson_learned) {
+    state.training.lessons.unshift(backendClosedTrade.lesson_learned);
+    state.training.lessons = state.training.lessons.slice(0, 160);
+    await window.quant.memoryWrite('training_lesson', backendClosedTrade.lesson_learned);
+  } else if (backendBody.lessonPending === true && backendBody.lessonPendingReason) {
+    logEvent('WARN', `Training backend writer: ${backendBody.lessonPendingReason}`);
+  }
+
+  if (backendResult.body?.persistence?.persistedAt) {
+    state.training.lastPersistedAt = backendResult.body.persistence.persistedAt;
+    setText('trainPersistence', `Persistencia backend atomic close - ${new Date(backendResult.body.persistence.persistedAt).toLocaleTimeString('es-CO')}`);
+  }
+
+  await window.quant.memoryWrite('trade', { ...backendClosedTrade, type: 'training_trade_closed', mode: 'training' });
+  return true;
+}
+
+function applyBackendTrainingStateRefresh(refreshedState) {
+  if (!refreshedState || typeof refreshedState !== 'object') return false;
+  state.training.balance = Number(refreshedState.balance || state.training.balance);
+  state.training.positions = Array.isArray(refreshedState.positions) ? refreshedState.positions : state.training.positions;
+  state.training.closedTrades = Array.isArray(refreshedState.closedTrades) ? refreshedState.closedTrades : state.training.closedTrades;
+  state.training.lessons = Array.isArray(refreshedState.lessons) ? refreshedState.lessons : state.training.lessons;
+  state.training.strategyStats = refreshedState.strategyStats || state.training.strategyStats;
+  state.training.pairCooldowns = refreshedState.pairCooldowns || state.training.pairCooldowns;
+  state.training.xp = Number(refreshedState.xp || state.training.xp || 0);
+  state.training.lastPersistedAt = refreshedState.persistedAt || state.training.lastPersistedAt;
+  computeWfCalibration();
+  if (refreshedState.persistedAt) {
+    setText('trainPersistence', `Persistencia backend refrescada - ${new Date(refreshedState.persistedAt).toLocaleTimeString('es-CO')}`);
+  }
+  return true;
+}
+
+async function refreshTrainingStateAfterAtomicClose() {
+  if (!trainingDemoWriterClient || typeof trainingDemoWriterClient.readTrainingDemoState !== 'function') {
+    return { ok: false, reason: 'client_unavailable', warning: 'training-demo-state refresh unavailable' };
+  }
+  const refreshResult = await trainingDemoWriterClient.readTrainingDemoState();
+  if (!refreshResult.ok) {
+    if (refreshResult.warning) logEvent('WARN', refreshResult.warning);
+    return refreshResult;
+  }
+  applyBackendTrainingStateRefresh(refreshResult.state);
+  logEvent('OK', 'Training backend writer: estado refrescado desde backend');
+  return refreshResult;
+}
+
 async function loadTrainingState() {
   try {
     const saved = await window.quant.trainingStateRead();
@@ -2174,6 +2285,14 @@ async function evaluateTrainingPair(pair) {
     if (shouldClose && protectContinuousTraining && !hardStop) continue;
     if (!shouldClose) continue;
     const closed = await executeSimulatedTrade('CLOSE', pair, signal, open);
+    const backendCloseResult = await shadowWriteTrainingClosedTrade(open, closed, pair, signal);
+    if (backendCloseResult && backendCloseResult.acceptAtomic) {
+      const accepted = await acceptBackendAtomicTrainingClose(open, pair, backendCloseResult);
+      if (accepted) {
+        await refreshTrainingStateAfterAtomicClose();
+        continue;
+      }
+    }
     state.training.positions = state.training.positions.filter((p) => p !== open);
     state.training.closedTrades.unshift(closed);
     state.training.closedTrades = state.training.closedTrades.slice(0, 80);

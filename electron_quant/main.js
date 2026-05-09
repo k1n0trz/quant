@@ -1670,6 +1670,8 @@ async function handleApi(req, res, url) {
         readTrainingState,
         readTrainingStateSnapshot,
         writeTrainingState,
+        getTicker: (symbol) => ticker(symbol),
+        readMt5Snapshot,
         syncBinanceTime: () => syncBinanceTime(),
         mt5AccountInfo: (envArg) => mt5Info(envArg)
       },

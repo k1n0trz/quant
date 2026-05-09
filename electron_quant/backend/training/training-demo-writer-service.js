@@ -1,5 +1,5 @@
-const { buildClosedTradeFromPosition } = require('./training-closure-service');
-const { createTrainingStateSnapshot, normalizeTrainingState } = require('./training-state');
+const { applyAtomicTrainingDemoClose } = require('./training-atomic-close-service');
+const { createTrainingStateSnapshot } = require('./training-state');
 
 function isObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
@@ -22,38 +22,36 @@ function disabledResponse() {
   };
 }
 
+function noWriteResponse(reason, error, status = 409) {
+  return {
+    status,
+    body: {
+      ok: false,
+      available: false,
+      reason,
+      ...(error ? { error } : {}),
+      safety: {
+        readOnly: false,
+        writesPerformed: false,
+        realTradingTouched: false
+      }
+    }
+  };
+}
+
 function registerTrainingDemoClosedTrade(env = {}, deps = {}, payload = {}) {
   if (!isTrainingBackendWriterEnabled(env)) {
     return { status: 409, body: disabledResponse() };
   }
 
   if (typeof deps.writeTrainingState !== 'function') {
-    return {
-      status: 503,
-      body: {
-        ok: false,
-        available: false,
-        reason: 'training_state_writer_missing',
-        safety: {
-          readOnly: false,
-          writesPerformed: false,
-          realTradingTouched: false
-        }
-      }
-    };
+    return noWriteResponse('training_state_writer_missing', null, 503);
   }
 
   const body = isObject(payload) ? payload : {};
   const openPosition = body.openPosition || body.open_position || body.position;
   if (!isObject(openPosition)) {
-    return {
-      status: 400,
-      body: {
-        ok: false,
-        error: 'openPosition object is required',
-        writesPerformed: false
-      }
-    };
+    return noWriteResponse('invalid_payload', 'openPosition object is required', 400);
   }
 
   const exitContext = isObject(body.exitContext || body.exit_context)
@@ -68,30 +66,29 @@ function registerTrainingDemoClosedTrade(env = {}, deps = {}, payload = {}) {
         { source: 'deps.readTrainingState' }
       );
   if (!snapshot || snapshot.available !== true) {
-    return {
-      status: 409,
-      body: {
-        ok: false,
-        available: false,
-        reason: snapshot?.reason || 'training_state_unavailable',
-        safety: {
-          readOnly: false,
-          writesPerformed: false,
-          realTradingTouched: false
-        }
-      }
-    };
+    return noWriteResponse(snapshot?.reason || 'training_state_unavailable');
   }
-  const state = normalizeTrainingState(snapshot.state || snapshot.raw || {});
-  const closedTrade = buildClosedTradeFromPosition(openPosition, exitContext, signal, {
-    closedAt: options.closedAt,
-    lessonBuilder: typeof options.lessonBuilder === 'function' ? options.lessonBuilder : undefined
+
+  const balanceBefore = Number(snapshot.state?.balance || 0);
+  const atomicResult = applyAtomicTrainingDemoClose({
+    state: snapshot.state || snapshot.raw || {},
+    openPosition,
+    exitContext,
+    signal,
+    options: {
+      closedAt: options.closedAt,
+      lessonBuilder: typeof options.lessonBuilder === 'function' ? options.lessonBuilder : undefined,
+      maxClosedTrades: options.maxClosedTrades,
+      maxLessons: options.maxLessons,
+      persistedAt: options.persistedAt
+    }
   });
-  const nextState = {
-    ...state,
-    closedTrades: [closedTrade, ...state.closedTrades].slice(0, Number(options.maxClosedTrades || 80))
-  };
-  const writeResult = deps.writeTrainingState(nextState);
+  if (!atomicResult.ok) {
+    const status = atomicResult.reason === 'open_position_object_required' ? 400 : 409;
+    return noWriteResponse(atomicResult.reason, null, status);
+  }
+
+  const writeResult = deps.writeTrainingState(atomicResult.nextState);
 
   return {
     status: 200,
@@ -99,11 +96,17 @@ function registerTrainingDemoClosedTrade(env = {}, deps = {}, payload = {}) {
       ok: true,
       available: true,
       mode: 'internal',
-      closedTrade,
+      closedTrade: atomicResult.closedTrade,
+      balanceBefore,
+      balanceAfter: atomicResult.nextState.balance,
+      removedPositionId: atomicResult.removedPosition?.id || null,
+      removedSignalId: atomicResult.removedPosition?.signal_id || atomicResult.removedPosition?.signalId || null,
+      lessonPending: atomicResult.lessonPending === true,
+      lessonPendingReason: atomicResult.lessonPendingReason || null,
       summary: {
-        positions: nextState.positions.length,
-        closedTrades: nextState.closedTrades.length,
-        lessons: nextState.lessons.length
+        positions: atomicResult.nextState.positions.length,
+        closedTrades: atomicResult.nextState.closedTrades.length,
+        lessons: atomicResult.nextState.lessons.length
       },
       persistence: writeResult || { ok: true },
       safety: {

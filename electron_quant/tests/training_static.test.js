@@ -28,6 +28,16 @@ assert(renderer.includes('riesgo macro alto'), 'El riesgo macro alto debe marcar
 assert(renderer.includes('ictCrtScore'), 'Training debe incorporar scoring ICT/CRT.');
 assert(renderer.includes('crtWeeklyBias'), 'Training debe analizar sesgo CRT semanal.');
 assert(renderer.includes('scoreStrategyPortfolio'), 'Training debe comparar un portafolio de estrategias, no solo ICT/CRT.');
+assert(renderer.includes('trainingSignalId'), 'Cada senal nueva debe generar signal_id estable y auditable.');
+assert(renderer.includes('buildTrainingTraceMetadata'), 'Training debe construir metadata causal para senales/posiciones nuevas.');
+assert(renderer.includes('entry_reason_code'), 'Las posiciones nuevas deben persistir entry_reason_code cuando este disponible.');
+assert(renderer.includes('risk_profile_id'), 'Las posiciones nuevas deben persistir risk_profile_id para trazabilidad.');
+assert(renderer.includes('confidence_at_entry'), 'Las posiciones nuevas deben conservar confidence_at_entry.');
+assert(renderer.includes('signal_id: trace.signal_id'), 'Las posiciones nuevas deben copiar signal_id desde la metadata causal.');
+assert(renderer.includes('source: trace.source'), 'Las posiciones nuevas deben preservar el source causal.');
+assert(html.includes('services/training-closure-service.js'), 'Renderer debe cargar el wrapper del Training Closure Service antes de cerrar trades.');
+assert(renderer.includes('window.QuantTrainingClosure.buildClosedTradeFromPosition'), 'El cierre de trades debe delegar la construccion al Training Closure Service.');
+assert(renderer.includes('lessonBuilder'), 'El cierre delegado debe seguir generando lecciones con el builder actual.');
 assert(renderer.includes('scoreTrendMomentum') && renderer.includes('scoreBreakoutRetest') && renderer.includes('scoreMeanReversion') && renderer.includes('scoreVolumePullback'), 'Training debe testear trend, breakout, mean reversion y volume pullback.');
 assert(renderer.includes('primaryStrategy'), 'Cada señal de training debe registrar estrategia dominante.');
 assert(html.includes('chat-dock') && html.includes('chatContextPanel'), 'El chat de Quant debe estar siempre visible como dock con contexto activo.');
@@ -40,6 +50,7 @@ assert(renderer.includes('runSelfAudit'), 'Quant debe tener auditoria interna de
 assert(main.includes('startLocalWebServer'), 'Quant debe exponer localhost web.');
 assert(main.includes('activeWebPort'), 'Localhost debe reportar el puerto activo/fallback.');
 assert(main.includes('MT5 adapter disabled'), 'MT5 debe quedar aislado como adapter opcional.');
+assert(main.includes("'TRAINING_BACKEND_WRITER_ENABLED'"), 'El backend debe permitir activar el writer demo por variable de entorno controlada.');
 assert(main.includes('deepseek-reasoner') || main.includes('Qwen/Qwen2.5-72B-Instruct'), 'Debe existir ruta a modelo fuerte.');
 assert(renderer.includes("trainingStateWrite"), 'El renderer debe persistir estado de training.');
 assert(main.includes('quant_training_state.json'), 'El estado de training debe guardarse en archivo local.');

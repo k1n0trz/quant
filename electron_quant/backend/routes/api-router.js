@@ -4,6 +4,30 @@ const { getConnectionsSummary, testBinanceConnection, testMt5Connection } = requ
 const { readTradesFromMemory } = require('../trades/trade-history-service');
 const { readSignalsFromMemory } = require('../signals/signal-history-service');
 const { readTrainingLogs } = require('../training/training-log-service');
+const {
+  getTrainingCoreStatus,
+  getTrainingCoreMetrics,
+  getTrainingCoreStrategies,
+  getTrainingCoreEquity,
+  getTrainingCoreEdge
+} = require('../training/training-core-service');
+const {
+  getTrainingDemoOpenPositions,
+  getTrainingDemoRecentTrades,
+  getTrainingDemoRecentLessons,
+  getTrainingDemoPerformanceSummary
+} = require('../training/training-monitoring-service');
+const { registerTrainingDemoClosedTrade } = require('../training/training-demo-writer-service');
+const { isTrainingBackendLoopEnabled, runTrainingDemoTick } = require('../training/training-loop-service');
+const { buildTrainingPositionContexts } = require('../training/training-position-context-service');
+const { resolveTrainingMarketContext } = require('../training/training-market-context-service');
+const { resolveTrainingSignalContext } = require('../training/training-signal-context-service');
+const { generateTrainingSignalCandidates } = require('../training/training-signal-candidate-engine');
+const {
+  startTrainingDemoLoopScheduler,
+  stopTrainingDemoLoopScheduler,
+  getTrainingDemoLoopSchedulerStatus
+} = require('../training/training-loop-scheduler');
 const { ApiError, toErrorPayload } = require('../utils/errors');
 
 function response(status, body) {
@@ -17,6 +41,11 @@ function createApiRouter(context) {
     const body = req.body || {};
     const env = context.env || {};
     const deps = context.deps || {};
+    const loopScheduler = deps.trainingLoopScheduler || {
+      startTrainingDemoLoopScheduler,
+      stopTrainingDemoLoopScheduler,
+      getTrainingDemoLoopSchedulerStatus
+    };
 
     try {
       if (method === 'GET' && pathname === '/healthz') {
@@ -82,6 +111,301 @@ function createApiRouter(context) {
 
       if (method === 'GET' && pathname === '/api/training/logs') {
         return response(200, readTrainingLogs(deps.readMemory, deps.readTrainingState));
+      }
+
+      if (method === 'GET' && pathname === '/api/training/core/status') {
+        return response(200, getTrainingCoreStatus(env, deps));
+      }
+
+      if (method === 'GET' && pathname === '/api/training/core/metrics') {
+        return response(200, getTrainingCoreMetrics(env, deps));
+      }
+
+      if (method === 'GET' && pathname === '/api/training/core/strategies') {
+        return response(200, getTrainingCoreStrategies(env, deps));
+      }
+
+      if (method === 'GET' && pathname === '/api/training/core/equity') {
+        return response(200, getTrainingCoreEquity(env, deps));
+      }
+
+      if (method === 'GET' && pathname === '/api/training/core/edge') {
+        return response(200, getTrainingCoreEdge(env, deps));
+      }
+
+      if (method === 'POST' && pathname === '/api/training/demo/closed-trade') {
+        const result = registerTrainingDemoClosedTrade(env, deps, body);
+        return response(result.status, result.body);
+      }
+
+      if (method === 'GET' && pathname === '/api/training/demo/state') {
+        const snapshot = typeof deps.readTrainingStateSnapshot === 'function'
+          ? deps.readTrainingStateSnapshot()
+          : null;
+        if (!snapshot || snapshot.available !== true) {
+          return response(200, {
+            ok: true,
+            available: false,
+            reason: snapshot?.reason || 'training_state_unavailable',
+            state: null,
+            safety: {
+              readOnly: true,
+              writesPerformed: false,
+              realTradingTouched: false
+            }
+          });
+        }
+        return response(200, {
+          ok: true,
+          available: true,
+          reason: null,
+          state: snapshot.state,
+          safety: {
+            readOnly: true,
+            writesPerformed: false,
+            realTradingTouched: false
+          }
+        });
+      }
+
+      if (method === 'GET' && pathname === '/api/training/demo/positions/open') {
+        return response(200, getTrainingDemoOpenPositions(deps));
+      }
+
+      if (method === 'GET' && pathname === '/api/training/demo/trades/recent') {
+        return response(200, getTrainingDemoRecentTrades(deps, body));
+      }
+
+      if (method === 'GET' && pathname === '/api/training/demo/lessons/recent') {
+        return response(200, getTrainingDemoRecentLessons(deps, body));
+      }
+
+      if (method === 'GET' && pathname === '/api/training/demo/performance/summary') {
+        const schedulerStatus = loopScheduler.getTrainingDemoLoopSchedulerStatus({
+          env,
+          deps,
+          logger: context.logger || null
+        });
+        return response(200, getTrainingDemoPerformanceSummary(deps, schedulerStatus));
+      }
+
+      if (method === 'POST' && pathname === '/api/training/demo/tick') {
+        if (!isTrainingBackendLoopEnabled(env)) {
+          return response(409, {
+            ok: false,
+            reason: 'training_backend_loop_disabled',
+            safety: {
+              readOnly: false,
+              writesPerformed: false,
+              realTradingTouched: false
+            }
+          });
+        }
+        const snapshot = typeof deps.readTrainingStateSnapshot === 'function'
+          ? deps.readTrainingStateSnapshot()
+          : null;
+        const hasManualContexts = Array.isArray(body.positionContexts) && body.positionContexts.length > 0;
+        const builtContexts = hasManualContexts ? null : await buildTrainingPositionContexts(snapshot?.state || null, deps, { nowMs: body.nowMs, env });
+        if (!hasManualContexts && !builtContexts?.ok) {
+          return response(409, {
+            ok: false,
+            reason: builtContexts?.reason || 'training_position_contexts_unavailable',
+            safety: {
+              readOnly: false,
+              writesPerformed: false,
+              realTradingTouched: false
+            }
+          });
+        }
+        const tickResult = await runTrainingDemoTick({
+          state: snapshot?.state || null,
+          positionContexts: hasManualContexts ? body.positionContexts : builtContexts.contexts,
+          nowMs: body.nowMs,
+          env,
+          deps
+        });
+        if (!tickResult.ok) {
+          return response(409, {
+            ok: false,
+            reason: tickResult.reason,
+            safety: {
+              readOnly: false,
+              writesPerformed: false,
+              realTradingTouched: false
+            }
+          });
+        }
+
+        let persistence = null;
+        if (tickResult.closedPositions > 0 || tickResult.openedPositions > 0) {
+          if (typeof deps.writeTrainingState !== 'function') {
+            return response(503, {
+              ok: false,
+              reason: 'training_state_writer_missing',
+              safety: {
+                readOnly: false,
+                writesPerformed: false,
+                realTradingTouched: false
+              }
+            });
+          }
+          persistence = deps.writeTrainingState(tickResult.nextState);
+        }
+
+        return response(200, {
+          ok: true,
+          tickId: tickResult.tickId,
+          evaluatedPositions: tickResult.evaluatedPositions,
+          closedPositions: tickResult.closedPositions,
+          openedPositions: tickResult.openedPositions,
+          skippedPositions: [
+            ...(Array.isArray(builtContexts?.skipped) ? builtContexts.skipped : []),
+            ...tickResult.skippedPositions
+          ],
+          skippedEntries: tickResult.skippedEntries,
+          balanceBefore: tickResult.balanceBefore,
+          balanceAfter: tickResult.balanceAfter,
+          lessonPendingCount: tickResult.lessonPendingCount,
+          contextSource: hasManualContexts ? 'manual' : 'backend',
+          entryEnabled: tickResult.entryEnabled,
+          persistence,
+          safety: {
+            readOnly: false,
+            writesPerformed: tickResult.closedPositions > 0 || tickResult.openedPositions > 0,
+            realTradingTouched: false
+          }
+        });
+      }
+
+      if (method === 'GET' && pathname === '/api/training/demo/context/status') {
+        const snapshot = typeof deps.readTrainingStateSnapshot === 'function'
+          ? deps.readTrainingStateSnapshot()
+          : null;
+        const state = snapshot?.state || null;
+        const openPositions = (Array.isArray(state?.positions) ? state.positions : []).filter((position) => !position.exit_price);
+        const diagnostics = [];
+        for (const position of openPositions) {
+          const market = await resolveTrainingMarketContext(position.symbol, {
+            venue: position.venue,
+            position,
+            state: snapshot?.raw || state,
+            deps
+          });
+          const signal = await resolveTrainingSignalContext(position, {
+            ...deps,
+            state: snapshot?.raw || state,
+            env
+          });
+          diagnostics.push({
+            positionId: position.id || null,
+            signalId: position.signal_id || null,
+            symbol: position.symbol || null,
+            venue: position.venue || null,
+            horizon: position.horizon || null,
+            market,
+            signal
+          });
+        }
+        return response(200, {
+          ok: true,
+          available: snapshot?.available === true,
+          reason: snapshot?.available === true ? null : (snapshot?.reason || 'training_state_unavailable'),
+          positions: diagnostics,
+          safety: {
+            readOnly: true,
+            writesPerformed: false,
+            realTradingTouched: false
+          }
+        });
+      }
+
+      if (method === 'GET' && pathname === '/api/training/demo/signals/candidates') {
+        const snapshot = typeof deps.readTrainingStateSnapshot === 'function'
+          ? deps.readTrainingStateSnapshot()
+          : null;
+        const state = snapshot?.state || null;
+        const symbols = Array.isArray(state?.activePairs)
+          ? state.activePairs.map((pair) => ({ symbol: pair.symbol, venue: pair.venue, ...pair }))
+          : [];
+        const candidates = await generateTrainingSignalCandidates(symbols, {
+          state: snapshot?.raw || state,
+          env,
+          deps
+        });
+        return response(200, {
+          ok: true,
+          available: snapshot?.available === true,
+          reason: snapshot?.available === true ? null : (snapshot?.reason || 'training_state_unavailable'),
+          candidates,
+          safety: {
+            readOnly: true,
+            writesPerformed: false,
+            realTradingTouched: false
+          }
+        });
+      }
+
+      if (method === 'GET' && pathname === '/api/training/demo/loop/status') {
+        return response(200, {
+          ok: true,
+          scheduler: loopScheduler.getTrainingDemoLoopSchedulerStatus({
+            env,
+            deps,
+            logger: context.logger || null
+          }),
+          safety: {
+            readOnly: true,
+            writesPerformed: false,
+            realTradingTouched: false
+          }
+        });
+      }
+
+      if (method === 'POST' && pathname === '/api/training/demo/loop/start') {
+        const result = loopScheduler.startTrainingDemoLoopScheduler({
+          env,
+          deps,
+          logger: context.logger || null
+        });
+        if (!result.ok) {
+          return response(409, {
+            ok: false,
+            reason: result.reason,
+            scheduler: result.status,
+            safety: {
+              readOnly: false,
+              writesPerformed: false,
+              realTradingTouched: false
+            }
+          });
+        }
+        return response(200, {
+          ok: true,
+          alreadyRunning: result.alreadyRunning === true,
+          scheduler: result.status,
+          safety: {
+            readOnly: false,
+            writesPerformed: false,
+            realTradingTouched: false
+          }
+        });
+      }
+
+      if (method === 'POST' && pathname === '/api/training/demo/loop/stop') {
+        const result = loopScheduler.stopTrainingDemoLoopScheduler({
+          env,
+          deps,
+          logger: context.logger || null
+        });
+        return response(200, {
+          ok: true,
+          scheduler: result.status,
+          safety: {
+            readOnly: false,
+            writesPerformed: false,
+            realTradingTouched: false
+          }
+        });
       }
 
       if (method === 'GET' && pathname === '/api/risk') {

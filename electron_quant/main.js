@@ -30,9 +30,13 @@ const { createJsonStore } = require('./backend/memory/json-store');
 const { createDefaultBotState, mergeBotState } = require('./backend/services/bot-state-service');
 const { createDefaultRiskConfig, assertTradingRealCanBeEnabled, validateRiskConfig } = require('./backend/risk/risk-policy');
 const { createApiRouter } = require('./backend/routes/api-router');
+const { createReadOnlyTrainingStateReader } = require('./backend/training/training-state');
+const { normalizeTrainingStateTraceability } = require('./backend/training/training-traceability');
+const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
 
 const BINANCE_BASE = 'https://api.binance.com';
 let timeOffsetMs = 0;
+let trainingLoopAutoStartAttempted = false;
 const logger = createLogger(IS_ELECTRON ? 'quant-desktop' : 'quant-backend');
 const CLOUD_ENV_KEYS = [
   'BINANCE_API_KEY','BINANCE_SECRET','DEEPSEEK_API_KEY','DEEPINFRA_API_KEY',
@@ -40,6 +44,7 @@ const CLOUD_ENV_KEYS = [
   'MT5_ACCOUNT1_LOGIN','MT5_ACCOUNT1_PASSWORD','MT5_ACCOUNT1_SERVER',
   'MT5_ACCOUNT2_LOGIN','MT5_ACCOUNT2_PASSWORD','MT5_ACCOUNT2_SERVER',
   'WEB_AUTH_ENABLED','WEB_AUTH_EMAIL','WEB_AUTH_PASSWORD',
+  'TRAINING_BACKEND_WRITER_ENABLED',
   'QUANT_WEB_PORT','QUANT_WEB_HOST','QUANT_DATA_DIR','QUANT_SYNC_URL','QUANT_SYNC_KEY',
   'QUANT_DESKTOP_DOWNLOAD_URL','DEFAULT_PROVIDER','QUANT_PRIMARY_MODEL',
   'DEEPSEEK_MODEL','DEEPSEEK_BASE_URL','DEEPINFRA_MODEL','DEEPINFRA_BASE_URL',
@@ -126,6 +131,7 @@ function resolveDataDir() {
 const memoryDir = resolveDataDir();
 const memoryFile = path.join(memoryDir, 'quant_memory.jsonl');
 const trainingStateFile = path.join(memoryDir, 'quant_training_state.json');
+const trainingStateReader = createReadOnlyTrainingStateReader(trainingStateFile);
 const customInstructionsFile = path.join(memoryDir, 'custom_instructions.json');
 const calibrationFile        = path.join(memoryDir, 'calibration.json');
 const conversationsDir       = path.join(memoryDir, 'conversations');
@@ -413,10 +419,14 @@ function readTrainingState() {
   }
 }
 
+function readTrainingStateSnapshot() {
+  return trainingStateReader.readSnapshot();
+}
+
 function writeTrainingState(payload) {
   ensureMemoryDir();
   const state = {
-    ...payload,
+    ...normalizeTrainingStateTraceability(payload),
     persistedAt: new Date().toISOString(),
     file: trainingStateFile
   };
@@ -1660,6 +1670,10 @@ async function handleApi(req, res, url) {
       deps: {
         readMemory,
         readTrainingState,
+        readTrainingStateSnapshot,
+        writeTrainingState,
+        getTicker: (symbol) => ticker(symbol),
+        readMt5Snapshot,
         syncBinanceTime: () => syncBinanceTime(),
         mt5AccountInfo: (envArg) => mt5Info(envArg)
       },
@@ -2314,7 +2328,23 @@ function startLocalWebServer() {
       }
       logger.error('server.listen.error', { port, message: err.message });
     });
-    webServer.listen(port, listenHost, () => logger.info('server.listen.ready', { host: listenHost, port }));
+    webServer.listen(port, listenHost, () => {
+      logger.info('server.listen.ready', { host: listenHost, port });
+      if (!trainingLoopAutoStartAttempted) {
+        trainingLoopAutoStartAttempted = true;
+        autoStartTrainingDemoLoopScheduler({
+          env: { ...ENV, ...process.env },
+          deps: {
+            readTrainingStateSnapshot: () => trainingStateReader.read(),
+            writeTrainingState: (nextState) => writeTrainingState(nextState),
+            getTicker: (symbol) => ticker(symbol),
+            readMt5Snapshot: () => readMt5Snapshot(),
+            readMemory: (limit) => readMemory(limit)
+          },
+          logger
+        });
+      }
+    });
   };
   tryListen(basePort, 10);
 }

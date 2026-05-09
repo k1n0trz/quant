@@ -1,0 +1,77 @@
+/* ============================================================
+   Quant Lab — Design Tokens (Purple Edition)
+   ------------------------------------------------------------
+   Scoped under .lab-shell so they NEVER leak into #view-dashboard
+   or any pre-existing component. Coexistence is mandatory.
+
+   Loaded BEFORE lab.css, AFTER styles.css.
+   ============================================================ */
+
+.lab-shell {
+  /* ---------- Surfaces ---------- */
+  --bg-base:        #050816;
+  --bg-surface:     #0B1020;
+  --bg-elev-1:      #0E1530;
+  --bg-elev-2:      #111827;
+  --bg-elev-3:      #161F3A;
+
+  /* Glass — used together with backdrop-filter on layers above background glow */
+  --glass:          rgba(17, 24, 39, 0.55);
+  --glass-strong:   rgba(11, 16, 32, 0.78);
+
+  /* ---------- Purple system ---------- */
+  --purple:         #8B5CF6;
+  --purple-2:       #A855F7;
+  --purple-3:       #7C3AED;
+  --purple-soft:    rgba(139, 92, 246, 0.12);
+  --purple-soft-2:  rgba(139, 92, 246, 0.20);
+  --purple-edge:    rgba(139, 92, 246, 0.32);
+  --purple-glow:    rgba(139, 92, 246, 0.35);
+  --purple-glow-2:  rgba(168, 85, 247, 0.22);
+
+  /* ---------- Borders ---------- */
+  --lab-border:        rgba(139, 92, 246, 0.18);
+  --lab-border-soft:   rgba(139, 92, 246, 0.10);
+  --lab-border-strong: rgba(139, 92, 246, 0.34);
+  --lab-hairline:      rgba(255, 255, 255, 0.04);
+
+  /* ---------- Semantic ---------- */
+  --lab-green:       #10B981;
+  --lab-green-soft:  rgba(16, 185, 129, 0.14);
+  --lab-green-glow:  rgba(16, 185, 129, 0.32);
+  --lab-red:         #EF4444;
+  --lab-red-soft:    rgba(239, 68, 68, 0.14);
+  --lab-red-glow:    rgba(239, 68, 68, 0.30);
+  --lab-amber:       #F59E0B;
+  --lab-amber-soft:  rgba(245, 158, 11, 0.14);
+  --lab-amber-glow:  rgba(245, 158, 11, 0.32);
+
+  /* ---------- Text ---------- */
+  --lab-text:        #F8FAFC;
+  --lab-text-dim:    #CBD5E1;
+  --lab-text-mute:   #94A3B8;
+  --lab-text-faint:  #64748B;
+
+  /* ---------- Typography ---------- */
+  --lab-font-sans:   'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --lab-font-mono:   'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---------- Geometry ---------- */
+  --lab-radius-sm:   4px;
+  --lab-radius:      8px;
+  --lab-radius-lg:   14px;
+
+  /* ---------- Shadows ---------- */
+  --lab-shadow-card:
+      0 1px 0 rgba(255,255,255,0.03) inset,
+      0 8px 28px -12px rgba(0,0,0,0.7),
+      0 0 0 1px rgba(139, 92, 246, 0.04);
+  --lab-shadow-glow:
+      0 0 0 1px var(--purple-edge),
+      0 0 24px -4px var(--purple-glow);
+  --lab-shadow-glow-soft: 0 0 18px -2px var(--purple-glow-2);
+
+  /* ---------- Motion ---------- */
+  --lab-duration: 180ms;
+  --lab-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}

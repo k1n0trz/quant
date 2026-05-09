@@ -255,7 +255,19 @@ async function boot() {
   bindUi();
   drawPerf();
   drawGauge(50);
-  addChat('Quant', 'Estoy lista. Esto ya es una ventana local con diseño vivo, no un panel pintado. Puedo conversar normal, revisar mercado, leer wallet y ayudarte a operar con cautela.');
+  // Boot cognitivo: restaura última conversación si existe; si no, silencio honesto.
+  // Sin mensajes teatrales. Los insights reales llegarán por el canal de Quant-Core
+  // cuando los endpoints cognitivos estén consumidos (F2+).
+  await loadLastConversationIfAny();
+
+  // Quant-Core observatorio: monta el panel del laboratorio backend.
+  // El refresh inicial corre en background; el setInterval debajo lo mantiene vivo.
+  // Defensivo: si el módulo o el target DOM faltan, queda silencioso.
+  if (window.QuantCore && window.QuantCore.views && window.QuantCore.views.coreLabPanel) {
+    if (window.QuantCore.views.coreLabPanel.mount('quantCorePanel')) {
+      window.QuantCore.views.coreLabPanel.refresh();
+    }
+  }
   logEvent('OK', 'Sistema iniciado correctamente');
   try {
     state.env = await window.quant.envStatus();
@@ -301,6 +313,12 @@ async function boot() {
   setInterval(() => runNightCalibration(), 3600000);
   // Sync MT5 → cloud automático cada 5 min en modo pasivo (sin mt5.login → sin reconexión al broker)
   setInterval(() => syncMt5ToCloud(false), 300000);
+  // Quant-Core panel refresh: cada 30s. Read-only, defensivo.
+  setInterval(() => {
+    if (window.QuantCore && window.QuantCore.views && window.QuantCore.views.coreLabPanel) {
+      window.QuantCore.views.coreLabPanel.refresh();
+    }
+  }, 30000);
   // Push de datos (training, memoria, conversaciones) al cloud cada 10 min
   if (window.quant.pushCloudData) {
     setTimeout(() => pushCloudData(), 20000);                       // primera vez a los 20s
@@ -374,6 +392,31 @@ function bindUi() {
   });
   document.addEventListener('click', (e) => {
     if (!$('assetCombo').contains(e.target)) $('assetMenu').classList.remove('open');
+  });
+
+  // Training Lab Tabs
+  document.querySelectorAll('.training-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const tabName = tab.dataset.tab;
+      document.querySelectorAll('.training-tab').forEach((t) => t.classList.remove('active'));
+      document.querySelectorAll('.training-tab-content').forEach((c) => c.classList.remove('active'));
+      tab.classList.add('active');
+      const content = document.getElementById(`tab-${tabName}`);
+      if (content) content.classList.add('active');
+    });
+  });
+
+  // Position Sub-tabs (Intraday / Swing)
+  document.querySelectorAll('.position-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const tabName = tab.dataset.positionTab;
+      document.querySelectorAll('.position-tab').forEach((t) => t.classList.remove('active'));
+      document.querySelectorAll('.position-tab-content').forEach((c) => c.classList.remove('active'));
+      tab.classList.add('active');
+      const contentId = tabName === 'intraday' ? 'positionsIntradayContent' : 'positionsSwingContent';
+      const content = document.getElementById(contentId);
+      if (content) content.classList.add('active');
+    });
   });
 }
 
@@ -1308,6 +1351,117 @@ function renderMarketTable() {
   document.querySelectorAll('.market-row').forEach((r) => r.addEventListener('click', () => { setSymbol(r.dataset.symbol); setView('dashboard'); }));
 }
 
+const trainingDemoWriterClient =
+  window.QuantTrainingDemoWriter && typeof window.QuantTrainingDemoWriter.createTrainingDemoWriterClient === 'function'
+    ? window.QuantTrainingDemoWriter.createTrainingDemoWriterClient()
+    : null;
+
+async function shadowWriteTrainingClosedTrade(openPosition, closedTrade, pair, signal) {
+  if (!trainingDemoWriterClient) return { ok: false, fallback: true, reason: 'client_unavailable', mode: 'fallback_legacy', acceptAtomic: false };
+  const exitContext = {
+    price: pair.price,
+    exit_price: closedTrade.exit_price,
+    symbol: pair.symbol,
+    venue: pair.venue,
+    spreadPct: pair.spreadPct,
+    volatilityPct: signal.volatilityPct
+  };
+  const result = await trainingDemoWriterClient.writeClosedTradeShadow({
+    openPosition: openPosition,
+    exitContext: exitContext,
+    signal: signal,
+    options: {
+      closedAt: closedTrade.closed_timestamp,
+      maxClosedTrades: 80
+    }
+  });
+  if (result.ok) {
+    logEvent('OK', result.acceptAtomic ? 'Training backend writer: atomic close aceptado' : 'Training backend writer: shadow write registrado');
+    return result;
+  }
+  if (result.reason === 'disabled') {
+    logEvent('OK', 'Training backend writer: backend desactivado, fallback local');
+    return result;
+  }
+  if (result.warning) {
+    logEvent('WARN', result.warning);
+  }
+  return result;
+}
+
+function removeTrainingPositionByBackendResponse(openPosition, backendBody) {
+  const removedPositionId = backendBody?.removedPositionId;
+  const removedSignalId = backendBody?.removedSignalId;
+  state.training.positions = state.training.positions.filter((position) => {
+    if (removedPositionId && position.id === removedPositionId) return false;
+    if (removedSignalId && (position.signal_id === removedSignalId || position.signalId === removedSignalId)) return false;
+    return position !== openPosition;
+  });
+}
+
+async function acceptBackendAtomicTrainingClose(openPosition, pair, backendResult) {
+  const backendBody = backendResult?.body || {};
+  const backendClosedTrade = backendBody.closedTrade;
+  if (!backendClosedTrade) return false;
+
+  removeTrainingPositionByBackendResponse(openPosition, backendBody);
+  state.training.closedTrades = [
+    backendClosedTrade,
+    ...state.training.closedTrades.filter((trade) => trade !== backendClosedTrade && trade?.closed_at !== backendClosedTrade.closed_at)
+  ].slice(0, 80);
+  computeWfCalibration();
+  state.training.balance = Number(backendBody.balanceAfter || state.training.balance);
+  state.training.xp += Math.max(4, Math.round(Math.abs(Number(backendClosedTrade.pnl_demo || 0)) / 4) + (Number(backendClosedTrade.pnl_demo || 0) >= 0 ? 14 : 8));
+  state.training.pairCooldowns[`${pair.venue}:${pair.symbol}:${openPosition.horizon || 'intraday'}`] = Date.now() + 30 * 1000;
+
+  if (backendBody.lessonPending !== true && backendClosedTrade.lesson_learned) {
+    state.training.lessons.unshift(backendClosedTrade.lesson_learned);
+    state.training.lessons = state.training.lessons.slice(0, 160);
+    await window.quant.memoryWrite('training_lesson', backendClosedTrade.lesson_learned);
+  } else if (backendBody.lessonPending === true && backendBody.lessonPendingReason) {
+    logEvent('WARN', `Training backend writer: ${backendBody.lessonPendingReason}`);
+  }
+
+  if (backendResult.body?.persistence?.persistedAt) {
+    state.training.lastPersistedAt = backendResult.body.persistence.persistedAt;
+    setText('trainPersistence', `Persistencia backend atomic close - ${new Date(backendResult.body.persistence.persistedAt).toLocaleTimeString('es-CO')}`);
+  }
+
+  await window.quant.memoryWrite('trade', { ...backendClosedTrade, type: 'training_trade_closed', mode: 'training' });
+  return true;
+}
+
+function applyBackendTrainingStateRefresh(refreshedState) {
+  if (!refreshedState || typeof refreshedState !== 'object') return false;
+  state.training.balance = Number(refreshedState.balance || state.training.balance);
+  state.training.positions = Array.isArray(refreshedState.positions) ? refreshedState.positions : state.training.positions;
+  state.training.closedTrades = Array.isArray(refreshedState.closedTrades) ? refreshedState.closedTrades : state.training.closedTrades;
+  state.training.lessons = Array.isArray(refreshedState.lessons) ? refreshedState.lessons : state.training.lessons;
+  state.training.strategyStats = refreshedState.strategyStats || state.training.strategyStats;
+  state.training.pairCooldowns = refreshedState.pairCooldowns || state.training.pairCooldowns;
+  state.training.xp = Number(refreshedState.xp || state.training.xp || 0);
+  state.training.lastPersistedAt = refreshedState.persistedAt || state.training.lastPersistedAt;
+  computeWfCalibration();
+  if (refreshedState.persistedAt) {
+    setText('trainPersistence', `Persistencia backend refrescada - ${new Date(refreshedState.persistedAt).toLocaleTimeString('es-CO')}`);
+  }
+  return true;
+}
+
+async function refreshTrainingStateAfterAtomicClose() {
+  if (!trainingDemoWriterClient || typeof trainingDemoWriterClient.readTrainingDemoState !== 'function') {
+    return { ok: false, reason: 'client_unavailable', warning: 'training-demo-state refresh unavailable' };
+  }
+  const refreshResult = await trainingDemoWriterClient.readTrainingDemoState();
+  if (!refreshResult.ok) {
+    if (refreshResult.warning) logEvent('WARN', refreshResult.warning);
+    return refreshResult;
+  }
+  applyBackendTrainingStateRefresh(refreshResult.state);
+  logEvent('OK', 'Training backend writer: estado refrescado desde backend');
+  return refreshResult;
+}
+
 async function loadTrainingState() {
   try {
     const saved = await window.quant.trainingStateRead();
@@ -1919,6 +2073,64 @@ async function openTrainingBucket(ranked, horizon, needed, initial) {
   return opened;
 }
 
+function stableTraceHash(input) {
+  const text = String(input || '');
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function trainingSignalId(pair = {}, signal = {}, createdAt = '') {
+  const primary = signal.primaryStrategy || {};
+  const strategyId = signal.strategy_id || primary.id || 'unknown';
+  return `sig_${stableTraceHash([
+    'training',
+    pair.venue || 'unknown',
+    pair.symbol || 'unknown',
+    signal.bias || 'NEUTRAL',
+    signal.horizon || 'intraday',
+    strategyId,
+    createdAt
+  ].join('|'))}`;
+}
+
+function nullableNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function buildTrainingTraceMetadata(pair = {}, signal = {}, options = {}) {
+  const createdAt = options.createdAt || signal.created_at || new Date().toISOString();
+  const primary = signal.primaryStrategy || {};
+  const strategyId = signal.strategy_id || primary.id || null;
+  const strategyName = signal.strategy_name || primary.name || null;
+  const learningMode = signal.learning_mode || null;
+  const professional = learningMode === 'professional_setup';
+  const entryReason = signal.entry_reason_code || (learningMode ? (professional ? 'professional_setup' : 'exploration_paper') : null);
+
+  return {
+    traceability_version: 1,
+    signal_id: signal.signal_id || trainingSignalId(pair, { ...signal, strategy_id: strategyId }, createdAt),
+    strategy_id: strategyId,
+    strategy_name: strategyName,
+    timeframe: signal.timeframe || signal.tf || null,
+    horizon: signal.horizon || options.horizon || null,
+    session: signal.session || null,
+    entry_reason_code: entryReason,
+    exit_reason_code: signal.exit_reason_code || null,
+    risk_profile_id: signal.risk_profile_id || null,
+    source: options.source || signal.source || 'renderer.training',
+    confidence_at_entry: nullableNumber(signal.confidence),
+    regime_at_entry: signal.regime_at_entry || signal.regime?.type || null,
+    volatility_at_entry: nullableNumber(signal.volatilityPct),
+    created_at: createdAt,
+    opened_at: options.openedAt || createdAt
+  };
+}
+
 function trainingHypothesisSignal(pair, forcedHorizon = null) {
   const signal = pair.indicators || {};
   const professional =
@@ -1942,7 +2154,7 @@ function trainingHypothesisSignal(pair, forcedHorizon = null) {
     horizon = forcedHorizon || (signal.h1?.bias === bias || pair.venue === 'MT5' ? 'swing' : 'intraday');
   }
   if (pair.spreadPct > (pair.venue === 'MT5' ? .004 : .0025)) return null;
-  return {
+  const tracedSignal = {
     ...signal,
     bias,
     confidence,
@@ -1950,6 +2162,10 @@ function trainingHypothesisSignal(pair, forcedHorizon = null) {
     setup: professional ? reason : reason,
     learning_mode: learningMode,
     motivo: professional ? 'Setup tecnico validado' : 'Exploracion controlada para aprendizaje continuo'
+  };
+  return {
+    ...tracedSignal,
+    ...buildTrainingTraceMetadata(pair, tracedSignal, { source: 'renderer.training.signal' })
   };
 }
 
@@ -1979,11 +2195,13 @@ async function executeSimulatedTrade(action, pair, signal, existing = null) {
   const spreadCost = notional * Math.max(pair.spreadPct || 0, 0);
   const slippage = notional * 0.00025;
   if (action === 'OPEN') {
+    const openedAt = new Date().toISOString();
+    const trace = buildTrainingTraceMetadata(pair, signal, { source: 'renderer.training.position', createdAt: signal.created_at || openedAt, openedAt });
     return {
       simulated,
       venue: pair.venue,
       symbol: pair.symbol,
-      timestamp: new Date().toISOString(),
+      timestamp: openedAt,
       direction: signal.bias,
       entry_price: price,
       exit_price: null,
@@ -1995,11 +2213,22 @@ async function executeSimulatedTrade(action, pair, signal, existing = null) {
       slippage_estimado: slippage,
       confidence: signal.confidence,
       setup_tecnico_detectado: signal.setup,
-      strategy_id: signal.primaryStrategy?.id || signal.strategy_id || 'unknown',
-      strategy_name: signal.primaryStrategy?.name || signal.strategy_name || 'Estrategia no clasificada',
+      traceability_version: trace.traceability_version,
+      signal_id: trace.signal_id,
+      strategy_id: trace.strategy_id || signal.primaryStrategy?.id || signal.strategy_id || 'unknown',
+      strategy_name: trace.strategy_name || signal.primaryStrategy?.name || signal.strategy_name || 'Estrategia no clasificada',
       strategy_score: Number(signal.primaryStrategy?.score || signal.strategy_score || 0),
       strategy_reason: signal.primaryStrategy?.reason || signal.strategy_reason || '',
       strategy_scores: signal.strategyScores || [],
+      timeframe: trace.timeframe,
+      session: trace.session,
+      entry_reason_code: trace.entry_reason_code,
+      risk_profile_id: trace.risk_profile_id,
+      source: trace.source,
+      opened_at: trace.opened_at,
+      confidence_at_entry: trace.confidence_at_entry,
+      regime_at_entry: trace.regime_at_entry,
+      volatility_at_entry: trace.volatility_at_entry,
       learning_mode: learningMode,
       contexto_noticia_macro: currentNewsContext(pair.symbol),
       motivo_entrada: `${signal.motivo || 'Setup demo'}; ${signal.setup}; confianza ${signal.confidence}; volumen x${Number(signal.volumeRatio || 0).toFixed(2)}`,
@@ -2011,17 +2240,13 @@ async function executeSimulatedTrade(action, pair, signal, existing = null) {
       opened_tick: Date.now()
     };
   }
-  const directionFactor = existing.direction === 'LONG' ? 1 : -1;
-  const gross = (price - existing.entry_price) * directionFactor * existing.size_demo;
-  const pnl = gross - existing.fees_simuladas - existing.spread_estimado - existing.slippage_estimado;
-  return {
-    ...existing,
-    exit_price: price,
-    closed_timestamp: new Date().toISOString(),
-    pnl_demo: pnl,
-    motivo_salida: `${signal.bias !== existing.direction ? 'Senal opuesta o perdida de edge' : 'Gestion demo por objetivo/riesgo'}; confianza actual ${signal.confidence}`,
-    lesson_learned: buildTrainingLesson(existing, pair, signal, pnl)
-  };
+  if (!window.QuantTrainingClosure?.buildClosedTradeFromPosition) {
+    throw new Error('Training closure service no esta disponible en renderer.');
+  }
+  return window.QuantTrainingClosure.buildClosedTradeFromPosition(existing, { price }, signal, {
+    closedAt: new Date().toISOString(),
+    lessonBuilder: (openPosition, exitContext, exitSignal, pnl) => buildTrainingLesson(openPosition, pair, exitSignal, pnl)
+  });
 }
 
 async function evaluateTrainingPair(pair) {
@@ -2060,6 +2285,14 @@ async function evaluateTrainingPair(pair) {
     if (shouldClose && protectContinuousTraining && !hardStop) continue;
     if (!shouldClose) continue;
     const closed = await executeSimulatedTrade('CLOSE', pair, signal, open);
+    const backendCloseResult = await shadowWriteTrainingClosedTrade(open, closed, pair, signal);
+    if (backendCloseResult && backendCloseResult.acceptAtomic) {
+      const accepted = await acceptBackendAtomicTrainingClose(open, pair, backendCloseResult);
+      if (accepted) {
+        await refreshTrainingStateAfterAtomicClose();
+        continue;
+      }
+    }
     state.training.positions = state.training.positions.filter((p) => p !== open);
     state.training.closedTrades.unshift(closed);
     state.training.closedTrades = state.training.closedTrades.slice(0, 80);
@@ -2360,7 +2593,9 @@ function renderChatContextPanel() {
     topStrategies;
 }
 
-function addChat(role, text) {
+// Render-only path: dibuja un mensaje en #chatLog sin persistirlo.
+// Necesario para restaurar conversaciones guardadas sin re-escribirlas a memoria.
+function renderChatMessage(role, text) {
   const div = document.createElement('div');
   const isQuant = role.toLowerCase().includes('quant');
   div.className = `chat-msg ${isQuant ? 'quant-msg' : 'user-msg'}`;
@@ -2369,6 +2604,10 @@ function addChat(role, text) {
     : `<b>${role}:</b> ${escapeHtml(text)}`;
   $('chatLog').appendChild(div);
   $('chatLog').scrollTop = $('chatLog').scrollHeight;
+}
+
+function addChat(role, text) {
+  renderChatMessage(role, text);
   window.quant.memoryWrite('message', { role, text }).then(loadMemoryStats).catch(() => {
     $('memoryNow').textContent = `${state.messages.length} msg · ${state.sessionTrades} trades`;
   });
@@ -3017,6 +3256,38 @@ async function loadConversationsList() {
     });
   } catch (err) {
     list.innerHTML = `<p style="color:#e05a5a;font-size:13px">Error cargando conversaciones: ${err.message}</p>`;
+  }
+}
+
+// Boot cognitivo: si existe una conversación previa, la restaura silenciosamente.
+// No emite mensajes teatrales. Si no hay nada que decir, no dice nada.
+// Devuelve true si restauró contexto, false en caso contrario.
+async function loadLastConversationIfAny() {
+  try {
+    const convs = await window.quant.conversationsList();
+    if (!Array.isArray(convs) || convs.length === 0) return false;
+    const sorted = [...convs].sort((a, b) => {
+      const ta = new Date(a.updatedAt || 0).getTime();
+      const tb = new Date(b.updatedAt || 0).getTime();
+      return tb - ta;
+    });
+    const last = sorted[0];
+    if (!last || !last.id) return false;
+    const data = await window.quant.conversationLoad(last.id);
+    if (!data || data.ok === false || !Array.isArray(data.messages)) return false;
+    state.conversationId = last.id;
+    state.messages = data.messages;
+    const box = $('chatLog');
+    if (!box) return false;
+    box.innerHTML = '';
+    for (const m of state.messages) {
+      renderChatMessage(m.role === 'user' ? 'Tú' : 'Quant', m.content);
+    }
+    logEvent('OK', `Contexto restaurado: ${last.name || 'última conversación'}`);
+    return true;
+  } catch (err) {
+    logEvent('WARN', `Restaurar contexto: ${err.message}`);
+    return false;
   }
 }
 

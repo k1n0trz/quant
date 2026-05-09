@@ -423,6 +423,93 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /api/training/core/status:
+    get:
+      tags: [Training]
+      summary: Get read-only Quant-Core training status
+      description: |
+        Returns backend-first Quant-Core status without activating the autonomous scheduler,
+        writing training records, touching Binance, or changing real trading state.
+      responses:
+        '200':
+          description: Quant-Core training status returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingCoreStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/training/core/metrics:
+    get:
+      tags: [Training]
+      summary: Get read-only Quant-Core training metrics
+      description: Computes metrics from the current persisted training state without writes.
+      responses:
+        '200':
+          description: Quant-Core metrics returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingCoreMetricsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/training/core/strategies:
+    get:
+      tags: [Training]
+      summary: Get read-only Quant-Core strategy registry
+      description: Returns registered strategy metadata in shadow mode; strategies are not backend-executable yet.
+      responses:
+        '200':
+          description: Quant-Core strategies returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingCoreStrategiesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/training/core/equity:
+    get:
+      tags: [Training]
+      summary: Get read-only Quant-Core training equity curve
+      description: Returns the equity curve derived from current closed demo trades without modifying state.
+      responses:
+        '200':
+          description: Quant-Core equity returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingCoreEquityResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/training/core/edge:
+    get:
+      tags: [Training]
+      summary: Get read-only Quant-Core edge diagnostics
+      description: Returns sample size, confidence, stability, and edge degradation diagnostics without activating training.
+      responses:
+        '200':
+          description: Quant-Core edge diagnostics returned successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrainingCoreEdgeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /api/risk:
     get:
       tags: [Risk]
@@ -840,6 +927,248 @@ components:
             $ref: '#/components/schemas/MemoryRecord'
         trainingStateSummary:
           $ref: '#/components/schemas/TrainingStateSummary'
+
+    TrainingCoreSafety:
+      type: object
+      additionalProperties: false
+      required: [readOnly, schedulerActive, writesPerformed, realTradingTouched]
+      properties:
+        readOnly:
+          type: boolean
+          const: true
+        schedulerActive:
+          type: boolean
+          const: false
+        writesPerformed:
+          type: boolean
+          const: false
+        realTradingTouched:
+          type: boolean
+          const: false
+
+    TrainingCoreStatusResponse:
+      type: object
+      additionalProperties: false
+      required: [ok, core, state, safety]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        core:
+          type: object
+          additionalProperties: false
+          required: [name, mode, backendEnabled, schedulerActive, backendManaged, shadowModeReady]
+          properties:
+            name:
+              type: string
+            mode:
+              type: string
+              const: shadow
+            backendEnabled:
+              type: boolean
+            schedulerActive:
+              type: boolean
+              const: false
+            backendManaged:
+              type: boolean
+            shadowModeReady:
+              type: boolean
+        state:
+          type: object
+          additionalProperties: false
+          required: [version, mode, simulated, blockRealExecution, balanceStart, balance, positions, closedTrades, lessons, persistedAt]
+          properties:
+            version:
+              type: integer
+            mode:
+              type: string
+            simulated:
+              type: boolean
+            blockRealExecution:
+              type: boolean
+            balanceStart:
+              type: number
+            balance:
+              type: number
+            positions:
+              type: integer
+              minimum: 0
+            closedTrades:
+              type: integer
+              minimum: 0
+            lessons:
+              type: integer
+              minimum: 0
+            persistedAt:
+              type: [string, 'null']
+        safety:
+          $ref: '#/components/schemas/TrainingCoreSafety'
+
+    TrainingCoreMetricSet:
+      type: object
+      additionalProperties: true
+      required: [sampleSize, sampleStatus, wins, losses, winRate, netProfit, profitFactor, expectancy, equityCurve, edgeDegradation, stabilityScore, confidenceScore]
+      properties:
+        sampleSize:
+          type: integer
+          minimum: 0
+        sampleStatus:
+          type: string
+          enum: [sufficient, insufficient]
+        wins:
+          type: integer
+          minimum: 0
+        losses:
+          type: integer
+          minimum: 0
+        winRate:
+          type: number
+        netProfit:
+          type: number
+        profitFactor:
+          type: number
+        expectancy:
+          type: number
+        equityCurve:
+          type: array
+          items:
+            type: number
+        edgeDegradation:
+          type: object
+          additionalProperties: true
+        stabilityScore:
+          type: number
+        confidenceScore:
+          type: number
+
+    TrainingCoreMetricsResponse:
+      type: object
+      additionalProperties: false
+      required: [ok, mode, metrics, safety]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        mode:
+          type: string
+          const: shadow
+        metrics:
+          $ref: '#/components/schemas/TrainingCoreMetricSet'
+        safety:
+          $ref: '#/components/schemas/TrainingCoreSafety'
+
+    TrainingCoreStrategy:
+      type: object
+      additionalProperties: true
+      required: [id, name, minScore, rrMin, backendExecutable, phase, rules]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        minScore:
+          type: number
+        rrMin:
+          type: number
+        backendExecutable:
+          type: boolean
+          const: false
+        phase:
+          type: string
+          const: shadow
+        rules:
+          type: array
+          items:
+            type: string
+
+    TrainingCoreStrategiesResponse:
+      type: object
+      additionalProperties: false
+      required: [ok, mode, strategies, safety]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        mode:
+          type: string
+          const: shadow
+        strategies:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrainingCoreStrategy'
+        safety:
+          $ref: '#/components/schemas/TrainingCoreSafety'
+
+    TrainingCoreEquityResponse:
+      type: object
+      additionalProperties: false
+      required: [ok, mode, equity, safety]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        mode:
+          type: string
+          const: shadow
+        equity:
+          type: object
+          additionalProperties: false
+          required: [balanceStart, balance, points, curve, maxDrawdown, maxDrawdownPct]
+          properties:
+            balanceStart:
+              type: number
+            balance:
+              type: number
+            points:
+              type: integer
+              minimum: 0
+            curve:
+              type: array
+              items:
+                type: number
+            maxDrawdown:
+              type: number
+            maxDrawdownPct:
+              type: number
+        safety:
+          $ref: '#/components/schemas/TrainingCoreSafety'
+
+    TrainingCoreEdgeResponse:
+      type: object
+      additionalProperties: false
+      required: [ok, mode, edge, safety]
+      properties:
+        ok:
+          type: boolean
+          const: true
+        mode:
+          type: string
+          const: shadow
+        edge:
+          type: object
+          additionalProperties: true
+          required: [sampleSize, sampleStatus, confidenceScore, stabilityScore, degradation, backendEnabled, schedulerActive]
+          properties:
+            sampleSize:
+              type: integer
+              minimum: 0
+            sampleStatus:
+              type: string
+              enum: [sufficient, insufficient]
+            confidenceScore:
+              type: number
+            stabilityScore:
+              type: number
+            degradation:
+              type: object
+              additionalProperties: true
+            backendEnabled:
+              type: boolean
+            schedulerActive:
+              type: boolean
+              const: false
+        safety:
+          $ref: '#/components/schemas/TrainingCoreSafety'
 
     RiskConfig:
       type: object

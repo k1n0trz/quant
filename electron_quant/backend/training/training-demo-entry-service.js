@@ -1,0 +1,429 @@
+const { resolveTrainingMarketContext } = require('./training-market-context-service');
+const { resolveTrainingSignalContext } = require('./training-signal-context-service');
+
+function textValue(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function finiteNumber(...values) {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return null;
+}
+
+function isObject(value) {
+  return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sameText(left, right) {
+  if (left == null && right == null) return true;
+  if (left == null || right == null) return false;
+  return String(left).trim().toUpperCase() === String(right).trim().toUpperCase();
+}
+
+function isTrainingBackendDemoEntryEnabled(env = {}) {
+  return String(env.TRAINING_BACKEND_DEMO_ENTRY_ENABLED || 'false').toLowerCase() === 'true';
+}
+
+function isTrainingBackendDemoEntryAllowDefensiveSignalEnabled(env = {}) {
+  return String(env.TRAINING_BACKEND_DEMO_ENTRY_ALLOW_DEFENSIVE_SIGNAL || 'false').toLowerCase() === 'true';
+}
+
+function stableTraceHash(input) {
+  const text = String(input || '');
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function trainingSignalId(pair = {}, signal = {}, createdAt = '') {
+  const primary = signal.primaryStrategy || {};
+  const strategyId = signal.strategy_id || primary.id || 'unknown';
+  return `sig_${stableTraceHash([
+    'training',
+    pair.venue || 'unknown',
+    pair.symbol || 'unknown',
+    signal.bias || 'NEUTRAL',
+    signal.horizon || 'intraday',
+    strategyId,
+    createdAt
+  ].join('|'))}`;
+}
+
+function trainingPositionId(pair = {}, signal = {}, createdAt = '') {
+  const primary = signal.primaryStrategy || {};
+  const strategyId = signal.strategy_id || primary.id || 'unknown';
+  return `pos_${stableTraceHash([
+    'training-position',
+    pair.venue || 'unknown',
+    pair.symbol || 'unknown',
+    signal.horizon || 'intraday',
+    strategyId,
+    createdAt
+  ].join('|'))}`;
+}
+
+function nullableNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function resolveTargetCount(state = {}, horizon = 'intraday') {
+  if (horizon === 'swing') {
+    return finiteNumber(
+      state.targetSwingPositions,
+      state.targets?.swing,
+      10
+    );
+  }
+  return finiteNumber(
+    state.targetIntradayPositions,
+    state.targets?.intraday,
+    10
+  );
+}
+
+function resolveMinMt5OpenPositions(state = {}) {
+  return finiteNumber(state.minMt5OpenPositions, 6);
+}
+
+function normalizeEntryPair(candidate) {
+  if (typeof candidate === 'string') {
+    return {
+      symbol: candidate,
+      venue: 'BINANCE',
+      indicators: {}
+    };
+  }
+  if (!isObject(candidate)) return null;
+  return {
+    ...candidate,
+    symbol: textValue(candidate.symbol),
+    venue: textValue(candidate.venue, 'BINANCE'),
+    indicators: isObject(candidate.indicators) ? candidate.indicators : {}
+  };
+}
+
+function collectTrainingEntryPairs(state = {}) {
+  const sources = [];
+  if (Array.isArray(state.activePairs)) sources.push(...state.activePairs);
+  else if (Array.isArray(state.pairs)) sources.push(...state.pairs);
+  else if (Array.isArray(state.configuredSymbols)) sources.push(...state.configuredSymbols);
+  else if (Array.isArray(state.symbols)) sources.push(...state.symbols);
+  return sources.map(normalizeEntryPair).filter(Boolean);
+}
+
+function mergeSignalForEntry(pair, signalContext, forcedHorizon = null) {
+  const signal = {
+    ...(isObject(pair?.indicators) ? pair.indicators : {}),
+    ...(isObject(signalContext) ? signalContext : {})
+  };
+  const professional =
+    signal.bias !== 'NEUTRAL' &&
+    Number(signal.confidence || 0) >= 70 &&
+    Number(signal.htfAlignmentScore || 0) >= 0.5 &&
+    Number(signal.patternScore || 0) >= 0.35;
+  let bias = textValue(signal.bias);
+  let reason = textValue(signal.setup) || 'Hipotesis de mercado real';
+  let confidence = Number(signal.confidence || 50);
+  let horizon = forcedHorizon || textValue(signal.horizon) || 'intraday';
+  let learningMode = professional ? 'professional_setup' : 'exploration_paper';
+
+  if (bias === 'NEUTRAL' || !bias) {
+    if (textValue(signal.h1?.bias) && signal.h1.bias !== 'NEUTRAL') bias = signal.h1.bias;
+    else if (textValue(signal.m15?.bias) && signal.m15.bias !== 'NEUTRAL') bias = signal.m15.bias;
+    else if (Number(signal.macd?.hist || 0) > 0) bias = 'LONG';
+    else if (Number(signal.macd?.hist || 0) < 0) bias = 'SHORT';
+    else bias = Number(signal.rsi || 50) <= 50 ? 'LONG' : 'SHORT';
+
+    reason = `Exploracion paper con sesgo inferido (${bias}) usando M15 ${signal.m15?.bias || 'NA'}, H1 ${signal.h1?.bias || 'NA'}, RSI ${Number(signal.rsi || 50).toFixed(1)}, MACD ${Number(signal.macd?.hist || 0).toPrecision(3)}`;
+    confidence = Math.max(52, Math.min(68, confidence));
+    horizon = forcedHorizon || (signal.h1?.bias === bias || pair.venue === 'MT5' ? 'swing' : 'intraday');
+  }
+
+  return {
+    ...signal,
+    bias,
+    confidence,
+    horizon,
+    setup: reason,
+    learning_mode: learningMode,
+    motivo: professional ? 'Setup tecnico validado' : 'Exploracion controlada para aprendizaje continuo'
+  };
+}
+
+function buildTrainingTraceMetadata(pair = {}, signal = {}, options = {}) {
+  const createdAt = options.createdAt || signal.created_at || new Date().toISOString();
+  const primary = signal.primaryStrategy || {};
+  const strategyId = signal.strategy_id || primary.id || null;
+  const strategyName = signal.strategy_name || primary.name || null;
+  const learningMode = signal.learning_mode || null;
+  const professional = learningMode === 'professional_setup';
+  const entryReason = signal.entry_reason_code || (learningMode ? (professional ? 'professional_setup' : 'exploration_paper') : null);
+
+  return {
+    traceability_version: 1,
+    signal_id: signal.signal_id || trainingSignalId(pair, { ...signal, strategy_id: strategyId }, createdAt),
+    strategy_id: strategyId,
+    strategy_name: strategyName,
+    timeframe: signal.timeframe || signal.tf || null,
+    horizon: signal.horizon || options.horizon || null,
+    session: signal.session || null,
+    entry_reason_code: entryReason,
+    risk_profile_id: signal.risk_profile_id || null,
+    source: options.source || signal.source || 'backend.training.entry',
+    confidence_at_entry: nullableNumber(signal.confidence),
+    regime_at_entry: signal.regime_at_entry || signal.regime?.type || null,
+    volatility_at_entry: nullableNumber(signal.volatilityPct),
+    created_at: createdAt,
+    opened_at: options.openedAt || createdAt
+  };
+}
+
+function evaluateTrainingDemoEntry(input = {}) {
+  const state = input.state || {};
+  const pair = input.pair || {};
+  const market = input.marketContext || {};
+  const rawSignal = input.signalContext || {};
+  const env = input.env || {};
+  const nowMs = Number.isFinite(Number(input.nowMs)) ? Number(input.nowMs) : Date.now();
+  const forcedHorizon = textValue(input.horizon) || 'intraday';
+  const allowDefensive = isTrainingBackendDemoEntryAllowDefensiveSignalEnabled(env);
+  const mergedSignal = mergeSignalForEntry(pair, rawSignal, forcedHorizon);
+  const key = `${pair.venue}:${pair.symbol}:${forcedHorizon}`;
+  const cooldownUntil = Number(state.pairCooldowns?.[key] || 0);
+  const duplicatePosition = (Array.isArray(state.positions) ? state.positions : []).some((position) => (
+    !position.exit_price
+    && sameText(position.symbol, pair.symbol)
+    && sameText(position.venue, pair.venue)
+    && sameText(position.horizon || 'intraday', forcedHorizon)
+    && sameText(position.strategy_id || 'unknown', mergedSignal.primaryStrategy?.id || mergedSignal.strategy_id || 'unknown')
+  ));
+
+  if (!market.available || !Number.isFinite(Number(market.price))) {
+    return { ok: true, shouldOpen: false, reason: market.reason || 'missing_price', signal: mergedSignal };
+  }
+  if (rawSignal.missing_signal && !allowDefensive) {
+    return { ok: true, shouldOpen: false, reason: 'defensive_signal_not_allowed', signal: mergedSignal };
+  }
+  if (duplicatePosition) {
+    return { ok: true, shouldOpen: false, reason: 'duplicate_open_position', signal: mergedSignal };
+  }
+  if (cooldownUntil > nowMs) {
+    return { ok: true, shouldOpen: false, reason: 'cooldown_active', signal: mergedSignal };
+  }
+
+  const spreadPct = finiteNumber(pair.spreadPct, pair.spread_pct) || 0;
+  if (spreadPct > (pair.venue === 'MT5' ? 0.004 : 0.0025)) {
+    return { ok: true, shouldOpen: false, reason: 'spread_too_wide', signal: mergedSignal };
+  }
+  if (mergedSignal.confidence < 74) {
+    return { ok: true, shouldOpen: false, reason: 'confidence_below_threshold', signal: mergedSignal };
+  }
+  if (mergedSignal.bias === 'NEUTRAL') {
+    return { ok: true, shouldOpen: false, reason: 'neutral_bias', signal: mergedSignal };
+  }
+  if (Number(mergedSignal.htfAlignmentScore || 0) < 0.5) {
+    return { ok: true, shouldOpen: false, reason: 'htf_alignment_below_threshold', signal: mergedSignal };
+  }
+  if (Number(mergedSignal.patternScore || 0) < 0.45) {
+    return { ok: true, shouldOpen: false, reason: 'pattern_score_below_threshold', signal: mergedSignal };
+  }
+  if (Number(mergedSignal.volumeRatio || 0) < 0.85) {
+    return { ok: true, shouldOpen: false, reason: 'volume_ratio_below_threshold', signal: mergedSignal };
+  }
+  if (Number(pair.score || 0) < 62) {
+    return { ok: true, shouldOpen: false, reason: 'pair_score_below_threshold', signal: mergedSignal };
+  }
+  if (spreadPct > (pair.venue === 'MT5' ? 0.0022 : 0.0012)) {
+    return { ok: true, shouldOpen: false, reason: 'professional_spread_gate_failed', signal: mergedSignal };
+  }
+
+  return {
+    ok: true,
+    shouldOpen: true,
+    reason: null,
+    signal: {
+      ...mergedSignal,
+      source: rawSignal.source || mergedSignal.source || 'backend.training.signal',
+      signal_id: rawSignal.signal_id || rawSignal.signalId || mergedSignal.signal_id || null,
+      strategy_id: rawSignal.strategy_id || mergedSignal.strategy_id || mergedSignal.primaryStrategy?.id || 'unknown',
+      strategy_name: rawSignal.strategy_name || mergedSignal.strategy_name || mergedSignal.primaryStrategy?.name || 'Estrategia no clasificada'
+    }
+  };
+}
+
+function openTrainingDemoPosition(input = {}) {
+  const pair = input.pair || {};
+  const signal = input.signal || {};
+  const market = input.marketContext || {};
+  const openedAt = input.openedAt || new Date().toISOString();
+  const learningMode = signal.learning_mode || 'professional_setup';
+  const price = Number(market.price);
+  const horizon = signal.horizon || 'intraday';
+  const notionalBase = horizon === 'swing' ? (pair.venue === 'MT5' ? 1800 : 1400) : (pair.venue === 'MT5' ? 1200 : 950);
+  const notional = learningMode === 'exploration_paper' ? notionalBase * 0.35 : notionalBase;
+  const size = notional / Math.max(price, 1e-12);
+  const fees = notional * 0.001;
+  const spreadPct = finiteNumber(pair.spreadPct, pair.spread_pct) || 0;
+  const spreadCost = notional * Math.max(spreadPct, 0);
+  const slippage = notional * 0.00025;
+  const trace = buildTrainingTraceMetadata(pair, signal, {
+    source: 'backend.training.position',
+    createdAt: signal.created_at || openedAt,
+    openedAt
+  });
+
+  return {
+    id: trainingPositionId(pair, signal, openedAt),
+    simulated: true,
+    venue: pair.venue,
+    symbol: pair.symbol,
+    timestamp: openedAt,
+    direction: signal.bias,
+    entry_price: price,
+    exit_price: null,
+    size_demo: size,
+    notional_demo: notional,
+    pnl_demo: 0,
+    fees_simuladas: fees,
+    spread_estimado: spreadCost,
+    slippage_estimado: slippage,
+    confidence: signal.confidence,
+    setup_tecnico_detectado: signal.setup,
+    traceability_version: trace.traceability_version,
+    signal_id: trace.signal_id,
+    strategy_id: trace.strategy_id || signal.primaryStrategy?.id || signal.strategy_id || 'unknown',
+    strategy_name: trace.strategy_name || signal.primaryStrategy?.name || signal.strategy_name || 'Estrategia no clasificada',
+    strategy_score: Number(signal.primaryStrategy?.score || signal.strategy_score || 0),
+    strategy_reason: signal.primaryStrategy?.reason || signal.strategy_reason || '',
+    strategy_scores: signal.strategyScores || [],
+    timeframe: trace.timeframe,
+    session: trace.session,
+    entry_reason_code: trace.entry_reason_code,
+    risk_profile_id: trace.risk_profile_id,
+    source: trace.source,
+    opened_at: trace.opened_at,
+    confidence_at_entry: trace.confidence_at_entry,
+    regime_at_entry: trace.regime_at_entry,
+    volatility_at_entry: trace.volatility_at_entry,
+    learning_mode: learningMode,
+    motivo_entrada: `${signal.motivo || 'Setup demo'}; ${signal.setup || 'Sin setup'}; confianza ${signal.confidence}`,
+    motivo_salida: null,
+    lesson_learned: null,
+    horizon,
+    min_hold_ms: horizon === 'swing' ? 36 * 60 * 60000 : 90 * 60000,
+    max_hold_ms: horizon === 'swing' ? 14 * 24 * 60 * 60000 : 12 * 60 * 60000,
+    opened_tick: Date.parse(openedAt)
+  };
+}
+
+async function evaluateTrainingDemoEntries(input = {}) {
+  const state = input.state || {};
+  const deps = input.deps || {};
+  const env = input.env || {};
+  const nowMs = Number.isFinite(Number(input.nowMs)) ? Number(input.nowMs) : Date.now();
+  const pairs = collectTrainingEntryPairs(state);
+  const openPositions = (Array.isArray(state.positions) ? state.positions : []).filter((position) => !position.exit_price);
+  const intradayNeeded = Math.max(0, resolveTargetCount(state, 'intraday') - openPositions.filter((position) => position.horizon !== 'swing').length);
+  const swingNeeded = Math.max(0, resolveTargetCount(state, 'swing') - openPositions.filter((position) => position.horizon === 'swing').length);
+  const mt5Open = openPositions.filter((position) => position.venue === 'MT5').length;
+  const ranked = pairs
+    .filter((pair) => textValue(pair.symbol))
+    .sort((left, right) => {
+      const leftBonus = left.venue === 'MT5' && mt5Open < resolveMinMt5OpenPositions(state) ? 30 : 0;
+      const rightBonus = right.venue === 'MT5' && mt5Open < resolveMinMt5OpenPositions(state) ? 30 : 0;
+      return (Number(right.score || 0) + rightBonus) - (Number(left.score || 0) + leftBonus);
+    });
+
+  let nextState = {
+    ...state,
+    positions: Array.isArray(state.positions) ? state.positions.slice() : []
+  };
+  const skippedEntries = [];
+  const openedEntries = [];
+
+  async function openBucket(horizon, needed) {
+    let opened = 0;
+    for (const pair of ranked) {
+      if (opened >= needed) break;
+      const marketContext = await resolveTrainingMarketContext(pair.symbol, {
+        venue: pair.venue,
+        state: nextState,
+        deps,
+        nowMs
+      });
+      const signalContext = await resolveTrainingSignalContext({
+        signal_id: pair.indicators?.signal_id,
+        symbol: pair.symbol,
+        venue: pair.venue,
+        horizon
+      }, {
+        ...deps,
+        state: nextState,
+        env,
+        nowMs,
+        pair,
+        marketContext
+      });
+      const evaluation = evaluateTrainingDemoEntry({
+        state: nextState,
+        pair,
+        marketContext,
+        signalContext,
+        env,
+        nowMs,
+        horizon
+      });
+      if (!evaluation.shouldOpen) {
+        skippedEntries.push({
+          symbol: pair.symbol,
+          venue: pair.venue,
+          horizon,
+          reason: evaluation.reason
+        });
+        continue;
+      }
+
+      const openedAt = new Date(nowMs).toISOString();
+      const position = openTrainingDemoPosition({
+        pair,
+        signal: evaluation.signal,
+        marketContext,
+        openedAt
+      });
+      nextState = {
+        ...nextState,
+        positions: nextState.positions.concat(position)
+      };
+      openedEntries.push(position);
+      opened += 1;
+    }
+  }
+
+  await openBucket('intraday', intradayNeeded);
+  await openBucket('swing', swingNeeded);
+
+  return {
+    ok: true,
+    nextState,
+    openedEntries,
+    skippedEntries
+  };
+}
+
+module.exports = {
+  isTrainingBackendDemoEntryEnabled,
+  isTrainingBackendDemoEntryAllowDefensiveSignalEnabled,
+  evaluateTrainingDemoEntry,
+  openTrainingDemoPosition,
+  evaluateTrainingDemoEntries
+};

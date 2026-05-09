@@ -1,0 +1,138 @@
+/**
+ * QUANT-CORE PANEL — minimal styling for the laboratorio observable.
+ * Reuses existing CSS variables from styles.css (--bg-*, --border-*,
+ * --text-*, --green/amber/red/blue) so the panel inherits the global
+ * visual language. No new design tokens introduced.
+ */
+
+.quant-core-panel {
+  margin: 12px 0 18px;
+}
+
+/* Banner: single-line state descriptor next to the panel head. */
+.quant-core-banner {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  text-transform: lowercase;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+}
+.quant-core-banner[data-severity="info"]    { border-color: var(--border-default); color: var(--text-secondary); }
+.quant-core-banner[data-severity="warning"] { border-color: var(--amber); color: var(--amber); }
+.quant-core-banner[data-severity="error"]   { border-color: var(--red); color: var(--red); }
+
+/* Calibration cards row: re-uses .kpi-card; just lays them out. */
+.quant-core-calibration {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 14px 6px;
+}
+.qc-cal-card { /* inherits .kpi-card; small adjustments only */ }
+.qc-score-scale {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 4px;
+  font-weight: 400;
+}
+
+/* Section heading inside the panel. */
+.qc-section-head {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  padding: 14px 14px 6px;
+}
+
+.qc-empty {
+  padding: 12px 14px 18px;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Strategy registry list. */
+.qc-strategy-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+.qc-strategy {
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  border-radius: 6px;
+  padding: 10px 12px;
+}
+.qc-strategy[data-executable="false"] {
+  border-left: 2px solid var(--neutral);
+}
+.qc-strategy[data-executable="true"] {
+  border-left: 2px solid var(--green-dim);
+}
+.qc-strategy-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.qc-strategy-id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.4px;
+}
+.qc-strategy-name {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.qc-strategy-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.qc-strategy-meta b { color: var(--text-primary); font-weight: 600; }
+.qc-exec.is-off { color: var(--text-muted); }
+.qc-exec.is-on  { color: var(--green); }
+
+.qc-rules {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  list-style: disc;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Footer: single-line status strip. */
+.quant-core-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 12px;
+  border-top: 1px solid var(--border-subtle);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  letter-spacing: 0.3px;
+}
+.quant-core-footer .qc-spacer { flex: 1 1 auto; }
+.quant-core-footer .qc-ts { color: var(--text-secondary); }
+
+/* Mobile: cards stack. */
+@media (max-width: 720px) {
+  .quant-core-calibration { grid-template-columns: 1fr; }
+  .quant-core-banner { display: inline-block; margin-top: 6px; }
+}

@@ -259,6 +259,15 @@ async function boot() {
   // Sin mensajes teatrales. Los insights reales llegarán por el canal de Quant-Core
   // cuando los endpoints cognitivos estén consumidos (F2+).
   await loadLastConversationIfAny();
+
+  // Quant-Core observatorio: monta el panel del laboratorio backend.
+  // El refresh inicial corre en background; el setInterval debajo lo mantiene vivo.
+  // Defensivo: si el módulo o el target DOM faltan, queda silencioso.
+  if (window.QuantCore && window.QuantCore.views && window.QuantCore.views.coreLabPanel) {
+    if (window.QuantCore.views.coreLabPanel.mount('quantCorePanel')) {
+      window.QuantCore.views.coreLabPanel.refresh();
+    }
+  }
   logEvent('OK', 'Sistema iniciado correctamente');
   try {
     state.env = await window.quant.envStatus();
@@ -304,6 +313,12 @@ async function boot() {
   setInterval(() => runNightCalibration(), 3600000);
   // Sync MT5 → cloud automático cada 5 min en modo pasivo (sin mt5.login → sin reconexión al broker)
   setInterval(() => syncMt5ToCloud(false), 300000);
+  // Quant-Core panel refresh: cada 30s. Read-only, defensivo.
+  setInterval(() => {
+    if (window.QuantCore && window.QuantCore.views && window.QuantCore.views.coreLabPanel) {
+      window.QuantCore.views.coreLabPanel.refresh();
+    }
+  }, 30000);
   // Push de datos (training, memoria, conversaciones) al cloud cada 10 min
   if (window.quant.pushCloudData) {
     setTimeout(() => pushCloudData(), 20000);                       // primera vez a los 20s

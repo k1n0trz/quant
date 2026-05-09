@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>QUANT - AI Trading System</title>
   <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./ui/quant-core-panel.css" />
 </head>
 <body>
   <div class="app-shell">
@@ -362,6 +363,9 @@
           <div class="training-mode-pill"><span class="dot"></span> Demo Mode</div>
         </div>
 
+        <!-- Quant-Core observatorio: estado del laboratorio backend (shadow). -->
+        <div id="quantCorePanel"></div>
+
         <!-- KPI Row Compacta -->
         <div class="training-kpis-compact">
           <div class="kpi-card"><div class="label">EQUITY DEMO</div><div class="kpi-value" id="trainBalance">$100,000.00</div><div class="sub">Balance + P&L</div></div>
@@ -679,6 +683,7 @@
   <!-- Quant-Core observatorio: UI primitives (carga antes del renderer). -->
   <script src="./ui/empty-states.js"></script>
   <script src="./services/quant-core-api.js"></script>
+  <script src="./views/quant-core-panel.js"></script>
 
   <script src="./renderer.js"></script>
 </body>

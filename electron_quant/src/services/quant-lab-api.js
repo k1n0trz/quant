@@ -75,6 +75,14 @@
   function getLabEdge()               { return fetchJson('/api/training/core/edge'); }
   function getLabLoopStatus()         { return fetchJson('/api/training/demo/loop/status'); }
 
+  /* ─── H4 endpoints ─── */
+  function getLabOpenPositions()      { return fetchJson('/api/training/demo/positions/open'); }
+  function getLabRecentTrades()       { return fetchJson('/api/training/demo/trades/recent'); }
+  function getLabRecentLessons()      { return fetchJson('/api/training/demo/lessons/recent'); }
+  function getLabSignalCandidates()   { return fetchJson('/api/training/demo/signals/candidates'); }
+  function getLabStrategies()         { return fetchJson('/api/training/core/strategies'); }
+  function getLabContextStatus()      { return fetchJson('/api/training/demo/context/status'); }
+
   /**
    * Fetch all four endpoints in parallel and return a snapshot envelope.
    * Each sub-result keeps its own ok/error so the consumer can render
@@ -264,6 +272,14 @@
     getLabEdge:               getLabEdge,
     getLabLoopStatus:         getLabLoopStatus,
     getLabHeroSnapshot:       getLabHeroSnapshot,
+
+    /* H4 panels */
+    getLabOpenPositions:    getLabOpenPositions,
+    getLabRecentTrades:     getLabRecentTrades,
+    getLabRecentLessons:    getLabRecentLessons,
+    getLabSignalCandidates: getLabSignalCandidates,
+    getLabStrategies:       getLabStrategies,
+    getLabContextStatus:    getLabContextStatus,
 
     interpretHero: interpretHero,
     envelopeState: envelopeState,

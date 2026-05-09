@@ -1,5 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
 
 const { computeTrainingMetrics } = require('../backend/training/metrics-engine');
 const { computeTrainingDiagnostics } = require('../backend/training/training-diagnostics');
@@ -246,4 +249,36 @@ test('training closure service normalizes open position defensively', () => {
   assert.equal(open.direction, 'SHORT');
   assert.equal(open.entry_price, 10);
   assert.equal(open.size_demo, 2);
+});
+
+test('renderer training closure wrapper matches backend close output', () => {
+  const wrapperPath = path.join(__dirname, '..', 'src', 'services', 'training-closure-service.js');
+  const wrapperSource = fs.readFileSync(wrapperPath, 'utf8');
+  const sandbox = { window: {} };
+  vm.createContext(sandbox);
+  vm.runInContext(wrapperSource, sandbox, { filename: wrapperPath });
+
+  const open = {
+    signal_id: 'sig-renderer-1',
+    strategy_id: 'breakoutRetest',
+    direction: 'LONG',
+    symbol: 'ETHUSD',
+    entry_price: 200,
+    size_demo: 1.5,
+    fees_simuladas: 0.75,
+    spread_estimado: 0.25,
+    slippage_estimado: 0.1,
+    confidence_at_entry: 74
+  };
+  const exitContext = { price: 203 };
+  const signal = { bias: 'SHORT', confidence: 52 };
+  const options = {
+    closedAt: '2026-05-09T15:00:00.000Z',
+    lessonBuilder: () => ({ type: 'training_lesson', source: 'test' })
+  };
+
+  const backendClosed = buildClosedTradeFromPosition(open, exitContext, signal, options);
+  const rendererClosed = sandbox.window.QuantTrainingClosure.buildClosedTradeFromPosition(open, exitContext, signal, options);
+
+  assert.equal(JSON.stringify(rendererClosed), JSON.stringify(backendClosed));
 });

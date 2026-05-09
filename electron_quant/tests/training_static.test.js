@@ -35,8 +35,9 @@ assert(renderer.includes('risk_profile_id'), 'Las posiciones nuevas deben persis
 assert(renderer.includes('confidence_at_entry'), 'Las posiciones nuevas deben conservar confidence_at_entry.');
 assert(renderer.includes('signal_id: trace.signal_id'), 'Las posiciones nuevas deben copiar signal_id desde la metadata causal.');
 assert(renderer.includes('source: trace.source'), 'Las posiciones nuevas deben preservar el source causal.');
-assert(renderer.includes('closed_at: closedAt'), 'Los trades cerrados nuevos deben conservar closed_at canonico.');
-assert(renderer.includes('exit_reason_code: exitReasonCode'), 'Los trades cerrados nuevos deben conservar exit_reason_code.');
+assert(html.includes('services/training-closure-service.js'), 'Renderer debe cargar el wrapper del Training Closure Service antes de cerrar trades.');
+assert(renderer.includes('window.QuantTrainingClosure.buildClosedTradeFromPosition'), 'El cierre de trades debe delegar la construccion al Training Closure Service.');
+assert(renderer.includes('lessonBuilder'), 'El cierre delegado debe seguir generando lecciones con el builder actual.');
 assert(renderer.includes('scoreTrendMomentum') && renderer.includes('scoreBreakoutRetest') && renderer.includes('scoreMeanReversion') && renderer.includes('scoreVolumePullback'), 'Training debe testear trend, breakout, mean reversion y volume pullback.');
 assert(renderer.includes('primaryStrategy'), 'Cada señal de training debe registrar estrategia dominante.');
 assert(html.includes('chat-dock') && html.includes('chatContextPanel'), 'El chat de Quant debe estar siempre visible como dock con contexto activo.');

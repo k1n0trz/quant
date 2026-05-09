@@ -2129,22 +2129,13 @@ async function executeSimulatedTrade(action, pair, signal, existing = null) {
       opened_tick: Date.now()
     };
   }
-  const directionFactor = existing.direction === 'LONG' ? 1 : -1;
-  const gross = (price - existing.entry_price) * directionFactor * existing.size_demo;
-  const pnl = gross - existing.fees_simuladas - existing.spread_estimado - existing.slippage_estimado;
-  const closedAt = new Date().toISOString();
-  const exitReasonCode = signal.exit_reason_code || (signal.bias !== existing.direction ? 'signal_flip_or_edge_loss' : 'demo_risk_management');
-  return {
-    ...existing,
-    exit_price: price,
-    closed_timestamp: closedAt,
-    closed_at: closedAt,
-    pnl_demo: pnl,
-    pnl,
-    exit_reason_code: exitReasonCode,
-    motivo_salida: `${signal.bias !== existing.direction ? 'Senal opuesta o perdida de edge' : 'Gestion demo por objetivo/riesgo'}; confianza actual ${signal.confidence}`,
-    lesson_learned: buildTrainingLesson(existing, pair, signal, pnl)
-  };
+  if (!window.QuantTrainingClosure?.buildClosedTradeFromPosition) {
+    throw new Error('Training closure service no esta disponible en renderer.');
+  }
+  return window.QuantTrainingClosure.buildClosedTradeFromPosition(existing, { price }, signal, {
+    closedAt: new Date().toISOString(),
+    lessonBuilder: (openPosition, exitContext, exitSignal, pnl) => buildTrainingLesson(openPosition, pair, exitSignal, pnl)
+  });
 }
 
 async function evaluateTrainingPair(pair) {

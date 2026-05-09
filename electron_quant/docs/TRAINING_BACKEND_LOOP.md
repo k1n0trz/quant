@@ -25,6 +25,7 @@ Default is `false`.
 - `POST /api/training/demo/loop/stop`
 
 Manual tick remains available, and the scheduler is now an explicit opt-in layer on top of the same backend close/evaluation flow.
+When both scheduler flags are enabled, the backend also auto-starts the scheduler on process boot without any frontend or manual POST call.
 
 ## Request
 
@@ -165,10 +166,31 @@ Backend-built contexts:
 1. Set `TRAINING_BACKEND_LOOP_ENABLED=true`.
 2. Set `TRAINING_BACKEND_LOOP_SCHEDULER_ENABLED=true`.
 3. Optionally set `TRAINING_BACKEND_LOOP_INTERVAL_MS=15000` for faster validation.
-4. Optionally set `TRAINING_BACKEND_DEMO_ENTRY_ENABLED=true` if you want the scheduler to open demo entries as well.
-5. Start it with `POST /api/training/demo/loop/start`.
-6. Inspect `GET /api/training/demo/loop/status` and verify:
+4. Restart `quant-backend`.
+5. Optionally set `TRAINING_BACKEND_DEMO_ENTRY_ENABLED=true` if you want the scheduler to open demo entries as well.
+6. Inspect backend logs and verify one of these:
+   - `training.loop.autostart.started`
+   - `training.loop.autostart.skipped`
+   - `training.loop.autostart.failed`
+7. Inspect `GET /api/training/demo/loop/status` and verify:
    - `active=true`
    - `ticksRun` increases over time
    - `lastTickResult.realTradingTouched=false`
-7. Stop it with `POST /api/training/demo/loop/stop`.
+8. Stop it with `POST /api/training/demo/loop/stop`.
+9. Start it manually again with `POST /api/training/demo/loop/start` if you want to confirm manual controls still work.
+
+## Auto-Start Behavior
+
+- Auto-start only happens when both flags are enabled:
+  - `TRAINING_BACKEND_LOOP_ENABLED=true`
+  - `TRAINING_BACKEND_LOOP_SCHEDULER_ENABLED=true`
+- If either flag is off, the backend does nothing and logs `training.loop.autostart.skipped`.
+- If the scheduler is already active, auto-start treats that as success and does not duplicate it.
+- If start fails, the backend stays up and logs `training.loop.autostart.failed`.
+
+## How To Disable
+
+- Set `TRAINING_BACKEND_LOOP_SCHEDULER_ENABLED=false`, or
+- Set `TRAINING_BACKEND_LOOP_ENABLED=false`
+
+Then restart the backend. No code changes or manual cleanup are required.

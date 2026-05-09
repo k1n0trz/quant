@@ -32,9 +32,11 @@ const { createDefaultRiskConfig, assertTradingRealCanBeEnabled, validateRiskConf
 const { createApiRouter } = require('./backend/routes/api-router');
 const { createReadOnlyTrainingStateReader } = require('./backend/training/training-state');
 const { normalizeTrainingStateTraceability } = require('./backend/training/training-traceability');
+const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
 
 const BINANCE_BASE = 'https://api.binance.com';
 let timeOffsetMs = 0;
+let trainingLoopAutoStartAttempted = false;
 const logger = createLogger(IS_ELECTRON ? 'quant-desktop' : 'quant-backend');
 const CLOUD_ENV_KEYS = [
   'BINANCE_API_KEY','BINANCE_SECRET','DEEPSEEK_API_KEY','DEEPINFRA_API_KEY',
@@ -2326,7 +2328,23 @@ function startLocalWebServer() {
       }
       logger.error('server.listen.error', { port, message: err.message });
     });
-    webServer.listen(port, listenHost, () => logger.info('server.listen.ready', { host: listenHost, port }));
+    webServer.listen(port, listenHost, () => {
+      logger.info('server.listen.ready', { host: listenHost, port });
+      if (!trainingLoopAutoStartAttempted) {
+        trainingLoopAutoStartAttempted = true;
+        autoStartTrainingDemoLoopScheduler({
+          env: { ...ENV, ...process.env },
+          deps: {
+            readTrainingStateSnapshot: () => trainingStateReader.read(),
+            writeTrainingState: (nextState) => writeTrainingState(nextState),
+            getTicker: (symbol) => ticker(symbol),
+            readMt5Snapshot: () => readMt5Snapshot(),
+            readMemory: (limit) => readMemory(limit)
+          },
+          logger
+        });
+      }
+    });
   };
   tryListen(basePort, 10);
 }

@@ -1962,6 +1962,64 @@ async function openTrainingBucket(ranked, horizon, needed, initial) {
   return opened;
 }
 
+function stableTraceHash(input) {
+  const text = String(input || '');
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function trainingSignalId(pair = {}, signal = {}, createdAt = '') {
+  const primary = signal.primaryStrategy || {};
+  const strategyId = signal.strategy_id || primary.id || 'unknown';
+  return `sig_${stableTraceHash([
+    'training',
+    pair.venue || 'unknown',
+    pair.symbol || 'unknown',
+    signal.bias || 'NEUTRAL',
+    signal.horizon || 'intraday',
+    strategyId,
+    createdAt
+  ].join('|'))}`;
+}
+
+function nullableNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function buildTrainingTraceMetadata(pair = {}, signal = {}, options = {}) {
+  const createdAt = options.createdAt || signal.created_at || new Date().toISOString();
+  const primary = signal.primaryStrategy || {};
+  const strategyId = signal.strategy_id || primary.id || null;
+  const strategyName = signal.strategy_name || primary.name || null;
+  const learningMode = signal.learning_mode || null;
+  const professional = learningMode === 'professional_setup';
+  const entryReason = signal.entry_reason_code || (learningMode ? (professional ? 'professional_setup' : 'exploration_paper') : null);
+
+  return {
+    traceability_version: 1,
+    signal_id: signal.signal_id || trainingSignalId(pair, { ...signal, strategy_id: strategyId }, createdAt),
+    strategy_id: strategyId,
+    strategy_name: strategyName,
+    timeframe: signal.timeframe || signal.tf || null,
+    horizon: signal.horizon || options.horizon || null,
+    session: signal.session || null,
+    entry_reason_code: entryReason,
+    exit_reason_code: signal.exit_reason_code || null,
+    risk_profile_id: signal.risk_profile_id || null,
+    source: options.source || signal.source || 'renderer.training',
+    confidence_at_entry: nullableNumber(signal.confidence),
+    regime_at_entry: signal.regime_at_entry || signal.regime?.type || null,
+    volatility_at_entry: nullableNumber(signal.volatilityPct),
+    created_at: createdAt,
+    opened_at: options.openedAt || createdAt
+  };
+}
+
 function trainingHypothesisSignal(pair, forcedHorizon = null) {
   const signal = pair.indicators || {};
   const professional =
@@ -1985,7 +2043,7 @@ function trainingHypothesisSignal(pair, forcedHorizon = null) {
     horizon = forcedHorizon || (signal.h1?.bias === bias || pair.venue === 'MT5' ? 'swing' : 'intraday');
   }
   if (pair.spreadPct > (pair.venue === 'MT5' ? .004 : .0025)) return null;
-  return {
+  const tracedSignal = {
     ...signal,
     bias,
     confidence,
@@ -1993,6 +2051,10 @@ function trainingHypothesisSignal(pair, forcedHorizon = null) {
     setup: professional ? reason : reason,
     learning_mode: learningMode,
     motivo: professional ? 'Setup tecnico validado' : 'Exploracion controlada para aprendizaje continuo'
+  };
+  return {
+    ...tracedSignal,
+    ...buildTrainingTraceMetadata(pair, tracedSignal, { source: 'renderer.training.signal' })
   };
 }
 
@@ -2022,11 +2084,13 @@ async function executeSimulatedTrade(action, pair, signal, existing = null) {
   const spreadCost = notional * Math.max(pair.spreadPct || 0, 0);
   const slippage = notional * 0.00025;
   if (action === 'OPEN') {
+    const openedAt = new Date().toISOString();
+    const trace = buildTrainingTraceMetadata(pair, signal, { source: 'renderer.training.position', createdAt: signal.created_at || openedAt, openedAt });
     return {
       simulated,
       venue: pair.venue,
       symbol: pair.symbol,
-      timestamp: new Date().toISOString(),
+      timestamp: openedAt,
       direction: signal.bias,
       entry_price: price,
       exit_price: null,
@@ -2038,11 +2102,22 @@ async function executeSimulatedTrade(action, pair, signal, existing = null) {
       slippage_estimado: slippage,
       confidence: signal.confidence,
       setup_tecnico_detectado: signal.setup,
-      strategy_id: signal.primaryStrategy?.id || signal.strategy_id || 'unknown',
-      strategy_name: signal.primaryStrategy?.name || signal.strategy_name || 'Estrategia no clasificada',
+      traceability_version: trace.traceability_version,
+      signal_id: trace.signal_id,
+      strategy_id: trace.strategy_id || signal.primaryStrategy?.id || signal.strategy_id || 'unknown',
+      strategy_name: trace.strategy_name || signal.primaryStrategy?.name || signal.strategy_name || 'Estrategia no clasificada',
       strategy_score: Number(signal.primaryStrategy?.score || signal.strategy_score || 0),
       strategy_reason: signal.primaryStrategy?.reason || signal.strategy_reason || '',
       strategy_scores: signal.strategyScores || [],
+      timeframe: trace.timeframe,
+      session: trace.session,
+      entry_reason_code: trace.entry_reason_code,
+      risk_profile_id: trace.risk_profile_id,
+      source: trace.source,
+      opened_at: trace.opened_at,
+      confidence_at_entry: trace.confidence_at_entry,
+      regime_at_entry: trace.regime_at_entry,
+      volatility_at_entry: trace.volatility_at_entry,
       learning_mode: learningMode,
       contexto_noticia_macro: currentNewsContext(pair.symbol),
       motivo_entrada: `${signal.motivo || 'Setup demo'}; ${signal.setup}; confianza ${signal.confidence}; volumen x${Number(signal.volumeRatio || 0).toFixed(2)}`,
@@ -2057,11 +2132,16 @@ async function executeSimulatedTrade(action, pair, signal, existing = null) {
   const directionFactor = existing.direction === 'LONG' ? 1 : -1;
   const gross = (price - existing.entry_price) * directionFactor * existing.size_demo;
   const pnl = gross - existing.fees_simuladas - existing.spread_estimado - existing.slippage_estimado;
+  const closedAt = new Date().toISOString();
+  const exitReasonCode = signal.exit_reason_code || (signal.bias !== existing.direction ? 'signal_flip_or_edge_loss' : 'demo_risk_management');
   return {
     ...existing,
     exit_price: price,
-    closed_timestamp: new Date().toISOString(),
+    closed_timestamp: closedAt,
+    closed_at: closedAt,
     pnl_demo: pnl,
+    pnl,
+    exit_reason_code: exitReasonCode,
     motivo_salida: `${signal.bias !== existing.direction ? 'Senal opuesta o perdida de edge' : 'Gestion demo por objetivo/riesgo'}; confianza actual ${signal.confidence}`,
     lesson_learned: buildTrainingLesson(existing, pair, signal, pnl)
   };

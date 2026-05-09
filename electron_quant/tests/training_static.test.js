@@ -28,6 +28,15 @@ assert(renderer.includes('riesgo macro alto'), 'El riesgo macro alto debe marcar
 assert(renderer.includes('ictCrtScore'), 'Training debe incorporar scoring ICT/CRT.');
 assert(renderer.includes('crtWeeklyBias'), 'Training debe analizar sesgo CRT semanal.');
 assert(renderer.includes('scoreStrategyPortfolio'), 'Training debe comparar un portafolio de estrategias, no solo ICT/CRT.');
+assert(renderer.includes('trainingSignalId'), 'Cada senal nueva debe generar signal_id estable y auditable.');
+assert(renderer.includes('buildTrainingTraceMetadata'), 'Training debe construir metadata causal para senales/posiciones nuevas.');
+assert(renderer.includes('entry_reason_code'), 'Las posiciones nuevas deben persistir entry_reason_code cuando este disponible.');
+assert(renderer.includes('risk_profile_id'), 'Las posiciones nuevas deben persistir risk_profile_id para trazabilidad.');
+assert(renderer.includes('confidence_at_entry'), 'Las posiciones nuevas deben conservar confidence_at_entry.');
+assert(renderer.includes('signal_id: trace.signal_id'), 'Las posiciones nuevas deben copiar signal_id desde la metadata causal.');
+assert(renderer.includes('source: trace.source'), 'Las posiciones nuevas deben preservar el source causal.');
+assert(renderer.includes('closed_at: closedAt'), 'Los trades cerrados nuevos deben conservar closed_at canonico.');
+assert(renderer.includes('exit_reason_code: exitReasonCode'), 'Los trades cerrados nuevos deben conservar exit_reason_code.');
 assert(renderer.includes('scoreTrendMomentum') && renderer.includes('scoreBreakoutRetest') && renderer.includes('scoreMeanReversion') && renderer.includes('scoreVolumePullback'), 'Training debe testear trend, breakout, mean reversion y volume pullback.');
 assert(renderer.includes('primaryStrategy'), 'Cada señal de training debe registrar estrategia dominante.');
 assert(html.includes('chat-dock') && html.includes('chatContextPanel'), 'El chat de Quant debe estar siempre visible como dock con contexto activo.');

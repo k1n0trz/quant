@@ -522,105 +522,6 @@
           </div>
         </aside>
 
-        <script>
-        /* Equity curve canvas — purple edition (synthetic, scoped to #view-lab) */
-        (function () {
-          if (window.__labEquityInit) return;
-          window.__labEquityInit = true;
-          var pending = false;
-
-          function draw() {
-            var cv = document.getElementById('labEquityCanvas');
-            if (!cv || cv.offsetParent === null) return;
-            var dpr = window.devicePixelRatio || 1;
-            var rect = cv.getBoundingClientRect();
-            cv.width  = Math.floor(rect.width  * dpr);
-            cv.height = Math.floor(rect.height * dpr);
-            var ctx = cv.getContext('2d');
-            var w = cv.width, h = cv.height;
-            ctx.clearRect(0, 0, w, h);
-
-            var n = 120, start = 10000, series = [], v = start;
-            for (var i = 0; i < n; i++) {
-              var drift = 4.4;
-              var noise = (Math.sin(i * 0.6) * 18) + (Math.cos(i * 0.21) * 10) + (Math.random() - 0.5) * 22;
-              var dd = (i > n*0.55 && i < n*0.7) ? -90 * Math.sin((i - n*0.55) / (n*0.15) * Math.PI) : 0;
-              v += drift + noise * 0.35 + dd * 0.6;
-              series.push(v);
-            }
-
-            var padX = 8 * dpr, padY = 16 * dpr;
-            var innerW = w - padX * 2, innerH = h - padY * 2;
-            var min = Math.min.apply(null, series), max = Math.max.apply(null, series);
-            var range = (max - min) || 1;
-            function pt(i){ return [padX + (innerW * i) / (series.length - 1), padY + innerH - ((series[i] - min) / range) * innerH]; }
-
-            ctx.strokeStyle = 'rgba(139, 92, 246, 0.06)'; ctx.lineWidth = 1;
-            for (var k = 1; k < 4; k++) {
-              var y = padY + (innerH / 4) * k;
-              ctx.beginPath(); ctx.moveTo(padX, y); ctx.lineTo(w - padX, y); ctx.stroke();
-            }
-
-            var grad = ctx.createLinearGradient(0, padY, 0, h - padY);
-            grad.addColorStop(0,   'rgba(168, 85, 247, 0.42)');
-            grad.addColorStop(0.6, 'rgba(139, 92, 246, 0.18)');
-            grad.addColorStop(1,   'rgba(139, 92, 246, 0.00)');
-
-            ctx.beginPath();
-            var p0 = pt(0); ctx.moveTo(p0[0], p0[1]);
-            for (var j = 1; j < series.length; j++) { var p = pt(j); ctx.lineTo(p[0], p[1]); }
-            ctx.lineTo(w - padX, h - padY); ctx.lineTo(padX, h - padY); ctx.closePath();
-            ctx.fillStyle = grad; ctx.fill();
-
-            ctx.beginPath(); var pa = pt(0); ctx.moveTo(pa[0], pa[1]);
-            for (var jj = 1; jj < series.length; jj++) { var pp = pt(jj); ctx.lineTo(pp[0], pp[1]); }
-            ctx.lineWidth = 6 * dpr;
-            ctx.strokeStyle = 'rgba(168, 85, 247, 0.22)';
-            ctx.shadowColor = 'rgba(168, 85, 247, 0.7)';
-            ctx.shadowBlur  = 16 * dpr;
-            ctx.stroke();
-            ctx.shadowBlur = 0;
-
-            var stroke = ctx.createLinearGradient(0, 0, w, 0);
-            stroke.addColorStop(0, '#A855F7'); stroke.addColorStop(1, '#8B5CF6');
-            ctx.beginPath(); var pb = pt(0); ctx.moveTo(pb[0], pb[1]);
-            for (var ll = 1; ll < series.length; ll++) { var pc = pt(ll); ctx.lineTo(pc[0], pc[1]); }
-            ctx.lineWidth = 1.8 * dpr; ctx.strokeStyle = stroke; ctx.stroke();
-
-            var lp = pt(series.length - 1);
-            ctx.beginPath(); ctx.arc(lp[0], lp[1], 8 * dpr, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(168, 85, 247, 0.30)'; ctx.fill();
-            ctx.beginPath(); ctx.arc(lp[0], lp[1], 4 * dpr, 0, Math.PI * 2);
-            ctx.fillStyle = '#A855F7';
-            ctx.shadowColor = 'rgba(168, 85, 247, 0.9)';
-            ctx.shadowBlur  = 12 * dpr;
-            ctx.fill(); ctx.shadowBlur = 0;
-            ctx.strokeStyle = 'rgba(5,8,22,1)'; ctx.lineWidth = 2 * dpr; ctx.stroke();
-          }
-
-          function schedule() {
-            if (pending) return;
-            pending = true;
-            requestAnimationFrame(function () { pending = false; draw(); });
-          }
-
-          /* Draw when lab view becomes visible. The MutationObserver
-             catches the .active class toggle from setView(). */
-          var lab = document.getElementById('view-lab');
-          if (lab) {
-            new MutationObserver(function (mutations) {
-              for (var i = 0; i < mutations.length; i++) {
-                if (mutations[i].attributeName === 'class' && lab.classList.contains('active')) {
-                  schedule();
-                  break;
-                }
-              }
-            }).observe(lab, { attributes: true });
-            if (lab.classList.contains('active')) schedule();
-          }
-          window.addEventListener('resize', schedule);
-        })();
-        </script>
       </section>
 
       <section class="view" id="view-markets">
@@ -982,6 +883,8 @@
   <script src="./services/training-closure-service.js"></script>
   <script src="./services/training-demo-writer-client.js"></script>
   <script src="./views/quant-core-panel.js"></script>
+  <script src="./services/quant-lab-api.js"></script>
+  <script src="./views/quant-lab-hero.js"></script>
 
   <script src="./renderer.js"></script>
 </body>

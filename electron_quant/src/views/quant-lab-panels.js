@@ -107,24 +107,75 @@
     return decPart ? (intPart + '.' + decPart) : intPart;
   }
 
+  /** SVG icon used in empty/error/unavailable cells. */
+  function emptyIconSvg(kind) {
+    if (kind === 'error') {
+      return '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1 L15 14 L1 14 Z"/><path d="M8 6 V9"/><circle cx="8" cy="11.5" r="0.6" fill="currentColor"/></svg>';
+    }
+    if (kind === 'loading') {
+      return '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 2 a6 6 0 0 1 6 6"/></svg>';
+    }
+    return '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M5.5 8 L8 10 L11 6"/></svg>';
+  }
+
+  /** Skeleton row HTML for a table tbody (returns <tr>... markup). */
+  function tableSkeletonRows(rowCount, colWidths) {
+    var rows = '';
+    for (var i = 0; i < rowCount; i++) {
+      var cells = colWidths.map(function (w) {
+        return '<td><span class="lab-skel" style="width:' + w + '%"></span></td>';
+      }).join('');
+      rows += '<tr class="lab-skel-row" aria-hidden="true">' + cells + '</tr>';
+    }
+    return rows;
+  }
+
   /** Render a generic envelope-aware empty/error message inside a tbody/list. */
   function renderEmptyRow(host, colspan, viewState, opts) {
     opts = opts || {};
+
+    // Loading → emit skeleton rows / cards instead of plain text
+    if (viewState === 'loading') {
+      if (host.tagName === 'TBODY' && Array.isArray(opts.skeletonCols)) {
+        host.innerHTML = tableSkeletonRows(opts.skeletonRows || 4, opts.skeletonCols);
+        return;
+      }
+      if (opts.skeletonHtml) {
+        host.innerHTML = opts.skeletonHtml;
+        return;
+      }
+      // fallback
+    }
+
+    var kind = viewState === 'error' ? 'error' : (viewState === 'loading' ? 'loading' : 'empty');
     var msg;
+    var hint = '';
     if (viewState === 'loading') msg = opts.loading || 'cargando…';
-    else if (viewState === 'error') msg = opts.error || 'sin conexión';
-    else if (viewState === 'unavailable') msg = opts.unavailable || 'training state unavailable';
-    else msg = opts.empty || 'sin datos';
+    else if (viewState === 'error') { msg = opts.error || 'sin conexión'; hint = 'reintentando'; }
+    else if (viewState === 'unavailable') { msg = opts.unavailable || 'training state unavailable'; hint = 'sin datos persistidos'; }
+    else { msg = opts.empty || 'sin datos'; hint = opts.hint || ''; }
+
+    var cellHtml = ''
+      + '<div class="lab-empty-cell ' + (kind === 'error' ? 'is-error' : '') + '" role="status" aria-live="polite">'
+      +   '<span class="lab-empty-icon">' + emptyIconSvg(kind) + '</span>'
+      +   '<span>' + escHtml(msg) + '</span>'
+      +   (hint ? '<span class="lab-empty-hint">' + escHtml(hint) + '</span>' : '')
+      + '</div>';
 
     if (host.tagName === 'TBODY') {
-      host.innerHTML = '<tr><td colspan="' + colspan + '" '
-        + 'style="padding:28px 16px;text-align:center;color:var(--lab-text-mute);font-size:12px;">'
-        + escHtml(msg) + '</td></tr>';
+      host.innerHTML = '<tr><td colspan="' + colspan + '" style="padding:0">' + cellHtml + '</td></tr>';
     } else {
-      host.innerHTML = '<div style="padding:28px 16px;text-align:center;'
-        + 'color:var(--lab-text-mute);font-size:12px;">'
-        + escHtml(msg) + '</div>';
+      host.innerHTML = cellHtml;
     }
+  }
+
+  /** Mark host as "fresh" for one frame so children fade in via CSS. */
+  function markFresh(host) {
+    if (!host) return;
+    host.classList.remove('lab-fresh');
+    // force reflow so the animation re-triggers if applied repeatedly
+    void host.offsetWidth;
+    host.classList.add('lab-fresh');
   }
 
   function envelopeState(envelope) {
@@ -142,8 +193,12 @@
       var state = envelopeState(envelope);
 
       if (state !== 'available') {
-        renderEmptyRow(tbody, 7, state, { unavailable: 'training state unavailable', empty: 'sin posiciones abiertas' });
-        var c = $('labOpenCount'); if (c) c.textContent = '—';
+        renderEmptyRow(tbody, 7, state, {
+          unavailable: 'training state unavailable',
+          empty: 'sin posiciones abiertas',
+          skeletonRows: 3, skeletonCols: [60, 28, 50, 50, 40, 30, 70]
+        });
+        var cE = $('labOpenCount'); if (cE) cE.textContent = state === 'loading' ? '…' : '—';
         return;
       }
 
@@ -152,7 +207,7 @@
       var c = $('labOpenCount'); if (c) c.textContent = String(body.total != null ? body.total : positions.length);
 
       if (positions.length === 0) {
-        renderEmptyRow(tbody, 7, 'available', { empty: 'sin posiciones abiertas' });
+        renderEmptyRow(tbody, 7, 'available', { empty: 'sin posiciones abiertas', hint: 'el scheduler aún no ha abierto demo trades' });
         return;
       }
 
@@ -190,6 +245,7 @@
           + '</tr>';
       }).join('');
       tbody.innerHTML = rows;
+      markFresh(tbody);
     }
     return { render: render };
   })();
@@ -204,8 +260,12 @@
       var state = envelopeState(envelope);
 
       if (state !== 'available') {
-        renderEmptyRow(tbody, 7, state, { unavailable: 'training state unavailable', empty: 'sin trades cerrados' });
-        var c = $('labTradesCount'); if (c) c.textContent = '—';
+        renderEmptyRow(tbody, 7, state, {
+          unavailable: 'training state unavailable',
+          empty: 'sin trades cerrados',
+          skeletonRows: 5, skeletonCols: [40, 50, 28, 70, 40, 30, 60]
+        });
+        var cE = $('labTradesCount'); if (cE) cE.textContent = state === 'loading' ? '…' : '—';
         return;
       }
 
@@ -215,7 +275,7 @@
       var c = $('labTradesCount'); if (c) c.textContent = totalShown + (body.total != null && body.total !== totalShown ? ' / ' + body.total : '');
 
       if (trades.length === 0) {
-        renderEmptyRow(tbody, 7, 'available', { empty: 'sin trades cerrados todavía' });
+        renderEmptyRow(tbody, 7, 'available', { empty: 'sin trades cerrados todavía', hint: 'esperando primer cierre' });
         return;
       }
 
@@ -253,6 +313,7 @@
           + '</tr>';
       }).join('');
       tbody.innerHTML = rows;
+      markFresh(tbody);
     }
     return { render: render };
   })();
@@ -266,8 +327,23 @@
       var state = envelopeState(envelope);
 
       if (state !== 'available') {
-        renderEmptyRow(host, 1, state, { unavailable: 'training state unavailable', empty: 'sin lecciones registradas' });
-        var c = $('labLessonsCount'); if (c) c.textContent = '—';
+        var lessonSkel = '';
+        if (state === 'loading') {
+          for (var lk = 0; lk < 4; lk++) {
+            lessonSkel += '<div class="lab-lesson" aria-hidden="true">'
+              + '<div class="tl"><div class="d" style="background:rgba(139,92,246,0.18);box-shadow:none"></div></div>'
+              + '<div class="body" style="gap:6px">'
+              +   '<div><span class="lab-skel" style="width:60%"></span></div>'
+              +   '<div><span class="lab-skel" style="width:88%"></span></div>'
+              + '</div></div>';
+          }
+        }
+        renderEmptyRow(host, 1, state, {
+          unavailable: 'training state unavailable',
+          empty: 'sin lecciones registradas',
+          skeletonHtml: lessonSkel
+        });
+        var cE = $('labLessonsCount'); if (cE) cE.textContent = state === 'loading' ? '…' : '—';
         return;
       }
 
@@ -276,7 +352,7 @@
       var c = $('labLessonsCount'); if (c) c.textContent = String(body.total != null ? body.total : lessons.length);
 
       if (lessons.length === 0) {
-        renderEmptyRow(host, 1, 'available', { empty: 'aún no hay lecciones registradas' });
+        renderEmptyRow(host, 1, 'available', { empty: 'aún no hay lecciones registradas', hint: 'cada cierre genera una entrada' });
         return;
       }
 
@@ -322,6 +398,7 @@
           + '</div>';
       }).join('');
       host.innerHTML = html;
+      markFresh(host);
     }
     return { render: render };
   })();
@@ -335,8 +412,24 @@
       var state = envelopeState(envelope);
 
       if (state !== 'available') {
-        renderEmptyRow(host, 1, state, { unavailable: 'training state unavailable', empty: 'aún no hay estrategias clasificadas' });
-        var c = $('labStratCount'); if (c) c.textContent = '—';
+        var stratSkel = '';
+        if (state === 'loading') {
+          for (var si = 0; si < 4; si++) {
+            stratSkel += '<div class="lab-strat-row" aria-hidden="true">'
+              +   '<div class="lab-strat-rank"><span class="lab-skel" style="width:60%;height:10px"></span></div>'
+              +   '<div class="lab-strat-name"><span class="lab-skel" style="width:60%"></span><span class="lab-skel" style="width:40%;margin-top:4px"></span></div>'
+              +   '<div class="lab-strat-stat"><span class="lab-skel" style="width:60px"></span></div>'
+              +   '<div class="lab-strat-stat"><span class="lab-skel" style="width:36px"></span></div>'
+              +   '<div class="lab-strat-bar"><span style="width:' + (40 + si * 10) + '%"></span></div>'
+              + '</div>';
+          }
+        }
+        renderEmptyRow(host, 1, state, {
+          unavailable: 'training state unavailable',
+          empty: 'aún no hay estrategias clasificadas',
+          skeletonHtml: stratSkel
+        });
+        var cE = $('labStratCount'); if (cE) cE.textContent = state === 'loading' ? '…' : '—';
         return;
       }
 
@@ -345,7 +438,10 @@
       var c = $('labStratCount'); if (c) c.textContent = String(ranking.length);
 
       if (ranking.length === 0) {
-        renderEmptyRow(host, 1, 'available', { empty: 'aún no hay estrategias con muestra · esperando trades cerrados' });
+        renderEmptyRow(host, 1, 'available', {
+          empty: 'aún no hay estrategias con muestra',
+          hint: 'esperando trades cerrados'
+        });
         return;
       }
 
@@ -386,6 +482,7 @@
           + '</div>';
       }).join('');
       host.innerHTML = html;
+      markFresh(host);
     }
     return { render: render };
   })();
@@ -402,8 +499,28 @@
         var unavailableMsg = (envelope && envelope.body && envelope.body.reason === 'training_state_unavailable')
           ? 'training state unavailable'
           : 'candidatos deshabilitados o sin conexión';
-        renderEmptyRow(host, 1, state, { unavailable: unavailableMsg, empty: 'sin candidatos en este momento' });
-        var c = $('labCandCount'); if (c) c.textContent = '—';
+        var candSkel = '';
+        if (state === 'loading') {
+          for (var ci = 0; ci < 4; ci++) {
+            candSkel += '<div class="lab-cand lab-skel-card" aria-hidden="true">'
+              +   '<div class="lab-cand-head"><span class="lab-skel" style="width:90px"></span><span class="lab-skel lab-skel-pill" style="width:50px"></span></div>'
+              +   '<div><span class="lab-skel" style="width:60%;height:18px"></span></div>'
+              +   '<div><span class="lab-skel" style="width:50%"></span></div>'
+              +   '<div class="lab-cand-meter">'
+              +     '<div class="m"><span class="lab-skel" style="width:70%"></span></div>'
+              +     '<div class="m"><span class="lab-skel" style="width:60%"></span></div>'
+              +     '<div class="m"><span class="lab-skel" style="width:65%"></span></div>'
+              +     '<div class="m"><span class="lab-skel" style="width:55%"></span></div>'
+              +   '</div>'
+              + '</div>';
+          }
+        }
+        renderEmptyRow(host, 1, state, {
+          unavailable: unavailableMsg,
+          empty: 'sin candidatos en este momento',
+          skeletonHtml: candSkel
+        });
+        var cE = $('labCandCount'); if (cE) cE.textContent = state === 'loading' ? '…' : '—';
         return;
       }
 
@@ -412,7 +529,10 @@
       var c = $('labCandCount'); if (c) c.textContent = String(candidates.length);
 
       if (candidates.length === 0) {
-        renderEmptyRow(host, 1, 'available', { empty: 'sin candidatos en este momento' });
+        renderEmptyRow(host, 1, 'available', {
+          empty: 'sin candidatos en este momento',
+          hint: 'el motor evalúa cada minuto'
+        });
         return;
       }
 
@@ -450,6 +570,7 @@
           + '</div>';
       }).join('');
       host.innerHTML = html;
+      markFresh(host);
     }
     return { render: render };
   })();

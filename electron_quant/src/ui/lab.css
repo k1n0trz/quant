@@ -622,22 +622,253 @@
   padding: 14px 0; font-family: var(--lab-font-mono);
 }
 
+/* ============================================================
+   H5 — Polish: skeletons, focus, motion, responsive, a11y
+   ============================================================ */
+
+/* ─── Fade-in when Lab becomes active ─── */
+@keyframes labFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.app-shell:has(#view-lab.active) #view-lab.view.active .lab-main > * {
+  animation: labFadeIn 220ms var(--lab-ease) both;
+}
+.app-shell:has(#view-lab.active) #view-lab.view.active .lab-main > *:nth-child(1) { animation-delay: 0ms; }
+.app-shell:has(#view-lab.active) #view-lab.view.active .lab-main > *:nth-child(2) { animation-delay: 40ms; }
+.app-shell:has(#view-lab.active) #view-lab.view.active .lab-main > *:nth-child(3) { animation-delay: 80ms; }
+.app-shell:has(#view-lab.active) #view-lab.view.active .lab-main > *:nth-child(4) { animation-delay: 120ms; }
+.app-shell:has(#view-lab.active) #view-lab.view.active .lab-main > *:nth-child(5) { animation-delay: 160ms; }
+
+/* When data first arrives, the controller swaps the .lab-fresh class
+   onto the panel body — a brief shimmer-end fade keeps the layout
+   from "popping" into place. */
+@keyframes labRowEnter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.lab-shell .lab-fresh tbody tr,
+.lab-shell .lab-fresh > .lab-strat-row,
+.lab-shell .lab-fresh > .lab-lesson,
+.lab-shell .lab-fresh > .lab-cand {
+  animation: labRowEnter 180ms var(--lab-ease) both;
+}
+
+/* ─── Skeleton system (purple shimmer) ─── */
+@keyframes labShimmer {
+  0%   { background-position: -180px 0; }
+  100% { background-position: 360px 0; }
+}
+.lab-shell .lab-skel {
+  display: inline-block;
+  height: 12px;
+  border-radius: 4px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(139,92,246,0.06) 0%,
+      rgba(168,85,247,0.18) 50%,
+      rgba(139,92,246,0.06) 100%
+    );
+  background-size: 540px 100%;
+  animation: labShimmer 1400ms linear infinite;
+}
+.lab-shell .lab-skel.lab-skel-pill { height: 18px; border-radius: 999px; min-width: 64px; }
+.lab-shell .lab-skel.lab-skel-num  { width: 72px; }
+.lab-shell .lab-skel.lab-skel-wide { width: 100%; max-width: 240px; }
+.lab-shell .lab-skel.lab-skel-tall { height: 28px; }
+
+/* Skeleton table row helper */
+.lab-shell tr.lab-skel-row td {
+  padding: 13px 16px;
+  background: transparent;
+}
+.lab-shell tr.lab-skel-row .lab-skel { height: 10px; width: 78%; }
+
+/* Skeleton candidate card */
+.lab-shell .lab-cand.lab-skel-card {
+  pointer-events: none;
+  border-color: var(--lab-border-soft);
+}
+.lab-shell .lab-cand.lab-skel-card .lab-skel { width: 100%; }
+
+/* ─── Empty / error / unavailable centered cells ─── */
+.lab-shell .lab-empty-cell {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--lab-text-mute);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.lab-shell .lab-empty-cell .lab-empty-icon {
+  width: 28px; height: 28px; border-radius: 8px;
+  display: grid; place-items: center;
+  background: var(--purple-soft);
+  border: 1px solid var(--lab-border-soft);
+  color: var(--purple-2);
+  margin-bottom: 2px;
+}
+.lab-shell .lab-empty-cell.is-error  .lab-empty-icon { background: var(--lab-amber-soft); border-color: rgba(245,158,11,0.32); color: var(--lab-amber); }
+.lab-shell .lab-empty-cell.is-error  { color: var(--lab-amber); }
+.lab-shell .lab-empty-cell .lab-empty-hint { color: var(--lab-text-faint); font-size: 11px; font-family: var(--lab-font-mono); }
+
+/* ─── Focus-visible rings (a11y) ─── */
+.lab-shell *:focus { outline: none; }
+.lab-shell .lab-icon-btn:focus-visible,
+.lab-shell .lab-chart-tab:focus-visible,
+.lab-shell .lab-pill:focus-visible,
+.lab-shell .lab-kill-btn:focus-visible,
+.lab-shell .lab-chat-send:focus-visible,
+.lab-shell .lab-chat-input input:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--purple-soft), 0 0 18px -4px var(--purple-glow);
+}
+.lab-shell .lab-kill-btn:focus-visible {
+  outline-color: var(--lab-red);
+  box-shadow: 0 0 0 4px var(--lab-red-soft), 0 0 18px -4px var(--lab-red-glow);
+}
+
+/* Sidebar nav focus-visible — applies to the lab nav item only,
+   so we never alter focus appearance for the legacy dashboard. */
+.nav-item[data-view="lab"]:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.18);
+}
+
+/* ─── Custom scrollbars (chat body + main) ─── */
+.lab-shell .lab-main,
+.lab-shell .lab-chat-body { scrollbar-width: thin; scrollbar-color: rgba(139,92,246,0.28) transparent; }
+.lab-shell .lab-main::-webkit-scrollbar,
+.lab-shell .lab-chat-body::-webkit-scrollbar { width: 8px; height: 8px; }
+.lab-shell .lab-main::-webkit-scrollbar-track,
+.lab-shell .lab-chat-body::-webkit-scrollbar-track { background: transparent; }
+.lab-shell .lab-main::-webkit-scrollbar-thumb,
+.lab-shell .lab-chat-body::-webkit-scrollbar-thumb {
+  background: rgba(139, 92, 246, 0.20);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.lab-shell .lab-main::-webkit-scrollbar-thumb:hover,
+.lab-shell .lab-chat-body::-webkit-scrollbar-thumb:hover { background: rgba(139, 92, 246, 0.40); background-clip: padding-box; }
+
+/* ─── Spacing/hierarchy micro-tuning ─── */
+.lab-shell .lab-panel-head { gap: 12px; }
+.lab-shell .lab-eyebrow { letter-spacing: 0.16em; }
+.lab-shell .lab-hero-title { color: var(--lab-text-mute); font-size: 13px; letter-spacing: 0.04em; }
+.lab-shell .lab-deltas { gap: 26px; }
+.lab-shell .lab-kpi:first-child { border-top-left-radius: var(--lab-radius); }
+.lab-shell .lab-kpi:last-child  { border-top-right-radius: var(--lab-radius); }
+.lab-shell .lab-h-cell:first-child { padding-left: 22px; }
+.lab-shell .lab-h-cell:last-child  { padding-right: 22px; }
+
+/* Strategy ranking: thicker bar + smoother fill animation when value changes */
+.lab-shell .lab-strat-bar { height: 3px; }
+.lab-shell .lab-strat-bar > span { transition: width 360ms var(--lab-ease); }
+
+/* Equity canvas wrap: subtle inner outline so the chart frames itself
+   even before the canvas paints any pixels */
+.lab-shell .lab-chart-wrap {
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(11,16,32,0.4), rgba(5,8,22,0.0));
+  box-shadow: inset 0 0 0 1px rgba(139, 92, 246, 0.06);
+}
+
+/* Lift-on-hover for panels (premium feel, very subtle) */
+.lab-shell .lab-panel { transition: transform var(--lab-duration) var(--lab-ease), box-shadow var(--lab-duration) var(--lab-ease); }
+.lab-shell .lab-panel:hover { transform: translateY(-1px); }
+
 /* ─── Responsive ─── */
 @media (max-width: 1440px) {
   .lab-shell { grid-template-columns: minmax(0, 1fr) 300px; }
   .lab-hero { grid-template-columns: 1fr 1.6fr; }
+  .lab-cand-grid { grid-template-columns: repeat(3, 1fr); }
 }
 @media (max-width: 1280px) {
   .lab-shell { grid-template-columns: minmax(0, 1fr); }
   .lab-chat { display: none; }
   .lab-hero { grid-template-columns: 1fr; }
+  .lab-hero::after { display: none; }
   .lab-kpi-row { grid-template-columns: repeat(3, 1fr); }
   .lab-cand-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 960px) {
   .lab-grid-12 > * { grid-column: 1 / -1 !important; }
   .lab-health { grid-template-columns: repeat(2, 1fr); }
+  .lab-hero-balance { font-size: 38px; }
+  .lab-kpi-row { grid-template-columns: repeat(2, 1fr); }
   /* Disable expensive backdrop-filter on small screens for perf */
   .lab-panel, .lab-hero, .lab-health, .lab-chat,
   .lab-topbar, .lab-pill { backdrop-filter: none; -webkit-backdrop-filter: none; }
+  /* Top-bar becomes horizontal-scrollable to keep all pills reachable */
+  .lab-topbar { overflow-x: auto; gap: 12px; }
+  .lab-topbar::-webkit-scrollbar { display: none; }
+  .lab-topbar { scrollbar-width: none; }
+}
+@media (max-width: 768px) {
+  .lab-shell { grid-template-rows: 56px minmax(0, 1fr); }
+  .lab-main { padding: 12px; gap: 12px; }
+  .lab-hero { padding: 16px; gap: 14px; }
+  .lab-hero-balance { font-size: 32px; }
+  .lab-deltas { gap: 14px; }
+  .lab-kpi { padding: 10px 12px; }
+  .lab-kpi .val { font-size: 16px; }
+  .lab-cand-grid { grid-template-columns: 1fr; padding: 12px; }
+  .lab-health { grid-template-columns: 1fr; }
+  /* Tables compress: hide R:R + Strategy on narrow trades view */
+  .lab-shell #labTradesTable th:nth-child(6),
+  .lab-shell #labTradesTable td:nth-child(6),
+  .lab-shell #labTradesTable th:nth-child(7),
+  .lab-shell #labTradesTable td:nth-child(7) { display: none; }
+  /* Hide Mark + Edad on narrow positions table */
+  .lab-shell #labOpenTable th:nth-child(4),
+  .lab-shell #labOpenTable td:nth-child(4),
+  .lab-shell #labOpenTable th:nth-child(6),
+  .lab-shell #labOpenTable td:nth-child(6) { display: none; }
+  .lab-brand-name span { display: none; }
+  .lab-crumbs { display: none; }
+  /* Increase tap targets */
+  .lab-icon-btn, .lab-chart-tab, .lab-kill-btn, .lab-pill { min-height: 32px; }
+}
+@media (max-width: 480px) {
+  .lab-hero-balance { font-size: 28px; }
+  .lab-kpi-row { grid-template-columns: 1fr; }
+  .lab-pill .dot { display: none; }   /* keep label readable on tiny screens */
+}
+
+/* ─── Accessibility: respect user motion preferences ─── */
+@media (prefers-reduced-motion: reduce) {
+  .lab-shell *,
+  .lab-shell *::before,
+  .lab-shell *::after,
+  .app-shell:has(#view-lab.active) #view-lab.view.active .lab-main > * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .lab-shell .lab-skel { animation: none; background: rgba(139,92,246,0.10); }
+  .lab-pill .dot { animation: none !important; }
+}
+
+/* ─── Accessibility: respect reduced transparency ─── */
+@media (prefers-reduced-transparency: reduce) {
+  .lab-panel, .lab-hero, .lab-health, .lab-chat,
+  .lab-topbar, .lab-pill, .lab-cand {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: var(--bg-elev-2);
+  }
+  .lab-hero { background: var(--bg-elev-2); }
+  .lab-hero::after { display: none; }
+}
+
+/* ─── Coarse pointers (touch) get larger hit areas without changing layout ─── */
+@media (hover: none) and (pointer: coarse) {
+  .lab-panel:hover { transform: none; }
+  .lab-cand:hover  { transform: none; }
 }

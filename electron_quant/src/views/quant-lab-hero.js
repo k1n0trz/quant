@@ -518,6 +518,7 @@
     });
   }
 
+  var firstDataApplied = false;
   function applyInterpreted() {
     var a = api(); if (!a) return;
     var view = a.interpretHero(rawSnapshot);
@@ -528,6 +529,11 @@
     renderPills(view);
     renderHealth(view);
     scheduleEquityRedraw();
+
+    if (!firstDataApplied && view.anyAvailable) {
+      firstDataApplied = true;
+      if (labRoot) labRoot.removeAttribute('aria-busy');
+    }
   }
 
   // ──────────────────────────────────────────────────────
@@ -601,6 +607,7 @@
       resizeAttached = true;
     }
 
+    if (labRoot) labRoot.setAttribute('aria-busy', 'true');
     renderInitialSkeleton();
     if (isActive()) start();
   }

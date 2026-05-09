@@ -289,8 +289,10 @@
               <label>TIPO<select id="orderType"><option value="MARKET">Market</option><option value="LIMIT">Limit</option></select></label>
               <label>PRECIO LÃMITE<input id="limitPriceInput" type="number" step="any" min="0" placeholder="Solo para Limit" /></label>
               <label>STOP-LOSS<input id="stopLossInput" type="number" step="any" min="0" placeholder="Precio de stop" /></label>
+              <label data-pending="backend" title="Pendiente integración backend">TAKE-PROFIT<input id="takeProfitInput" type="number" step="any" min="0" placeholder="Precio objetivo" /></label>
               <label>RIESGO %<input id="riskPctInput" type="number" value="0.5" step="0.1" min="0.1" max="5" /></label>
               <label>CANTIDAD<input id="qtyInput" type="number" value="0.001" step="0.001" min="0" /></label>
+              <label data-pending="backend" title="Pendiente integración backend">MULTIPLICADOR<input id="multiplierInput" type="number" value="1" step="0.5" min="1" max="125" placeholder="1x" /></label>
               <label style="justify-content:center;align-items:flex-end">
                 <button class="ghost-btn" id="calcSizeBtn" style="width:100%;padding:6px 0">âŸ³ Calcular size</button>
               </label>
@@ -301,6 +303,7 @@
               <button class="cancel-btn" id="cancelBtn">CANCELAR<span>Limpiar</span></button>
             </div>
             <div id="orderResultBox" style="margin-top:10px;font-size:13px;display:none"></div>
+            <div class="manual-pending-note" style="margin-top:10px;padding:6px 10px;border-left:2px solid #4a6080;font-size:11px;color:#8fa3c0;font-style:italic;line-height:1.45">TAKE-PROFIT y MULTIPLICADOR aún no se transmiten al backend. Quedan capturados localmente hasta que el contrato de orden los acepte.</div>
           </section>
 
           <section class="panel recent-panel">

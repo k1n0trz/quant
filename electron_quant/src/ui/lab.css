@@ -6,28 +6,6 @@
    Loaded AFTER tokens.css.
    ============================================================ */
 
-/* Transitional coexistence: when the legacy training workspace is
-   active, give it the whole .content area and hide the shell
-   topbar plus the dashboard chat dock. Electron supports :has(). */
-.app-shell:has(#view-lab.active) > .topbar { display: none; }
-.app-shell:has(#view-lab.active) > .content {
-  grid-template-columns: minmax(0, 1fr);
-  padding: 0;
-  background: #050816;
-}
-.app-shell:has(#view-lab.active) > .content > .chat-dock { display: none; }
-.app-shell:has(#view-lab.active) #view-lab { padding: 0; }
-
-/* When the transitional workspace is active, ensure no view
-   scrollbar wraps it. The workspace manages its own scroll regions. */
-.app-shell:has(#view-lab.active) #view-lab.view.active {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  min-height: 0;
-  overflow: hidden;
-  padding-right: 0;
-}
-
 /* ============================================================
    Legacy training workspace - everything below is scoped to
    .lab-shell.
@@ -616,14 +594,14 @@
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.app-shell:has(#view-lab.active) #view-lab.view.active .lab-main > * {
+.lab-shell .lab-main > * {
   animation: labFadeIn 220ms var(--lab-ease) both;
 }
-.app-shell:has(#view-lab.active) #view-lab.view.active .lab-main > *:nth-child(1) { animation-delay: 0ms; }
-.app-shell:has(#view-lab.active) #view-lab.view.active .lab-main > *:nth-child(2) { animation-delay: 40ms; }
-.app-shell:has(#view-lab.active) #view-lab.view.active .lab-main > *:nth-child(3) { animation-delay: 80ms; }
-.app-shell:has(#view-lab.active) #view-lab.view.active .lab-main > *:nth-child(4) { animation-delay: 120ms; }
-.app-shell:has(#view-lab.active) #view-lab.view.active .lab-main > *:nth-child(5) { animation-delay: 160ms; }
+.lab-shell .lab-main > *:nth-child(1) { animation-delay: 0ms; }
+.lab-shell .lab-main > *:nth-child(2) { animation-delay: 40ms; }
+.lab-shell .lab-main > *:nth-child(3) { animation-delay: 80ms; }
+.lab-shell .lab-main > *:nth-child(4) { animation-delay: 120ms; }
+.lab-shell .lab-main > *:nth-child(5) { animation-delay: 160ms; }
 
 /* When data first arrives, the controller swaps the .lab-fresh class
    onto the panel body — a brief shimmer-end fade keeps the layout
@@ -823,7 +801,7 @@
   .lab-shell *,
   .lab-shell *::before,
   .lab-shell *::after,
-  .app-shell:has(#view-lab.active) #view-lab.view.active .lab-main > * {
+  .lab-shell .lab-main > * {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;

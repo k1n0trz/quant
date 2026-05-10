@@ -3006,7 +3006,7 @@ select:hover, input:hover, select:focus, input:focus {
   border: 1px solid rgba(139, 92, 246, 0.16);
 }
 
-.app-shell--global .dot {
+.app-shell--global .active-pill .dot {
   background: #a855f7;
   box-shadow: 0 0 12px rgba(168, 85, 247, 0.65);
 }
@@ -3062,4 +3062,58 @@ select:hover, input:hover, select:focus, input:focus {
 .app-shell--global #perfChart {
   background: rgba(5, 8, 22, 0.7);
   border-color: rgba(139, 92, 246, 0.16);
+}
+
+@media (max-width: 1450px) {
+  .app-shell--global {
+    grid-template-columns: 248px minmax(0, 1fr);
+  }
+
+  .app-shell--global .shell-content {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+}
+
+@media (max-width: 1220px) {
+  .app-shell--global {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
+  .app-shell--global .shell-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .app-shell--global .chat-dock {
+    grid-column: 1;
+    grid-row: auto;
+    order: 2;
+    min-height: 320px;
+  }
+}
+
+@media (max-width: 980px) {
+  .app-shell--global {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .app-shell--global .shell-sidebar {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .app-shell--global .shell-topbar {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .app-shell--global .shell-content {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .app-shell--global .chat-dock {
+    grid-column: 1;
+    grid-row: auto;
+  }
 }

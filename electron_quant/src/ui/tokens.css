@@ -1,102 +1,64 @@
 /* ============================================================
-   Global shell + legacy training workspace tokens
+   Quant global design tokens
    ------------------------------------------------------------
-   Shared shell variables live on :root for the Commit 1 global
-   wrappers, while the .lab-shell block keeps the transitional
-   training workspace isolated from #view-dashboard.
+   Shared shell variables live on :root and power the unified
+   purple/glass interface across the current frontend runtime.
 
-   Loaded BEFORE lab.css, AFTER styles.css.
+   Loaded after styles.css so the shell can override base panels
+   without introducing a second visual system.
    ============================================================ */
 
 :root {
-  --shell-bg-base:     #050816;
-  --shell-bg-surface:  #0b1020;
-  --shell-glass:       rgba(17, 24, 39, 0.62);
-  --shell-glass-deep:  rgba(11, 16, 32, 0.72);
-  --shell-purple:      #8b5cf6;
-  --shell-purple-2:    #a855f7;
-  --shell-border:      rgba(139, 92, 246, 0.18);
+  --shell-bg-base:       #050816;
+  --shell-bg-surface:    #0b1020;
+  --shell-glass:         rgba(17, 24, 39, 0.62);
+  --shell-glass-deep:    rgba(11, 16, 32, 0.72);
+
+  --shell-purple:        #8b5cf6;
+  --shell-purple-2:      #a855f7;
+  --shell-purple-3:      #7c3aed;
+  --shell-purple-soft:   rgba(139, 92, 246, 0.12);
+  --shell-purple-soft-2: rgba(139, 92, 246, 0.20);
+  --shell-purple-edge:   rgba(139, 92, 246, 0.32);
+  --shell-purple-glow:   rgba(139, 92, 246, 0.35);
+  --shell-purple-glow-2: rgba(168, 85, 247, 0.22);
+
+  --shell-border:        rgba(139, 92, 246, 0.18);
+  --shell-border-soft:   rgba(139, 92, 246, 0.10);
   --shell-border-strong: rgba(139, 92, 246, 0.34);
-  --shell-text:        #f8fafc;
-  --shell-text-dim:    #cbd5e1;
-  --shell-text-mute:   #94a3b8;
+  --shell-hairline:      rgba(255, 255, 255, 0.04);
+
+  --shell-text:          #f8fafc;
+  --shell-text-dim:      #cbd5e1;
+  --shell-text-mute:     #94a3b8;
+  --shell-text-faint:    #64748b;
+
+  --shell-green:         #10b981;
+  --shell-green-soft:    rgba(16, 185, 129, 0.14);
+  --shell-green-glow:    rgba(16, 185, 129, 0.32);
+  --shell-red:           #ef4444;
+  --shell-red-soft:      rgba(239, 68, 68, 0.14);
+  --shell-red-glow:      rgba(239, 68, 68, 0.30);
+  --shell-amber:         #f59e0b;
+  --shell-amber-soft:    rgba(245, 158, 11, 0.14);
+  --shell-amber-glow:    rgba(245, 158, 11, 0.32);
+
+  --shell-font-sans:     "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --shell-font-mono:     "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --shell-radius-sm:     4px;
+  --shell-radius:        8px;
+  --shell-radius-lg:     14px;
+
   --shell-shadow-card:
-      0 1px 0 rgba(255,255,255,0.03) inset,
-      0 8px 28px -12px rgba(0,0,0,0.7),
-      0 0 0 1px rgba(139, 92, 246, 0.04);
-  --lab-border:        rgba(139, 92, 246, 0.18);
-  --lab-text:          #f8fafc;
-  --lab-shadow-card:
-      0 1px 0 rgba(255,255,255,0.03) inset,
-      0 8px 28px -12px rgba(0,0,0,0.7),
-      0 0 0 1px rgba(139, 92, 246, 0.04);
-}
+    0 1px 0 rgba(255, 255, 255, 0.03) inset,
+    0 8px 28px -12px rgba(0, 0, 0, 0.7),
+    0 0 0 1px rgba(139, 92, 246, 0.04);
+  --shell-shadow-glow:
+    0 0 0 1px var(--shell-purple-edge),
+    0 0 24px -4px var(--shell-purple-glow);
+  --shell-shadow-glow-soft: 0 0 18px -2px var(--shell-purple-glow-2);
 
-.lab-shell {
-  /* ---------- Surfaces ---------- */
-  --bg-base:        #050816;
-  --bg-surface:     #0B1020;
-  --bg-elev-1:      #0E1530;
-  --bg-elev-2:      #111827;
-  --bg-elev-3:      #161F3A;
-
-  /* Glass — used together with backdrop-filter on layers above background glow */
-  --glass:          rgba(17, 24, 39, 0.55);
-  --glass-strong:   rgba(11, 16, 32, 0.78);
-
-  /* ---------- Purple system ---------- */
-  --purple:         #8B5CF6;
-  --purple-2:       #A855F7;
-  --purple-3:       #7C3AED;
-  --purple-soft:    rgba(139, 92, 246, 0.12);
-  --purple-soft-2:  rgba(139, 92, 246, 0.20);
-  --purple-edge:    rgba(139, 92, 246, 0.32);
-  --purple-glow:    rgba(139, 92, 246, 0.35);
-  --purple-glow-2:  rgba(168, 85, 247, 0.22);
-
-  /* ---------- Borders ---------- */
-  --lab-border:        rgba(139, 92, 246, 0.18);
-  --lab-border-soft:   rgba(139, 92, 246, 0.10);
-  --lab-border-strong: rgba(139, 92, 246, 0.34);
-  --lab-hairline:      rgba(255, 255, 255, 0.04);
-
-  /* ---------- Semantic ---------- */
-  --lab-green:       #10B981;
-  --lab-green-soft:  rgba(16, 185, 129, 0.14);
-  --lab-green-glow:  rgba(16, 185, 129, 0.32);
-  --lab-red:         #EF4444;
-  --lab-red-soft:    rgba(239, 68, 68, 0.14);
-  --lab-red-glow:    rgba(239, 68, 68, 0.30);
-  --lab-amber:       #F59E0B;
-  --lab-amber-soft:  rgba(245, 158, 11, 0.14);
-  --lab-amber-glow:  rgba(245, 158, 11, 0.32);
-
-  /* ---------- Text ---------- */
-  --lab-text:        #F8FAFC;
-  --lab-text-dim:    #CBD5E1;
-  --lab-text-mute:   #94A3B8;
-  --lab-text-faint:  #64748B;
-
-  /* ---------- Typography ---------- */
-  --lab-font-sans:   'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --lab-font-mono:   'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-
-  /* ---------- Geometry ---------- */
-  --lab-radius-sm:   4px;
-  --lab-radius:      8px;
-  --lab-radius-lg:   14px;
-
-  /* ---------- Shadows ---------- */
-  --lab-shadow-card:
-      0 1px 0 rgba(255,255,255,0.03) inset,
-      0 8px 28px -12px rgba(0,0,0,0.7),
-      0 0 0 1px rgba(139, 92, 246, 0.04);
-  --lab-shadow-glow:
-      0 0 0 1px var(--purple-edge),
-      0 0 24px -4px var(--purple-glow);
-  --lab-shadow-glow-soft: 0 0 18px -2px var(--purple-glow-2);
-
-  /* ---------- Motion ---------- */
-  --lab-duration: 180ms;
-  --lab-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --shell-duration:      180ms;
+  --shell-ease:          cubic-bezier(0.2, 0.8, 0.2, 1);
 }

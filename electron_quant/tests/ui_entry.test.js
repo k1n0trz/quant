@@ -41,10 +41,12 @@ test('ui=lite query preserves rollback without changing other routes', () => {
 test('full UI exposes the unified shell without legacy lab runtime coupling', () => {
   const repoRoot = path.resolve(__dirname, '..');
   const indexPath = path.join(repoRoot, 'src', 'index.html');
-  const labCssPath = path.join(repoRoot, 'src', 'ui', 'lab.css');
+  const stylesPath = path.join(repoRoot, 'src', 'styles.css');
+  const tokensPath = path.join(repoRoot, 'src', 'ui', 'tokens.css');
   const indexBuffer = fs.readFileSync(indexPath);
   const indexHtml = indexBuffer.toString('utf8');
-  const labCss = fs.readFileSync(labCssPath, 'utf8');
+  const stylesCss = fs.readFileSync(stylesPath, 'utf8');
+  const tokensCss = fs.readFileSync(tokensPath, 'utf8');
 
   assert.notEqual(indexBuffer[0], 0xef, 'index.html should not start with a UTF-8 BOM');
   assert.doesNotMatch(
@@ -69,9 +71,11 @@ test('full UI exposes the unified shell without legacy lab runtime coupling', ()
   assert.doesNotMatch(indexHtml, /data-view="lab"/);
   assert.doesNotMatch(indexHtml, /Quant Lab|lab-badge|Purple workspace preview|>\s*v1\s*</i);
   assert.doesNotMatch(indexHtml, /#view-lab\.active/);
-  assert.doesNotMatch(labCss, /#view-lab\.active/);
-  assert.ok(fs.existsSync(path.join(repoRoot, 'src', 'ui', 'tokens.css')));
-  assert.ok(fs.existsSync(labCssPath));
+  assert.doesNotMatch(stylesCss, /#view-lab\.active/);
+  assert.doesNotMatch(tokensCss, /#view-lab\.active/);
+  assert.match(tokensCss, /Quant global design tokens/);
+  assert.doesNotMatch(tokensCss, /--lab-/);
+  assert.doesNotMatch(indexHtml, /<link rel="stylesheet" href="\.\/ui\/lab\.css"\s*\/?>/);
   assert.doesNotMatch(indexHtml, /<script src="\.\/services\/quant-lab-api\.js"><\/script>/);
   assert.doesNotMatch(indexHtml, /<script src="\.\/views\/quant-lab-hero\.js"><\/script>/);
   assert.doesNotMatch(indexHtml, /<script src="\.\/views\/quant-lab-panels\.js"><\/script>/);

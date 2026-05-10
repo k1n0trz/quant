@@ -61,4 +61,35 @@
 
   --shell-duration:      180ms;
   --shell-ease:          cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --shell-sidebar-width: 280px;
+  --shell-topbar-height: 72px;
+  --shell-content-gap:   14px;
+  --shell-card-surface:  linear-gradient(180deg, rgba(17, 24, 39, 0.82), rgba(11, 16, 32, 0.88));
+  --shell-card-surface-strong: linear-gradient(180deg, rgba(17, 24, 39, 0.92), rgba(11, 16, 32, 0.96));
+  --shell-input-surface: rgba(15, 23, 42, 0.92);
+  --shell-hover-surface: rgba(139, 92, 246, 0.14);
+
+  /* Legacy aliases kept so pre-Commit-3 views inherit the global shell
+     without rewriting every existing component selector at once. */
+  --bg-base:            var(--shell-bg-base);
+  --bg-surface:         var(--shell-bg-surface);
+  --bg-panel:           rgba(17, 24, 39, 0.82);
+  --bg-elevated:        rgba(30, 41, 59, 0.9);
+  --bg-hover:           var(--shell-hover-surface);
+  --border-subtle:      var(--shell-border-soft);
+  --border-default:     var(--shell-border);
+  --border-bright:      var(--shell-border-strong);
+  --green:              var(--shell-green);
+  --green-dim:          #059669;
+  --amber:              var(--shell-amber);
+  --red:                var(--shell-red);
+  --blue:               var(--shell-purple-2);
+  --cyan:               #d8b4fe;
+  --neutral:            var(--shell-text-faint);
+  --text-primary:       var(--shell-text);
+  --text-secondary:     var(--shell-text-dim);
+  --text-muted:         var(--shell-text-mute);
+  --font-sans:          var(--shell-font-sans);
+  --font-mono:          var(--shell-font-mono);
 }

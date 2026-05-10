@@ -43,6 +43,12 @@ test('full UI exposes the unified shell without legacy lab runtime coupling', ()
   const indexPath = path.join(repoRoot, 'src', 'index.html');
   const stylesPath = path.join(repoRoot, 'src', 'styles.css');
   const tokensPath = path.join(repoRoot, 'src', 'ui', 'tokens.css');
+  const deadLabPaths = [
+    path.join(repoRoot, 'src', 'ui', 'lab.css'),
+    path.join(repoRoot, 'src', 'services', 'quant-lab-api.js'),
+    path.join(repoRoot, 'src', 'views', 'quant-lab-hero.js'),
+    path.join(repoRoot, 'src', 'views', 'quant-lab-panels.js')
+  ];
   const indexBuffer = fs.readFileSync(indexPath);
   const indexHtml = indexBuffer.toString('utf8');
   const stylesCss = fs.readFileSync(stylesPath, 'utf8');
@@ -75,10 +81,21 @@ test('full UI exposes the unified shell without legacy lab runtime coupling', ()
   assert.doesNotMatch(tokensCss, /#view-lab\.active/);
   assert.match(tokensCss, /Quant global design tokens/);
   assert.doesNotMatch(tokensCss, /--lab-/);
+  assert.match(tokensCss, /--bg-base:\s*var\(--shell-bg-base\);/);
+  assert.match(tokensCss, /--bg-surface:\s*var\(--shell-bg-surface\);/);
+  assert.match(tokensCss, /--border-default:\s*var\(--shell-border\);/);
+  assert.match(tokensCss, /--font-sans:\s*var\(--shell-font-sans\);/);
   assert.doesNotMatch(indexHtml, /<link rel="stylesheet" href="\.\/ui\/lab\.css"\s*\/?>/);
   assert.doesNotMatch(indexHtml, /<script src="\.\/services\/quant-lab-api\.js"><\/script>/);
   assert.doesNotMatch(indexHtml, /<script src="\.\/views\/quant-lab-hero\.js"><\/script>/);
   assert.doesNotMatch(indexHtml, /<script src="\.\/views\/quant-lab-panels\.js"><\/script>/);
+  for (const deadLabPath of deadLabPaths) {
+    assert.equal(
+      fs.existsSync(deadLabPath),
+      false,
+      `${path.relative(repoRoot, deadLabPath)} should be removed after the global shell cleanup`
+    );
+  }
 });
 
 test('frontend defaults and boot path keep training on until backend sync wins', () => {

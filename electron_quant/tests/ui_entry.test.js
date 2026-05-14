@@ -83,6 +83,9 @@ test('full UI exposes the unified shell without legacy lab runtime coupling', ()
   assert.match(indexHtml, /id="dashboardRecentTrades"/);
   assert.match(indexHtml, /id="dashboardRecentLessons"/);
   assert.match(indexHtml, /id="dashboardPerformanceSnapshot"/);
+  assert.match(indexHtml, /id="trainingStatus">ON</);
+  assert.match(indexHtml, /id="trainingToggle"[^>]*>Autonomous</);
+  assert.match(indexHtml, /id="dashboardTrainingRailStatus">Sincronizando</);
   assert.doesNotMatch(indexHtml, /id="view-lab"/);
   assert.doesNotMatch(indexHtml, /<button class="nav-item[^"]*" data-view="lab">/);
   assert.doesNotMatch(indexHtml, /data-view="lab"/);
@@ -112,12 +115,20 @@ test('full UI exposes the unified shell without legacy lab runtime coupling', ()
 test('frontend defaults and boot path keep training on until backend sync wins', () => {
   const repoRoot = path.resolve(__dirname, '..');
   const stateManager = fs.readFileSync(path.join(repoRoot, 'src', 'modules', 'state-manager.js'), 'utf8');
+  const heroController = fs.readFileSync(path.join(repoRoot, 'src', 'modules', 'hero-controller.js'), 'utf8');
   const renderer = fs.readFileSync(path.join(repoRoot, 'src', 'renderer.js'), 'utf8');
 
   assert.match(stateManager, /training:\s*\{\s*enabled:\s*true,/s);
   assert.match(stateManager, /reset:\s*\(\)\s*=>\s*\{[\s\S]*training\.enabled = true;/);
   assert.match(renderer, /await runSelfAudit\(\);\s*await updateHeroSection\(\);/);
   assert.match(renderer, /refreshTrainingLoopStatus\(\)/);
+  assert.match(renderer, /window\.quantStateManager\.training\.locked = Boolean\(loopStatus\?\.active \|\| \(loopStatus\?\.enabled && loopStatus\?\.loopEnabled\)\);/);
+  assert.match(heroController, /const autonomousTraining = Boolean\(window\.quantStateManager\.training\.locked\);/);
+  assert.match(heroController, /el\.trainingStatus\.textContent = state\.training \? \(autonomousTraining \? 'ON · AUTONOMOUS' : 'ON'\) : 'OFF';/);
+  assert.match(heroController, /el\.trainingToggle\.disabled = autonomousTraining;/);
+  assert.match(heroController, /setToggleStateLabel:\s*\(button,\s*label\)\s*=>/);
+  assert.match(heroController, /window\.heroController\.setToggleStateLabel\(el\.trainingToggle,\s*autonomousTraining/);
+  assert.match(renderer, /if \(this\.training\.locked && !enable\)/);
   assert.match(renderer, /dashboardTrainingRailStatus', trainingRailStatus/);
   assert.match(renderer, /compactDashboardText\(lesson\.lesson \|\| lesson\.text \|\| 'Sin nota detallada\.', 92\)/);
   assert.doesNotMatch(

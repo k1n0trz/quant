@@ -2488,11 +2488,18 @@ function renderDashboardExecutive(metrics = {}) {
     .sort((a, b) => (b.open + b.liveCandidates) - (a.open + a.liveCandidates))
     .slice(0, 5);
 
-  const modeSummary = state.env.realTrading ? 'Modo: Trading Real ACTIVO' : 'Modo seguro';
+  const autonomousTraining = Boolean(window.quantStateManager?.training?.locked);
+  const modeSummary = state.env.realTrading
+    ? 'Modo: Trading Real ACTIVO'
+    : autonomousTraining
+    ? 'Modo seguro · Training autonomo activo'
+    : 'Modo seguro';
   const lastUpdateText = lastUpdate?.textContent || '--:--:--';
   const syncBadgeText = syncStatusBadge?.textContent || '';
   const backendTrainingEnabled = !!window.quantStateManager?.training?.enabled;
-  const trainingRailStatus = backendTrainingEnabled ? 'Training ON' : 'Training OFF';
+  const trainingRailStatus = backendTrainingEnabled
+    ? (autonomousTraining ? 'Training ON · Autonomous' : 'Training ON')
+    : 'Training OFF';
   const schedulerStatusText = scheduler
     ? (scheduler.active ? 'Activo' : 'Inactivo')
     : (tr.refreshing ? 'Actualizando' : 'No expuesto');
@@ -3711,6 +3718,8 @@ async function updateHeroSection() {
     }
 
     await refreshTrainingLoopStatus();
+    const loopStatus = state.training.loopStatus;
+    window.quantStateManager.training.locked = Boolean(loopStatus?.active || (loopStatus?.enabled && loopStatus?.loopEnabled));
 
     // Update hero controller UI with synced state
     window.heroController.updateUI();
@@ -3938,6 +3947,11 @@ if (window.quantStateManager) {
 
   const originalToggleTraining = window.quantStateManager.toggleTraining;
   window.quantStateManager.toggleTraining = async function(enable) {
+    if (this.training.locked && !enable) {
+      logEvent('WARN', 'Training backend always-on: controlado por el scheduler autonomo');
+      updateHeroSection();
+      return false;
+    }
     const success = await setTrainingBackend(enable);
     if (success) {
       originalToggleTraining.call(this, enable);

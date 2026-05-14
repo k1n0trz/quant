@@ -46,3 +46,29 @@ test('training loop autostart reads snapshots from the read-only training state 
     /readTrainingStateSnapshot:\s*\(\)\s*=>\s*trainingStateReader\.readSnapshot\(\)/
   );
 });
+
+test('vps pm2 profile enables autonomous training loop features by default', () => {
+  const ecosystem = fs.readFileSync(
+    path.join(__dirname, '..', 'ops', 'pm2', 'ecosystem.config.cjs'),
+    'utf8'
+  );
+
+  assert.match(ecosystem, /TRAINING_BACKEND_LOOP_ENABLED:\s*'true'/);
+  assert.match(ecosystem, /TRAINING_BACKEND_LOOP_SCHEDULER_ENABLED:\s*'true'/);
+  assert.match(ecosystem, /TRAINING_BACKEND_DEMO_ENTRY_ENABLED:\s*'true'/);
+  assert.match(ecosystem, /TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED:\s*'true'/);
+  assert.match(ecosystem, /REAL_TRADING:\s*'false'/);
+});
+
+test('production env example documents autonomous training flags as the safe default', () => {
+  const envExample = fs.readFileSync(
+    path.join(__dirname, '..', '.env.production.example'),
+    'utf8'
+  );
+
+  assert.match(envExample, /TRAINING_BACKEND_LOOP_ENABLED=true/);
+  assert.match(envExample, /TRAINING_BACKEND_LOOP_SCHEDULER_ENABLED=true/);
+  assert.match(envExample, /TRAINING_BACKEND_DEMO_ENTRY_ENABLED=true/);
+  assert.match(envExample, /TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED=true/);
+  assert.match(envExample, /REAL_TRADING=false/);
+});

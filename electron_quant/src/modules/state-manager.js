@@ -21,6 +21,7 @@ if (!window.quantStateManager) {
     // Estado de Training
     training: {
       enabled: true,
+      locked: false,
       lastUpdated: null,
     },
 
@@ -124,6 +125,7 @@ if (!window.quantStateManager) {
     reset: () => {
       window.quantStateManager.tradingReal.enabled = false;
       window.quantStateManager.training.enabled = true;
+      window.quantStateManager.training.locked = false;
       window.quantStateManager.killSwitch.enabled = false;
       console.log('[StateManager] State reset');
     },

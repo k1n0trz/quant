@@ -5,6 +5,16 @@
 
 if (!window.heroController) {
   window.heroController = {
+    setToggleStateLabel: (button, label) => {
+      if (!button) return;
+      const stateLabel = button.querySelector('.toggle-state');
+      if (stateLabel) {
+        stateLabel.textContent = label;
+        return;
+      }
+      button.textContent = label;
+    },
+
     // Cache de elementos
     elements: {
       botStateMode: null,
@@ -81,6 +91,10 @@ if (!window.heroController) {
       // Training toggle
       if (el.trainingToggle) {
         el.trainingToggle.addEventListener('click', async () => {
+          if (window.quantStateManager.training.locked) {
+            window.heroController.updateUI();
+            return;
+          }
           const current = window.quantStateManager.training.enabled;
           await window.quantStateManager.toggleTraining(!current);
           window.heroController.updateUI();
@@ -136,14 +150,15 @@ if (!window.heroController) {
         el.tradingRealToggle.disabled = state.killSwitch;
         el.tradingRealToggle.classList.toggle('active', state.tradingReal);
         el.tradingRealToggle.classList.toggle('disabled', state.killSwitch);
-        el.tradingRealToggle.querySelector('.toggle-state').textContent = state.tradingReal
+        window.heroController.setToggleStateLabel(el.tradingRealToggle, state.tradingReal
           ? 'DISABLE'
-          : 'ENABLE';
+          : 'ENABLE');
       }
 
       // Update Training display
+      const autonomousTraining = Boolean(window.quantStateManager.training.locked);
       if (el.trainingStatus) {
-        el.trainingStatus.textContent = state.training ? 'ON' : 'OFF';
+        el.trainingStatus.textContent = state.training ? (autonomousTraining ? 'ON · AUTONOMOUS' : 'ON') : 'OFF';
         el.trainingStatus.className =
           'control-status training ' + (state.training ? '' : 'off');
       }
@@ -153,11 +168,21 @@ if (!window.heroController) {
       }
 
       if (el.trainingToggle) {
+        el.trainingToggle.disabled = autonomousTraining;
         el.trainingToggle.classList.toggle('active', state.training);
         el.trainingToggle.classList.toggle('training', state.training);
-        el.trainingToggle.querySelector('.toggle-state').textContent = state.training
+        el.trainingToggle.classList.toggle('disabled', autonomousTraining);
+        window.heroController.setToggleStateLabel(el.trainingToggle, autonomousTraining
+          ? 'AUTONOMOUS'
+          : state.training
           ? 'DISABLE'
-          : 'ENABLE';
+          : 'ENABLE');
+        el.trainingToggle.setAttribute(
+          'title',
+          autonomousTraining
+            ? 'Training backend always-on: controlado por el scheduler autonomo'
+            : 'Activar o desactivar training paper'
+        );
       }
 
       // Update pause button visibility
@@ -167,9 +192,16 @@ if (!window.heroController) {
 
       if (el.killSwitchBtn) {
         el.killSwitchBtn.classList.toggle('active', state.killSwitch);
-        el.killSwitchBtn.querySelector('span:last-child').textContent = state.killSwitch
-          ? 'RESUME TRADING'
-          : 'KILL SWITCH';
+        const killSwitchLabel = el.killSwitchBtn.querySelector('span:last-child');
+        if (killSwitchLabel) {
+          killSwitchLabel.textContent = state.killSwitch
+            ? 'RESUME TRADING'
+            : 'KILL SWITCH';
+        } else {
+          el.killSwitchBtn.textContent = state.killSwitch
+            ? 'RESUME TRADING'
+            : 'KILL SWITCH';
+        }
         el.killSwitchBtn.setAttribute(
           'title',
           state.killSwitch

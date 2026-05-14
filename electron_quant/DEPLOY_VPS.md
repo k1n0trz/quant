@@ -72,6 +72,11 @@ Valores obligatorios para primer arranque:
 - `QUANT_WEB_PORT=47829`
 - `QUANT_DATA_DIR=/opt/quant/shared/quant_data`
 - `REAL_TRADING=false`
+- `TRAINING_BACKEND_LOOP_ENABLED=true`
+- `TRAINING_BACKEND_LOOP_SCHEDULER_ENABLED=true`
+- `TRAINING_BACKEND_LOOP_INTERVAL_MS=60000`
+- `TRAINING_BACKEND_DEMO_ENTRY_ENABLED=true`
+- `TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED=true`
 - `MT5_CONNECTOR_ENABLED=false`
 - `WEB_AUTH_ENABLED=true`
 - `WEB_AUTH_EMAIL=<tu correo>`
@@ -111,6 +116,8 @@ Esperado:
 - `REAL_TRADING=false`
 - primer arranque con `tradingRealEnabled=false`
 - `paperMode=true`
+- `trainingEnabled=true`
+- scheduler backend con auto-start habilitado
 
 Desde otra terminal:
 

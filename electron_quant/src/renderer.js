@@ -112,11 +112,13 @@ const state = {
     targetIntradayPositions: 10,
     targetSwingPositions: 10,
     minMt5OpenPositions: 6,
-    lastPersistedAt: null
+    lastPersistedAt: null,
+    loopStatus: null,
+    loopStatusFetchedAt: 0
   },
   wfCalibration:    { isWr: null, oosWr: null, ratio: 1, n: 0, label: 'Sin datos' },
   nightCalibration: { ok: false, histWr: null, liveWr: null, ratio: 1, label: 'Sin datos', computedAt: null },
-  conversationId:   null,   // ID de la sesión actual (se asigna al primer mensaje)
+  conversationId:   null,   // ID de la sesion actual (se asigna al primer mensaje)
   syncStatus:       { lastSync: null, ok: null, pushed: false },
   strategies: {
     ictCrt: {
@@ -208,10 +210,10 @@ function logEvent(status, message) {
 function renderPipeline() {
   const html = state.pipeline.slice(0, 18).map((e) => {
     const cls = e.status === 'OK' ? 'pipe-ok' : e.status === 'WARN' ? 'pipe-warn' : 'pipe-error';
-    return `<div class="pipe-item"><span class="pipe-time">${e.time}</span><span class="${cls}">●</span><span class="${cls}">${e.status}</span><span>${escapeHtml(e.message)}</span></div>`;
+    return `<div class="pipe-item"><span class="pipe-time">${e.time}</span><span class="${cls}">*</span><span class="${cls}">${e.status}</span><span>${escapeHtml(e.message)}</span></div>`;
   }).join('');
   if ($('pipelineList')) $('pipelineList').innerHTML = html;
-  $('historyList').innerHTML = state.pipeline.map((e) => `<div class="pipe-item"><span class="pipe-time">${e.time}</span><span class="${e.status === 'OK' ? 'pipe-ok' : 'pipe-warn'}">●</span><span>${e.status}</span><span>${escapeHtml(e.message)}</span></div>`).join('');
+  $('historyList').innerHTML = state.pipeline.map((e) => `<div class="pipe-item"><span class="pipe-time">${e.time}</span><span class="${e.status === 'OK' ? 'pipe-ok' : 'pipe-warn'}">*</span><span>${e.status}</span><span>${escapeHtml(e.message)}</span></div>`).join('');
 }
 
 function escapeHtml(text) {
@@ -235,7 +237,7 @@ function setTf(tf) {
   state.tf = tf;
   state.interval = intervalMap[tf] || '1m';
   document.querySelectorAll('.tf').forEach((b) => b.classList.toggle('active', b.dataset.tf === tf));
-  $('chartTitle').textContent = `GRÁFICO EN TIEMPO REAL · ${state.symbol} · ${tf}`;
+  $('chartTitle').textContent = `GRAFICO EN TIEMPO REAL - ${state.symbol} - ${tf}`;
   setText('chartTitle', `GRAFICO EN TIEMPO REAL - ${state.symbol} - ${tf}`);
   refreshCandles();
 }
@@ -255,14 +257,14 @@ async function boot() {
   bindUi();
   drawPerf();
   drawGauge(50);
-  // Boot cognitivo: restaura última conversación si existe; si no, silencio honesto.
-  // Sin mensajes teatrales. Los insights reales llegarán por el canal de Quant-Core
-  // cuando los endpoints cognitivos estén consumidos (F2+).
+  // Boot cognitivo: restaura la ultima conversacion si existe; si no, silencio honesto.
+  // Sin mensajes teatrales. Los insights reales llegaran por el canal de Quant-Core
+  // cuando los endpoints cognitivos esten consumidos (F2+).
   await loadLastConversationIfAny();
 
   // Quant-Core observatorio: monta el panel del laboratorio backend.
   // El refresh inicial corre en background; el setInterval debajo lo mantiene vivo.
-  // Defensivo: si el módulo o el target DOM faltan, queda silencioso.
+  // Defensivo: si el modulo o el target DOM faltan, queda silencioso.
   if (window.QuantCore && window.QuantCore.views && window.QuantCore.views.coreLabPanel) {
     if (window.QuantCore.views.coreLabPanel.mount('quantCorePanel')) {
       window.QuantCore.views.coreLabPanel.refresh();
@@ -272,14 +274,14 @@ async function boot() {
   try {
     state.env = await window.quant.envStatus();
     renderStatus();
-    logEvent('OK', `Configuración cargada desde ${state.env.envFile || '.env'}`);
+    logEvent('OK', `Configuracion cargada desde ${state.env.envFile || '.env'}`);
   } catch (err) {
-    logEvent('ERR', `No pude leer configuración: ${err.message}`);
+    logEvent('ERR', `No pude leer configuracion: ${err.message}`);
   }
   await loadSymbols();
   await loadMemoryStats();
   window.quant.alertConfigRead().then((cfg) => { _alertConfig = cfg; }).catch(() => {});
-  // Cargar calibración nocturna persistida
+  // Cargar calibracion nocturna persistida
   window.quant.calibrationRead().then((cal) => { if (cal?.ok) state.nightCalibration = cal; }).catch(() => {});
   await Promise.allSettled([refreshMarket(true), refreshWallet(), refreshMacroContext(false)]);
   await loadTrainingState();
@@ -287,13 +289,13 @@ async function boot() {
   await runSelfAudit();
   await updateHeroSection();
 
-  // ── Al arrancar: si training local está vacío, intenta traer datos del cloud ──
+  // Al arrancar: si training local esta vacio, intenta traer datos del cloud
   if (window.quant.pullCloudData && state.env?.syncConfigured) {
     const hasLocalTraining = state.training?.sessions > 0 || state.training?.totalTrades > 0;
     if (!hasLocalTraining) {
       window.quant.pullCloudData().then(r => {
         if (r?.ok && r.applied) {
-          logEvent('OK', `Datos importados del cloud: training=${r.applied.trainingState ? 'sí' : 'no'}, memorias=${r.applied.memories || 0}, conv=${r.applied.conversations || 0}`);
+          logEvent('OK', `Datos importados del cloud: training=${r.applied.trainingState ? 'si' : 'no'}, memorias=${r.applied.memories || 0}, conv=${r.applied.conversations || 0}`);
           loadTrainingState();
         }
       }).catch(() => {});
@@ -310,9 +312,9 @@ async function boot() {
   setInterval(() => runSelfAudit(), 300000);
   // PHASE 1: Update hero section every 3 seconds
   setInterval(() => updateHeroSection(), 3000);
-  // Recalibración nocturna automática: una vez por hora
+  // Recalibracion nocturna automatica: una vez por hora
   setInterval(() => runNightCalibration(), 3600000);
-  // Sync MT5 → cloud automático cada 5 min en modo pasivo (sin mt5.login → sin reconexión al broker)
+  // Sync MT5 -> cloud automatico cada 5 min en modo pasivo (sin mt5.login -> sin reconexion al broker)
   setInterval(() => syncMt5ToCloud(false), 300000);
   // Quant-Core panel refresh: cada 30s. Read-only, defensivo.
   setInterval(() => {
@@ -356,7 +358,7 @@ function bindUi() {
     const isLimit = $('orderType').value === 'LIMIT';
     $('limitPriceInput').closest('label').style.opacity = isLimit ? '1' : '0.35';
   });
-  $('enableTradingBtn').addEventListener('click', () => alert('Trading real requiere REAL_TRADING=true, confirmación exacta, límites de riesgo y una prueba final. No lo voy a activar a ciegas con dinero real.'));
+  $('enableTradingBtn').addEventListener('click', () => alert('Trading real requiere REAL_TRADING=true, confirmacion exacta, limites de riesgo y una prueba final. No lo voy a activar a ciegas con dinero real.'));
   $('saveCustomInstructionsBtn').addEventListener('click', saveCustomInstructions);
   $('apiConfigForm').addEventListener('submit', saveApiConfig);
   $('runCalibrationBtn').addEventListener('click', manualCalibration);
@@ -443,10 +445,10 @@ function renderStatus() {
     ['Trading real', state.env.realTrading ? 'ACTIVO' : 'Bloqueado'],
     ['Seguridad', 'BUY/SELL reales siguen requiriendo risk gate'],
     ['MT5 Adapter', state.executionAdapters.mt5 ? 'Habilitado por conector' : 'Opcional / aislado'],
-    ['Sync cloud MT5', state.env.syncConfigured ? 'Configurado ✓' : 'No configurado (QUANT_SYNC_URL + QUANT_SYNC_KEY en .env)']
+    ['Sync cloud MT5', state.env.syncConfigured ? 'Configurado ok' : 'No configurado (QUANT_SYNC_URL + QUANT_SYNC_KEY en .env)']
   ].map(([k, v]) => `<div class="setting-card"><b>${k}</b><span>${escapeHtml(String(v))}</span></div>`).join('');
 
-  // Botón de descarga del escritorio (visible solo desde la web)
+  // Boton de descarga del escritorio (visible solo desde la web)
   const dlBtn = $('desktopDownloadBtn');
   if (dlBtn && state.env.desktopDownloadUrl) {
     dlBtn.href = state.env.desktopDownloadUrl;
@@ -461,7 +463,7 @@ async function loadSymbols() {
     state.symbols = state.binanceSymbols;
     fillSymbolSelects();
     renderMarketTable();
-    logEvent('OK', `${state.symbols.length} símbolos cargados desde Binance`);
+    logEvent('OK', `${state.symbols.length} simbolos cargados desde Binance`);
     if (!state.executionAdapters.mt5) {
       logEvent('OK', 'MT5 adapter aislado; Quant Core opera sin depender de MT5');
       return;
@@ -469,9 +471,9 @@ async function loadSymbols() {
     window.quant.mt5Symbols().then((res) => {
       if (res.ok && res.symbols?.length) {
         state.mt5Symbols = res.symbols;
-        logEvent('OK', `${res.symbols.length} símbolos cargados desde MT5`);
+        logEvent('OK', `${res.symbols.length} simbolos cargados desde MT5`);
       } else {
-        logEvent('WARN', `MT5 símbolos: ${res.error || 'sin símbolos visibles'}`);
+        logEvent('WARN', `MT5 simbolos: ${res.error || 'sin simbolos visibles'}`);
       }
     });
   } catch (err) {
@@ -489,8 +491,8 @@ function setSymbol(symbol) {
   $('assetSearch').value = symbol;
   setValue('manualVenueDisplay', state.platform);
   setValue('manualSymbolDisplay', symbol);
-  $('assetSub').textContent = `${state.platform} · símbolo principal`;
-  $('chartTitle').textContent = `GRÁFICO EN TIEMPO REAL · ${symbol} · ${state.tf}`;
+  $('assetSub').textContent = `${state.platform} | simbolo principal`;
+  $('chartTitle').textContent = `GRAFICO EN TIEMPO REAL - ${symbol} - ${state.tf}`;
   setText('chartTitle', `GRAFICO EN TIEMPO REAL - ${symbol} - ${state.tf}`);
   logEvent('OK', `Activo principal cambiado a ${symbol}`);
   refreshMarket(true);
@@ -530,7 +532,7 @@ function selectSymbolFromSearch(symbol) {
 }
 
 async function refreshAll() {
-  logEvent('OK', 'Actualización manual solicitada');
+  logEvent('OK', 'Actualizacion manual solicitada');
   await Promise.allSettled([refreshMarket(true), refreshWallet(), refreshMacroContext(false)]);
   syncMt5ToCloud(true);      // sync MT5 inmediato (con login completo)
   pushCloudData(false);      // push training + memoria + conversaciones al cloud
@@ -540,7 +542,7 @@ async function refreshCandles() {
   try {
     if (state.platform === 'MT5') {
       const data = await window.quant.mt5Rates(state.symbol, state.tf, 180);
-      if (!data.ok) throw new Error(data.error || 'MT5 no devolvió velas');
+      if (!data.ok) throw new Error(data.error || 'MT5 no devolvio velas');
       state.candles = data.candles || [];
       state.ticker = data.ticker || state.ticker;
       renderTicker();
@@ -604,7 +606,7 @@ function renderTicker() {
 }
 
 async function clearPersistentMemory() {
-  if (!confirm('¿Limpiar toda la memoria persistente local de Quant? Esta acción vacía el archivo de memoria.')) return;
+  if (!confirm('?Limpiar toda la memoria persistente local de Quant? Esta accion vacia el archivo de memoria.')) return;
   try {
     state.messages = [];
     state.sessionTrades = 0;
@@ -908,8 +910,7 @@ function detectRegime(candles) {
   // ATR% = avg true range / current price (volatility proxy)
   const slice = candles.slice(-14);
   const price = candles[candles.length - 1]?.close || 1;
-  const atrPct = slice.length > 1
-    ? slice.slice(1).reduce((s, c, i) => {
+  const atrPct = slice.length > 1 ? slice.slice(1).reduce((s, c, i) => {
         const prev = slice[i];
         return s + Math.max(c.high - c.low, Math.abs(c.high - prev.close), Math.abs(c.low - prev.close));
       }, 0) / (slice.length - 1) / price
@@ -919,15 +920,15 @@ function detectRegime(candles) {
 
   const { adx, plusDI, minusDI } = adxResult;
 
-  // VOLATILE takes priority — ADX can be high or low during a spike
+  // VOLATILE takes priority - ADX can be high or low during a spike
   if (atrPct > 0.012) {
     return { type: 'VOLATILE',      label: 'VOLATIL',    color: '#f0a500', adx, plusDI, minusDI, atrPct, penalty: -12 };
   }
   if (adx > 25 && plusDI > minusDI) {
-    return { type: 'TRENDING_UP',   label: 'TENDENCIA↑', color: '#43d787', adx, plusDI, minusDI, atrPct, penalty: 0  };
+    return { type: 'TRENDING_UP',   label: 'TENDENCIA UP', color: '#43d787', adx, plusDI, minusDI, atrPct, penalty: 0  };
   }
   if (adx > 25 && minusDI > plusDI) {
-    return { type: 'TRENDING_DOWN', label: 'TENDENCIA↓', color: '#ff5252', adx, plusDI, minusDI, atrPct, penalty: 0  };
+    return { type: 'TRENDING_DOWN', label: 'TENDENCIA DOWN', color: '#ff5252', adx, plusDI, minusDI, atrPct, penalty: 0  };
   }
   if (adx < 20) {
     return { type: 'RANGING',       label: 'LATERAL',    color: '#f0a500', adx, plusDI, minusDI, atrPct, penalty: -8 };
@@ -936,7 +937,7 @@ function detectRegime(candles) {
 }
 
 function updateSignal() {
-  const data = state.candles.slice(-60);  // más velas para ADX14 estable
+  const data = state.candles.slice(-60);  // mas velas para ADX14 estable
   if (data.length < 20) return;
   const closes  = data.map((c) => c.close);
   const ranges  = data.slice(-20).map((c) => c.high - c.low);
@@ -945,27 +946,27 @@ function updateSignal() {
   const volNow  = data[data.length - 1].volume;
   const volAvg  = data.slice(-20).reduce((s, c) => s + c.volume, 0) / 20;
 
-  // ── Dirección base por momentum ───────────────────────────
+  // Direccion base por momentum
   let dir = 'NEUTRAL';
   if (momentum >  avgRange * 0.55) dir = 'LONG';
   if (momentum < -avgRange * 0.55) dir = 'SHORT';
 
-  // ── Score base ────────────────────────────────────────────
+  // Score base
   let score = 50 + Math.min(30, Math.abs(momentum) / Math.max(avgRange, 1e-12) * 8);
   if (volNow > volAvg * 1.35) score += 8;
 
-  // ── Macro penalty ─────────────────────────────────────────
+  // Macro penalty
   const macro = macroRiskLevel(state.symbol);
   if (macro.risk === 'high')   score -= 12;
   else if (macro.risk === 'medium') score -= 6;
 
-  // ── ADX14 Regime Detection ───────────────────────────────
+  // ADX14 Regime Detection
   const regime = detectRegime(data);
 
-  // Penalización base por régimen
+  // Penalizacion base por regimen
   score += regime.penalty;
 
-  // Bonus/penalización por alineación dirección ↔ régimen
+  // Bonus/penalizacion por alineacion direccion vs regimen
   if (regime.type === 'TRENDING_UP') {
     if (dir === 'LONG')  score += 6;   // alineado: impulso + tendencia alcista
     if (dir === 'SHORT') score -= 10;  // contra-tendencia: peligroso
@@ -976,7 +977,7 @@ function updateSignal() {
 
   score = Math.round(Math.max(8, Math.min(95, score)));
 
-  // ── Render UI ─────────────────────────────────────────────
+  // Render UI
   const badge = $('signalBadge');
   badge.textContent = dir;
   badge.className = `badge ${dir === 'LONG' ? 'long' : dir === 'SHORT' ? 'short' : 'neutral'}`;
@@ -984,7 +985,7 @@ function updateSignal() {
   $('sigStrength').textContent = score >= 70 ? 'ALTA' : score >= 50 ? 'MEDIA' : 'BAJA';
   $('sigVol').textContent      = volNow > volAvg * 1.4 ? 'ALTA' : 'BAJA';
 
-  // Régimen con color dinámico
+  // Regimen con color dinamico
   const regEl = $('sigRegime');
   if (regEl) {
     regEl.textContent = `${regime.label} (ADX ${regime.adx.toFixed(1)})`;
@@ -993,12 +994,9 @@ function updateSignal() {
 
   const strongSignal = score >= 62 && dir !== 'NEUTRAL';
   const caution = macro.risk === 'high' ? ' con cautela: riesgo macro alto' : '';
-  const msg = strongSignal && dir === 'LONG'
-    ? `Buen momento para comprar${caution}`
-    : strongSignal && dir === 'SHORT'
-    ? `Buen momento para vender${caution}`
-    : dir === 'LONG' || dir === 'SHORT'
-    ? 'Esperar confirmacion: senal aun debil'
+  const msg = strongSignal && dir === 'LONG' ? `Buen momento para comprar${caution}`
+    : strongSignal && dir === 'SHORT' ? `Buen momento para vender${caution}`
+    : dir === 'LONG' || dir === 'SHORT' ? 'Esperar confirmacion: senal aun debil'
     : 'Buen momento para no hacer nada';
   $('signalMessage').textContent = msg;
   $('signalMessage').className = `signal-message ${msg.includes('comprar') ? 'buy' : msg.includes('vender') ? 'sell' : 'wait'}`;
@@ -1008,34 +1006,32 @@ function updateSignal() {
   const pivot      = (support + resistance + closes[closes.length - 1]) / 3;
   const last       = data[data.length - 1];
 
-  // Explicación del ajuste de régimen
-  const regimeLine = regime.type === 'VOLATILE'
-    ? `Régimen VOLÁTIL — ATR ${(regime.atrPct * 100).toFixed(3)}% — penalización -12 pts.`
-    : regime.type === 'RANGING'
-    ? `Régimen LATERAL — ADX ${regime.adx.toFixed(1)} < 20 — señales poco confiables, penalización -8 pts.`
-    : regime.type === 'TRENDING_UP'
-    ? `Régimen TENDENCIA↑ — ADX ${regime.adx.toFixed(1)}, +DI ${regime.plusDI.toFixed(1)} > -DI ${regime.minusDI.toFixed(1)}${dir === 'LONG' ? ' — señal alineada +6 pts.' : dir === 'SHORT' ? ' — señal contra-tendencia -10 pts.' : '.'}`
-    : regime.type === 'TRENDING_DOWN'
-    ? `Régimen TENDENCIA↓ — ADX ${regime.adx.toFixed(1)}, -DI ${regime.minusDI.toFixed(1)} > +DI ${regime.plusDI.toFixed(1)}${dir === 'SHORT' ? ' — señal alineada +6 pts.' : dir === 'LONG' ? ' — señal contra-tendencia -10 pts.' : '.'}`
-    : `Régimen NEUTRO — ADX ${regime.adx.toFixed(1)}, sin penalización.`;
+  // Explicacion del ajuste de regimen
+  const regimeLine = regime.type === 'VOLATILE' ? `Regimen VOLATIL - ATR ${(regime.atrPct * 100).toFixed(3)}% - penalizacion -12 pts.`
+    : regime.type === 'RANGING' ? `Regimen LATERAL - ADX ${regime.adx.toFixed(1)} < 20 - senales poco confiables, penalizacion -8 pts.`
+    : regime.type === 'TRENDING_UP' ? `Regimen TENDENCIA UP - ADX ${regime.adx.toFixed(1)}, +DI ${regime.plusDI.toFixed(1)} > -DI ${regime.minusDI.toFixed(1)}${dir === 'LONG' ? ' - senal alineada +6 pts.' : dir === 'SHORT' ? ' - senal contra-tendencia -10 pts.' : '.'}`
+    : regime.type === 'TRENDING_DOWN' ? `Regimen TENDENCIA DOWN - ADX ${regime.adx.toFixed(1)}, -DI ${regime.minusDI.toFixed(1)} > +DI ${regime.plusDI.toFixed(1)}${dir === 'SHORT' ? ' - senal alineada +6 pts.' : dir === 'LONG' ? ' - senal contra-tendencia -10 pts.' : '.'}`
+    : `Regimen NEUTRO - ADX ${regime.adx.toFixed(1)}, sin penalizacion.`;
 
   const wfc = state.wfCalibration;
-  const wfLine = wfc.n >= 10
-    ? `Calibración WF-OOS: ${wfc.label}`
-    : `Calibración WF-OOS: acumulando trades (${wfc.n}/10)`;
+  // Calibracion combinada: WF-OOS (Mejora 6) x nocturna live/hist (Mejora 7)
+  // Calibracion combinada: WF-OOS (Mejora 6) x nocturna live/hist (Mejora 7)
   const nc = state.nightCalibration;
-  const nightLine = nc?.ok
-    ? `Calibración nocturna: ${nc.label} (${new Date(nc.computedAt).toLocaleString('es-CO')})`
-    : `Calibración nocturna: pendiente (ejecuta recalibrar en Configuración)`;
+  const nightLine = nc?.ok ? `Calibracion nocturna: ${nc.label} (${new Date(nc.computedAt).toLocaleString('es-CO')})`
+    : `Calibracion nocturna: pendiente (ejecuta recalibrar en Configuracion)`;
 
   $('signalSummary').textContent =
-    `Resumen del análisis\n` +
-    `Estructura: ${dir === 'LONG' ? 'impulso alcista' : dir === 'SHORT' ? 'presión bajista' : 'mercado lateral'}.\n` +
-    `Decisión: ${msg}.\n` +
+    `Resumen del analisis
+` +
+    `Estructura: ${dir === 'LONG' ? 'impulso alcista' : dir === 'SHORT' ? 'presion bajista' : 'mercado lateral'}.
+` +
+    `Decision: ${msg}.
+` +
     `Confianza: ${score}/100.\n` +
     `Momentum 10 velas: ${fmtPrice(momentum)}.\n` +
     `Volumen actual/promedio: ${volNow.toFixed(4)} / ${volAvg.toFixed(4)}.\n\n` +
-    `Régimen de mercado (ADX14)\n` +
+    `Regimen de mercado (ADX14)
+` +
     `${regimeLine}\n\n` +
     `${wfLine}\n` +
     `${nightLine}\n\n` +
@@ -1047,13 +1043,15 @@ function updateSignal() {
     `Resistencia  ${fmtPrice(resistance)}\n` +
     `Soporte      ${fmtPrice(support)}\n` +
     `Punto Pivote ${fmtPrice(pivot)}\n` +
-    `Último Close ${fmtPrice(last.close)}\n\n` +
+    `Ultimo Close ${fmtPrice(last.close)}
+
+` +
     `Nota de riesgo\n` +
-    `No es orden ejecutable. Requiere confirmación, tamaño, stop, spread aceptable y risk gate.`;
+    `No es orden ejecutable. Requiere confirmacion, tamano, stop, spread aceptable y risk gate.`;
 
   drawGauge(score);
 
-  // Disparar alertas si hay configuración activa
+  // Disparar alertas si hay configuracion activa
   if (_alertConfig?.enabled) {
     const activePair = { symbol: state.symbol, venue: state.platform, price: state.ticker?.price || 0, spreadPct: state.ticker ? (state.ticker.spread || 0) / Math.max(state.ticker.price, 1) : 0 };
     checkAndFireAlerts({ bias: dir, confidence: score, setup: dir !== 'NEUTRAL' ? `momentum_${regime.type}` : null, horizon: 'intraday', volumeRatio: volAvg > 0 ? volNow / volAvg : 1 }, activePair);
@@ -1107,36 +1105,35 @@ function renderWallet(data) {
     const amount = Number(b.totalAmount || b.amount || 0);
     const apr = Number(b.latestAnnualPercentageRate || 0) * 100;
     const rewards = Number(b.cumulativeTotalRewards || b.cumulativeRealTimeRewards || 0);
-    return `<div class="balance-row"><span>${b.asset}</span><b>${amount.toPrecision(8)}</b><span>APR ${apr.toFixed(3)}% · rewards ${rewards.toPrecision(5)}</span></div>`;
+    return `<div class="balance-row"><span>${b.asset}</span><b>${amount.toPrecision(8)}</b><span>APR ${apr.toFixed(3)}% | rewards ${rewards.toPrecision(5)}</span></div>`;
   }).join('');
   const valuationRows = (bw.valuation || []).slice(0, 16).map((v) => {
-    const apr = v.apr ? ` · APR ${(v.apr * 100).toFixed(3)}%` : '';
+    const apr = v.apr ? ` | APR ${(v.apr * 100).toFixed(3)}%` : '';
     return `<div class="balance-row"><span>${v.source} ${v.asset}</span><b>$${v.valueUsd.toFixed(4)}</b><span>${v.valueCop ? `COP ${Math.round(v.valueCop).toLocaleString('es-CO')}` : 'COP n/a'}${apr}</span></div>`;
   }).join('');
   const diagnosticRows = [
     bw.error ? `<div class="balance-row"><span>Estado</span><b style="color:#f87171">${escapeHtml(bw.error.slice(0, 110))}</b></div>` : '',
     `<div class="balance-row"><span>Tipo</span><b>${bw.accountType || 'SPOT'}</b></div>`,
-    `<div class="balance-row"><span>Trade</span><b>${bw.canTrade ? 'Sí' : 'No'}</b></div>`,
-    `<div class="balance-row"><span>Deposit</span><b>${bw.canDeposit ? 'Sí' : 'No'}</b></div>`,
-    `<div class="balance-row"><span>Withdraw</span><b>${bw.canWithdraw ? 'Sí' : 'No'}</b></div>`
+    `<div class="balance-row"><span>Trade</span><b>${bw.canTrade ? 'Si' : 'No'}</b></div>`,
+    `<div class="balance-row"><span>Deposit</span><b>${bw.canDeposit ? 'Si' : 'No'}</b></div>`,
+    `<div class="balance-row"><span>Withdraw</span><b>${bw.canWithdraw ? 'Si' : 'No'}</b></div>`
   ].join('');
-  // ── MT5 multi-account cards ────────────────────────────────
+  // MT5 multi-account cards
   const mt5Accounts = data.mt5Accounts || [];
   // Fallback: if backend still returns old-style single mt5 object
   if (!mt5Accounts.length && data.mt5?.available) mt5Accounts.push(data.mt5);
-  const mt5Cards = mt5Accounts.length
-    ? mt5Accounts.map((acc) => {
+  const mt5Cards = mt5Accounts.length ? mt5Accounts.map((acc) => {
         const modeLabel = acc.is_demo ? 'DEMO' : 'REAL';
         const modeColor = acc.is_demo ? '#f0a500' : '#2979ff';
         const cur = escapeHtml(acc.currency || 'USD');
         const profit = Number(acc.profit || 0);
         const profitColor = profit >= 0 ? '#43d787' : '#ff5252';
         if (!acc.available) {
-          return `<div class="wallet-card"><h3>MT5 · ${escapeHtml(String(acc.login || '--'))} <small style="color:#f87171">ERROR</small></h3>
+          return `<div class="wallet-card"><h3>MT5 | ${escapeHtml(String(acc.login || '--'))} <small style="color:#f87171">ERROR</small></h3>
             <div class="balance-row"><span>Servidor</span><b>${escapeHtml(acc.server || '--')}</b></div>
             <div class="balance-row"><span>Error</span><b style="color:#f87171">${escapeHtml((acc.error || 'No accesible').slice(0, 120))}</b></div></div>`;
         }
-        return `<div class="wallet-card"><h3>MT5 · ${acc.login} <small style="background:${modeColor}22;color:${modeColor};padding:2px 7px;border-radius:3px;font-size:11px">${modeLabel}</small></h3>
+        return `<div class="wallet-card"><h3>MT5 | ${acc.login} <small style="background:${modeColor}22;color:${modeColor};padding:2px 7px;border-radius:3px;font-size:11px">${modeLabel}</small></h3>
           <div class="balance-row"><span>Servidor</span><b>${escapeHtml(acc.server || '--')}</b></div>
           <div class="balance-row"><span>Moneda</span><b>${cur}</b></div>
           <div class="balance-row"><span>Balance</span><b>${Number(acc.balance || 0).toFixed(2)} ${cur}</b><span>${acc.balanceCop ? `COP ${Math.round(acc.balanceCop).toLocaleString('es-CO')}` : ''}</span></div>
@@ -1148,8 +1145,8 @@ function renderWallet(data) {
     : `<div class="wallet-card"><h3>MT5</h3><div class="balance-row"><span>Estado</span><b>${escapeHtml(data.mt5?.message || 'Adapter desactivado o sin cuentas configuradas')}</b></div></div>`;
 
   $('walletGrid').innerHTML =
-    `<div class="wallet-card"><h3>BINANCE · DIAGNÓSTICO</h3>${diagnosticRows}</div>` +
-    `<div class="wallet-card"><h3>BINANCE · VALORACIÓN</h3><div class="balance-row"><span>Total aprox.</span><b>$${Number(bw.totalUsd || 0).toFixed(4)}</b><span>${bw.totalCop ? `COP ${Math.round(bw.totalCop).toLocaleString('es-CO')}` : 'COP n/a'}</span></div><div class="balance-row"><span>USD/COP</span><b>${bw.usdCop ? Number(bw.usdCop).toFixed(2) : 'n/a'}</b><span>referencial</span></div>${valuationRows}</div>` +
+    `<div class="wallet-card"><h3>BINANCE | DIAGNOSTICO</h3>${diagnosticRows}</div>` +
+    `<div class="wallet-card"><h3>BINANCE | VALORACION</h3><div class="balance-row"><span>Total aprox.</span><b>$${Number(bw.totalUsd || 0).toFixed(4)}</b><span>${bw.totalCop ? `COP ${Math.round(bw.totalCop).toLocaleString('es-CO')}` : 'COP n/a'}</span></div><div class="balance-row"><span>USD/COP</span><b>${bw.usdCop ? Number(bw.usdCop).toFixed(2) : 'n/a'}</b><span>referencial</span></div>${valuationRows}</div>` +
     `<div class="wallet-card"><h3>BINANCE SPOT</h3>${spotRows || '<div class="balance-row"><span>Sin saldos Spot visibles</span><b>0</b></div>'}</div>` +
     `<div class="wallet-card"><h3>BINANCE FUNDING</h3>${fundingRows || `<div class="balance-row"><span>${bw.fundingError ? 'Error' : 'Sin saldos Funding'}</span><b>${escapeHtml((bw.fundingError || '0').slice(0, 80))}</b></div>`}</div>` +
     `<div class="wallet-card"><h3>BINANCE EARN</h3>${earnRows || `<div class="balance-row"><span>${bw.earnError ? 'Error' : 'Sin posiciones Earn'}</span><b>${escapeHtml((bw.earnError || '0').slice(0, 80))}</b></div>`}</div>` +
@@ -1168,8 +1165,8 @@ function walletContext() {
     return `${b.asset}: total ${total}, APR ${apr.toFixed(4)}%, rewards ${rewards}, product ${b.productId || ''}`;
   }).join('; ');
   return [
-    `Valoración Binance total aproximada: ${bw.totalUsd || 0} USD; ${bw.totalCop || 0} COP; USD/COP ${bw.usdCop || 'n/a'}`,
-    `Valoración por activo: ${(bw.valuation || []).map((v) => `${v.source} ${v.asset}: ${v.amount} ≈ ${v.valueUsd} USD / ${v.valueCop} COP${v.apr ? ` APR ${v.apr * 100}%` : ''}`).join('; ')}`,
+    `Valoracion Binance total aproximada: ${bw.totalUsd || 0} USD; ${bw.totalCop || 0} COP; USD/COP ${bw.usdCop || 'n/a'}`,
+    `Valoracion por activo: ${(bw.valuation || []).map((v) => `${v.source} ${v.asset}: ${v.amount} ~ ${v.valueUsd} USD / ${v.valueCop} COP${v.apr ? ` APR ${v.apr * 100}%` : ''}`).join('; ')}`,
     `Binance accountType: ${bw.accountType || 'SPOT'}, canTrade: ${bw.canTrade}, canDeposit: ${bw.canDeposit}, canWithdraw: ${bw.canWithdraw}`,
     `Binance Spot: ${spot || 'sin saldos Spot visibles'}`,
     `Binance Funding: ${funding || 'sin saldos Funding visibles'}`,
@@ -1240,12 +1237,12 @@ async function refreshMacroContext(automatic = false) {
     window.quant.finnhub(),
     window.quant.alpha(),
     window.quant.finnhubEconomic ? window.quant.finnhubEconomic() : Promise.resolve([]),
-    window.quant.finnhubCrypto   ? window.quant.finnhubCrypto()   : Promise.resolve([]),
-    window.quant.cryptoRss       ? window.quant.cryptoRss()       : Promise.resolve([])
+    window.quant.finnhubCrypto ? window.quant.finnhubCrypto()   : Promise.resolve([]),
+    window.quant.cryptoRss ? window.quant.cryptoRss()       : Promise.resolve([])
   ]);
-  if (finnhub.status === 'fulfilled')       state.macroNews.finnhub       = Array.isArray(finnhub.value)       ? finnhub.value.slice(0, 30)       : [];
+  if (finnhub.status === 'fulfilled')       state.macroNews.finnhub       = Array.isArray(finnhub.value) ? finnhub.value.slice(0, 30)       : [];
   if (finnhubCrypto.status === 'fulfilled') state.macroNews.finnhubCrypto = Array.isArray(finnhubCrypto.value) ? finnhubCrypto.value.slice(0, 20) : [];
-  if (cryptoRss.status === 'fulfilled')     state.macroNews.cryptoRss     = Array.isArray(cryptoRss.value)     ? cryptoRss.value.slice(0, 20)     : [];
+  if (cryptoRss.status === 'fulfilled')     state.macroNews.cryptoRss     = Array.isArray(cryptoRss.value) ? cryptoRss.value.slice(0, 20)     : [];
   if (alpha.status === 'fulfilled') {
     state.macroNews.alphaSentiment = alpha.value || {};
     state.macroNews.alphaFeed = (alpha.value?.feed || []).slice(0, 30);
@@ -1295,7 +1292,7 @@ function macroContext() {
   const cryptoFinnhub = state.macroNews.finnhubCrypto.slice(0, 6).map((n) => `FinnhubCrypto: ${n.headline || n.summary || ''}`).join('\n');
   const cryptoRss    = state.macroNews.cryptoRss.slice(0, 6).map((n) => `${n.source || 'RSS'}: ${n.title || ''}`).join('\n');
   const alpha        = state.macroNews.alphaFeed.slice(0, 6).map((n) => `${n.overall_sentiment_label || 'Sentiment'} ${Number(n.overall_sentiment_score || 0).toFixed(3)}: ${n.title || ''}`).join('\n');
-  const events       = state.macroNews.economic.slice(0, 8).map((e) => `${e.time || ''} ${e.country || ''} ${e.event || ''} impact=${e.impact || 'n/a'} actual=${e.actual ?? 'n/a'} forecast=${e.estimate ?? 'n/a'}`).join('\n');
+  const events       = state.macroNews.economic.slice(0, 8).map((e) => `${e.time || ''} ${e.country || ''} ${e.event || ''} impact=${e.impact || 'n/a'} actual=${e.actual || 'n/a'} forecast=${e.estimate || 'n/a'}`).join('\n');
   return [
     `Macro/news context ACTIVO. UpdatedAt=${state.macroNews.updatedAt || 'no cargado'} Risk=${risk.risk} Score=${risk.score}.`,
     `Regla: toda decision real o training debe consultar todas las fuentes de noticias disponibles antes de actuar.`,
@@ -1337,7 +1334,7 @@ async function refreshNews(source, automatic = false) {
     renderNewsFromState(source);
     const now = Date.now();
     if (!automatic || now - state.lastNewsAutoLog > 240000) {
-      logEvent('OK', `Noticias actualizadas: ${source}${automatic ? ' · auto' : ''}`);
+      logEvent('OK', `Noticias actualizadas: ${source}${automatic ? ' | auto' : ''}`);
       state.lastNewsAutoLog = now;
     }
   } catch (err) {
@@ -1353,8 +1350,7 @@ function renderMarketTable() {
 }
 
 const trainingDemoWriterClient =
-  window.QuantTrainingDemoWriter && typeof window.QuantTrainingDemoWriter.createTrainingDemoWriterClient === 'function'
-    ? window.QuantTrainingDemoWriter.createTrainingDemoWriterClient()
+  window.QuantTrainingDemoWriter && typeof window.QuantTrainingDemoWriter.createTrainingDemoWriterClient === 'function' ? window.QuantTrainingDemoWriter.createTrainingDemoWriterClient()
     : null;
 
 async function shadowWriteTrainingClosedTrade(openPosition, closedTrade, pair, signal) {
@@ -1618,8 +1614,7 @@ async function fetchTrainingMarket(pair) {
   const indicators = trainingIndicators(candles, candlesM15, candlesH1, candlesH4, candlesD1, candlesW1);
   const spreadPct = tickerData.price ? Number(tickerData.spread || 0) / tickerData.price : 0;
   const spreadQuality = pair.venue === 'MT5' ? Math.max(0, 1 - spreadPct * 900) : Math.max(0, 1 - spreadPct * 1800);
-  const volumeScore = pair.venue === 'BINANCE'
-    ? Math.min(1, Number(tickerData.quoteVolume || 0) / 50000000)
+  const volumeScore = pair.venue === 'BINANCE' ? Math.min(1, Number(tickerData.quoteVolume || 0) / 50000000)
     : Math.min(1, indicators.volumeRatio / 2);
   const score = Math.round(100 * (
     volumeScore * .28 +
@@ -1674,10 +1669,8 @@ function trainingIndicators(candles, candlesM15 = [], candlesH1 = [], candlesH4 
   const finalBias = strategyBias !== 'NEUTRAL' ? strategyBias : bias;
   const signalQuality = Math.min(1, Math.abs(momentum) / Math.max(avgRange * 4, 1e-12) * .26 + (volumeRatio > 1.2 ? .14 : 0) + htfAlignmentScore * .2 + patternScore * .16 + primaryStrategy.score / 100 * .28);
   const confidence = Math.round(Math.max(25, Math.min(97, 38 + signalQuality * 34 + (volumeRatio > 1.5 ? 5 : 0) + ictCrt.score * .08 + primaryStrategy.score * .18)));
-  const setup = finalBias === 'LONG'
-    ? `SSL Hybrid bullish + ${m15.bias}/M15 + ${h1.bias}/H1 + ${patternScore > .55 ? 'pattern confirmation' : 'trend continuation'}`
-    : finalBias === 'SHORT'
-      ? `SSL Hybrid bearish + ${m15.bias}/M15 + ${h1.bias}/H1 + ${patternScore > .55 ? 'pattern confirmation' : 'trend continuation'}`
+  const setup = finalBias === 'LONG' ? `SSL Hybrid bullish + ${m15.bias}/M15 + ${h1.bias}/H1 + ${patternScore > .55 ? 'pattern confirmation' : 'trend continuation'}`
+    : finalBias === 'SHORT' ? `SSL Hybrid bearish + ${m15.bias}/M15 + ${h1.bias}/H1 + ${patternScore > .55 ? 'pattern confirmation' : 'trend continuation'}`
       : 'Range / no directional edge';
   const strategySuffix = ictCrt.score >= 80 ? ` + ICT/CRT ${ictCrt.score}` : ` + ICT/CRT watch ${ictCrt.score}`;
   const horizon = h1.bias === finalBias && m15.bias === finalBias && confidence >= 78 ? 'swing' : 'intraday';
@@ -1834,27 +1827,27 @@ function detectTrainingPattern(candles, current, rsi, macd, bias) {
   return Math.min(1, score);
 }
 
-// ── Full data push: training + memoria + conversaciones → cloud ───────────────
+// Full data push: training + memoria + conversaciones -> cloud
 async function pushCloudData(silent = true) {
   if (!window.quant.pushCloudData) return;
   try {
     const res = await window.quant.pushCloudData();
-    if (!silent) logEvent('OK', `Cloud sync: training=${res?.results?.trainingState ? '✓' : '-'}, mem=${res?.results?.memories ?? '-'}, conv=${res?.results?.conversations ?? '-'}`);
+    if (!silent) logEvent('OK', `Cloud sync: training=${res?.results?.trainingState ? 'ok' : '-'}, mem=${res?.results?.memories ?? '-'}, conv=${res?.results?.conversations ?? '-'}`);
   } catch (err) {
     if (!silent) logEvent('WARN', `pushCloudData: ${err.message}`);
   }
 }
 
-// ── MT5 Sync desktop → cloud ──────────────────────────────────────────────────
-// manual=true → pasa {manual:true} al backend para que use mt5.login() completo
-// manual=false → modo pasivo: solo lee cuenta activa, NO reconecta al broker
+// MT5 Sync desktop -> cloud
+// manual=true -> pasa {manual:true} al backend para que use mt5.login() completo
+// manual=false -> modo pasivo: solo lee cuenta activa, NO reconecta al broker
 async function syncMt5ToCloud(manual = false) {
   if (!window.quant.syncMt5) return;
   try {
     const res = await window.quant.syncMt5(manual);
-    state.syncStatus = { lastSync: new Date().toISOString(), ok: res?.ok ?? false, pushed: res?.pushed ?? false };
+    state.syncStatus = { lastSync: new Date().toISOString(), ok: !!res?.ok, pushed: !!res?.pushed };
     updateSyncIndicator();
-    if (manual && res?.ok) logEvent('OK', `MT5 sincronizado con cloud${res.pushed ? ' ✓ push exitoso' : ' (local)'}`);
+    if (manual && res?.ok) logEvent('OK', `MT5 sincronizado con cloud${res.pushed ? ' ok push exitoso' : ' (local)'}`);
   } catch (err) {
     state.syncStatus = { lastSync: new Date().toISOString(), ok: false, pushed: false };
     updateSyncIndicator();
@@ -1869,26 +1862,26 @@ function updateSyncIndicator() {
   if (!s.lastSync) { el.textContent = ''; return; }
   const ago  = Math.round((Date.now() - new Date(s.lastSync)) / 1000);
   const time = ago < 60 ? `${ago}s` : `${Math.round(ago / 60)}m`;
-  el.textContent  = s.ok && s.pushed ? `↑ MT5 cloud ${time}` : s.ok ? `↑ MT5 local ${time}` : `↑ MT5 error`;
+  el.textContent  = s.ok && s.pushed ? `-> MT5 cloud ${time}` : s.ok ? `-> MT5 local ${time}` : `-> MT5 error`;
   el.style.color  = s.ok && s.pushed ? '#4caf7d' : s.ok ? '#8fa3c0' : '#e09a3a';
-  el.title = s.pushed ? `Datos MT5 enviados al cloud hace ${time}` : 'QUANT_SYNC_URL no configurado — sync solo local';
+  el.title = s.pushed ? `Datos MT5 enviados al cloud hace ${time}` : 'QUANT_SYNC_URL no configurado - sync solo local';
 }
 
-// ── Calibración nocturna (Mejora 7) ──────────────────────────────────────────
+// Calibracion nocturna (Mejora 7)
 // Pide al backend que recalcule live_wr / hist_wr desde el JSONL completo y
 // persista a calibration.json. Se aplica al score ICT/CRT como segundo factor.
 async function runNightCalibration() {
   try {
     const cal = await window.quant.calibrationCompute();
     state.nightCalibration = cal;
-    if (cal?.ok) logEvent('OK', `Calibración nocturna: ${cal.label}`);
-    else logEvent('WARN', `Calibración nocturna: ${cal?.reason || 'sin datos suficientes'}`);
+    if (cal?.ok) logEvent('OK', `Calibracion nocturna: ${cal.label}`);
+    else logEvent('WARN', `Calibracion nocturna: ${cal?.reason || 'sin datos suficientes'}`);
   } catch (err) {
-    logEvent('WARN', `Calibración nocturna: ${err.message}`);
+    logEvent('WARN', `Calibracion nocturna: ${err.message}`);
   }
 }
 
-// ── Walk-Forward OOS Calibration (Mejora 6) ─────────────────────────────────
+// Walk-Forward OOS Calibration (Mejora 6)
 // Splits closedTrades 70/30 (IS / OOS), computes win rates and stores a
 // calibration ratio that scales the live ICT/CRT score up or down.
 function computeWfCalibration() {
@@ -1907,7 +1900,7 @@ function computeWfCalibration() {
   // ratio: how well OOS matches IS; cap between 0.60 and 1.30 to avoid extremes
   const raw = (isWr > 0) ? oosWr / isWr : 1;
   const ratio = Math.max(0.60, Math.min(1.30, raw));
-  const label = `OOS ${(oosWr * 100).toFixed(0)}% vs IS ${(isWr * 100).toFixed(0)}% → ×${ratio.toFixed(2)}`;
+  const label = `OOS ${(oosWr * 100).toFixed(0)}% vs IS ${(isWr * 100).toFixed(0)}% -> x${ratio.toFixed(2)}`;
   state.wfCalibration = { isWr, oosWr, ratio, n, label };
 }
 
@@ -1927,8 +1920,8 @@ function ictCrtScore(ctx) {
   if (structure) score += 20;
   if (session >= .8) score += 20;
   if (entryContext) score = Math.min(100, score + 8);
-  // Calibración combinada: WF-OOS (Mejora 6) × nocturna live/hist (Mejora 7)
-  const wfRatio    = state.wfCalibration?.ratio ?? 1;
+// Calibracion nocturna (Mejora 7)
+  const wfRatio = state.wfCalibration?.ratio ?? 1;
   const nightRatio = state.nightCalibration?.ratio ?? 1;
   const combinedRatio = Math.max(0.5, Math.min(1.3, wfRatio * nightRatio));
   const rawScore   = Math.round(Math.min(100, score));
@@ -1939,8 +1932,8 @@ function ictCrtScore(ctx) {
     wfRatio,
     nightRatio,
     combinedRatio,
-    wfLabel: state.wfCalibration?.label ?? '',
-    nightLabel: state.nightCalibration?.label ?? '',
+    wfLabel: state.wfCalibration?.label || '',
+    nightLabel: state.nightCalibration?.label || '',
     weeklyBias: weekly.bias,
     htfAligned,
     liquidity,
@@ -1986,8 +1979,7 @@ function structureConfirmation(candles, bias) {
   if (data.length < 6 || bias === 'NEUTRAL') return false;
   const prev = data.slice(0, -3);
   const recent = data.slice(-3);
-  return bias === 'LONG'
-    ? Math.max(...recent.map((c) => c.high)) > Math.max(...prev.map((c) => c.high))
+  return bias === 'LONG' ? Math.max(...recent.map((c) => c.high)) > Math.max(...prev.map((c) => c.high))
     : Math.min(...recent.map((c) => c.low)) < Math.min(...prev.map((c) => c.low));
 }
 
@@ -2313,8 +2305,7 @@ async function evaluateTrainingPair(pair) {
 function buildTrainingLesson(trade, pair, signal, pnl) {
   const pnlPercent = pnl / Math.max(trade.notional_demo, 1e-12) * 100;
   const outcome = pnl >= 0 ? 'win' : 'loss';
-  const lesson = outcome === 'win'
-    ? `El setup ${trade.setup_tecnico_detectado} en ${pair.symbol} funciono con volumen x${signal.volumeRatio.toFixed(2)} y spread ${(pair.spreadPct * 100).toFixed(4)}%.`
+  const lesson = outcome === 'win' ? `El setup ${trade.setup_tecnico_detectado} en ${pair.symbol} funciono con volumen x${signal.volumeRatio.toFixed(2)} y spread ${(pair.spreadPct * 100).toFixed(4)}%.`
     : `El setup ${trade.setup_tecnico_detectado} en ${pair.symbol} fallo o perdio edge; conviene exigir alineacion multi-timeframe o mejor volumen.`;
   return {
     type: 'training_lesson',
@@ -2365,12 +2356,9 @@ function buildTrainingAdvice() {
     const winrate = pairTrades.length ? wins / pairTrades.length : 0;
     const macro = macroRiskLevel(pair.symbol);
     const risk = macro.risk === 'high' ? 'alto por macro/news' : pair.spreadPct > .0015 ? 'alto por spread' : signal.volatilityPct > .008 ? 'alto por volatilidad' : macro.risk === 'medium' ? 'medio por macro/news' : 'controlado';
-    const recommendation = signal.bias === 'NEUTRAL' || signal.confidence < 60
-      ? 'observar'
-      : macro.risk === 'high'
-        ? 'evitar hasta que pase la noticia'
-      : pairTrades.length >= 3 && winrate > .58 && pnl > 0
-        ? 'considerar real en futuro'
+    const recommendation = signal.bias === 'NEUTRAL' || signal.confidence < 60 ? 'observar'
+      : macro.risk === 'high' ? 'evitar hasta que pase la noticia'
+      : pairTrades.length >= 3 && winrate > .58 && pnl > 0 ? 'considerar real en futuro'
         : signal.horizon === 'swing' ? 'probar demo mediano plazo' : 'probar demo intradia';
     return {
       symbol: pair.symbol,
@@ -2444,7 +2432,7 @@ function renderTraining() {
   const wins = tr.closedTrades.filter((t) => Number(t.pnl_demo || 0) >= 0).length;
   setText('trainBalance', `$${equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   setText('trainTotalPnl', `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}`);
-  setText('trainTotalPct', `${(totalPnl / tr.balanceStart * 100).toFixed(2)}% · realizado ${realized >= 0 ? '+' : ''}$${realized.toFixed(2)}`);
+  setText('trainTotalPct', `${(totalPnl / tr.balanceStart * 100).toFixed(2)}% | realizado ${realized >= 0 ? '+' : ''}$${realized.toFixed(2)}`);
   setText('trainTodayPnl', `${today >= 0 ? '+' : ''}$${today.toFixed(2)}`);
   setText('trainOps', String(tr.closedTrades.length));
   setText('trainWinrate', `${tr.closedTrades.length ? Math.round(wins / tr.closedTrades.length * 100) : 0}% winrate`);
@@ -2461,6 +2449,159 @@ function renderTraining() {
   renderTrainingTrades();
   renderTrainingLevelTable();
   renderChatContextPanel();
+  renderDashboardExecutive({
+    equity,
+    totalPnl,
+    today,
+    wins
+  });
+}
+
+function dashboardEmptyState(message) {
+  return `<div class="dashboard-empty">${escapeHtml(message)}</div>`;
+}
+
+function compactDashboardText(value, maxLength = 96) {
+  const normalized = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function renderDashboardExecutive(metrics = {}) {
+  const tr = state.training;
+  const equity = Number(metrics.equity || tr.balance || tr.balanceStart || 0);
+  const totalPnl = Number(metrics.totalPnl || 0);
+  const today = Number(metrics.today || 0);
+  const wins = Number(metrics.wins || 0);
+  const openPositions = tr.positions.filter((p) => !p.exit_price);
+  const closedTrades = tr.closedTrades.slice(0, 5);
+  const lessons = tr.lessons.slice(0, 5);
+  const scheduler = tr.loopStatus || null;
+  const signalCandidates = tr.activePairs
+    .filter((pair) => pair?.indicators)
+    .sort((a, b) => Number(b.indicators.confidence || 0) - Number(a.indicators.confidence || 0))
+    .slice(0, 5);
+
+  updateTrainingStrategyStats();
+  const topStrategies = Object.values(tr.strategyStats || {})
+    .sort((a, b) => (b.open + b.liveCandidates) - (a.open + a.liveCandidates))
+    .slice(0, 5);
+
+  const modeSummary = state.env.realTrading ? 'Modo: Trading Real ACTIVO' : 'Modo seguro';
+  const lastUpdateText = lastUpdate?.textContent || '--:--:--';
+  const syncBadgeText = syncStatusBadge?.textContent || '';
+  const backendTrainingEnabled = !!window.quantStateManager?.training?.enabled;
+  const trainingRailStatus = backendTrainingEnabled ? 'Training ON' : 'Training OFF';
+  const schedulerStatusText = scheduler
+    ? (scheduler.active ? 'Activo' : 'Inactivo')
+    : (tr.refreshing ? 'Actualizando' : 'No expuesto');
+  const schedulerTicksText = scheduler && Number.isFinite(Number(scheduler.ticksRun))
+    ? String(Number(scheduler.ticksRun))
+    : '-';
+  setText('dashboardEquityValue', `$${equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+  setText('dashboardOpenPositionsCount', `${openPositions.length} abiertas`);
+  setText('dashboardClosedTradesCount', String(tr.closedTrades.length));
+  setText('dashboardTrainingRailStatus', trainingRailStatus);
+  setText('dashboardSchedulerStatus', schedulerStatusText);
+  setText('dashboardTicksRun', schedulerTicksText);
+  setText('dashboardSchedulerRailStatus', schedulerStatusText);
+  setText('dashboardSchedulerRailTicks', schedulerTicksText);
+  setText('dashboardPositionRailStats', `${openPositions.length} / ${tr.closedTrades.length}`);
+  setText('dashboardModeSummary', modeSummary);
+  setText('dashboardLastUpdate', lastUpdateText);
+  setText('dashboardSyncStatusBadge', syncBadgeText);
+
+  const openEl = $('dashboardOpenPositions');
+  if (openEl) {
+    openEl.innerHTML = openPositions.length
+      ? openPositions.slice(0, 5).map((position) => {
+          const pair = tr.activePairs.find((item) => item.symbol === position.symbol && item.venue === position.venue);
+          const livePnl = markToMarketPnl(position, pair);
+          return `<article class="dashboard-list-item">
+            <div class="dashboard-list-item-head">
+              <strong>${escapeHtml(position.symbol)}</strong>
+              <b class="${livePnl >= 0 ? 'pipe-ok' : 'pipe-error'}">${position.direction}</b>
+            </div>
+            <p>${escapeHtml(position.venue)} | ${escapeHtml(position.horizon || 'intraday')} | conf ${Number(position.confidence || 0)}%</p>
+            <small>P&L flotante ${livePnl >= 0 ? '+' : ''}${livePnl.toFixed(2)}</small>
+          </article>`;
+        }).join('')
+      : dashboardEmptyState('No hay posiciones abiertas en este momento.');
+  }
+
+  const strategyEl = $('dashboardStrategyRanking');
+  if (strategyEl) {
+    strategyEl.innerHTML = topStrategies.length
+      ? topStrategies.map((strategy) => `<article class="dashboard-list-item">
+          <div class="dashboard-list-item-head">
+            <strong>${escapeHtml(strategy.name)}</strong>
+            <b>${strategy.liveCandidates}</b>
+          </div>
+          <p>Open ${strategy.open} | Closed ${strategy.closed} | WR ${strategy.closed ? Math.round(strategy.winrate * 100) + '%' : '--'}</p>
+          <small>P&L ${strategy.pnl >= 0 ? '+' : ''}${strategy.pnl.toFixed(2)} | score ${strategy.avgScore ? strategy.avgScore.toFixed(0) : '--'}</small>
+        </article>`).join('')
+      : dashboardEmptyState('Las estrategias apareceran aqui cuando el training acumule actividad real.');
+  }
+
+  const candidatesEl = $('dashboardSignalCandidates');
+  if (candidatesEl) {
+    candidatesEl.innerHTML = signalCandidates.length
+      ? signalCandidates.map((pair) => {
+          const indicators = pair.indicators || {};
+          return `<article class="dashboard-list-item">
+            <div class="dashboard-list-item-head">
+              <strong>${escapeHtml(pair.symbol)}</strong>
+              <b>${Number(indicators.confidence || 0)}%</b>
+            </div>
+            <p>${escapeHtml(indicators.bias || 'NEUTRAL')} | ${escapeHtml(indicators.horizon || 'watch')} | ${escapeHtml(indicators.primaryStrategy?.name || 'Sin estrategia')}</p>
+            <small>${escapeHtml(indicators.setup || 'Esperando setup confirmado.')}</small>
+          </article>`;
+        }).join('')
+      : dashboardEmptyState('Aun no hay candidatos priorizados en el training activo.');
+  }
+
+  const tradesEl = $('dashboardRecentTrades');
+  if (tradesEl) {
+    tradesEl.innerHTML = closedTrades.length
+      ? closedTrades.map((trade) => `<article class="dashboard-list-item">
+          <div class="dashboard-list-item-head">
+            <strong>${escapeHtml(trade.symbol || 'N/A')}</strong>
+            <b class="${Number(trade.pnl_demo || 0) >= 0 ? 'pipe-ok' : 'pipe-error'}">${Number(trade.pnl_demo || 0) >= 0 ? '+' : ''}${Number(trade.pnl_demo || 0).toFixed(2)}</b>
+          </div>
+          <p>${escapeHtml(trade.direction || 'N/A')} | ${escapeHtml(trade.strategy_name || 'Estrategia no clasificada')}</p>
+          <small>${escapeHtml(String(trade.closed_timestamp || trade.timestamp || '').replace('T', ' ').slice(0, 16) || 'Sin timestamp')}</small>
+        </article>`).join('')
+      : dashboardEmptyState('Todavia no hay trades cerrados para resumir. Veras el historial aqui cuando el training registre ejecuciones.');
+  }
+
+  const lessonsEl = $('dashboardRecentLessons');
+  if (lessonsEl) {
+    lessonsEl.innerHTML = lessons.length
+      ? lessons.map((lesson) => `<article class="dashboard-list-item">
+          <div class="dashboard-list-item-head">
+            <strong>${escapeHtml(lesson.symbol || 'Leccion')}</strong>
+            <b>${escapeHtml((lesson.outcome || 'n/a').toUpperCase())}</b>
+          </div>
+          <p>${escapeHtml(lesson.strategy_name || lesson.strategy_id || 'Sin estrategia')}</p>
+          <small>${escapeHtml(compactDashboardText(lesson.lesson || lesson.text || 'Sin nota detallada.', 92))}</small>
+        </article>`).join('')
+      : dashboardEmptyState('Sin lecciones recientes. El training mostrara aprendizajes reales cuando cierre operaciones.');
+  }
+
+  const performanceEl = $('dashboardPerformanceSnapshot');
+  if (performanceEl) {
+    const closedCount = tr.closedTrades.length;
+    const winRate = closedCount ? Math.round(wins / closedCount * 100) : 0;
+    performanceEl.innerHTML = [
+      { label: 'P&L total', value: `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}` },
+      { label: 'P&L hoy', value: `${today >= 0 ? '+' : ''}$${today.toFixed(2)}` },
+      { label: 'Win rate', value: `${winRate}%` },
+      { label: 'Closed trades', value: String(closedCount) },
+      { label: 'Open positions', value: String(openPositions.length) },
+      { label: 'Pares activos', value: String(tr.activePairs.length) }
+    ].map((item) => `<article class="dashboard-performance-item"><span>${item.label}</span><b>${escapeHtml(item.value)}</b></article>`).join('');
+  }
 }
 
 function trainingLevel() {
@@ -2492,7 +2633,7 @@ function renderTrainingPairs() {
     const realized = pairTrades.reduce((s, t) => s + Number(t.pnl_demo || 0), 0);
     const floating = opens.reduce((s, pos) => s + markToMarketPnl(pos, p), 0);
     const positionLabel = opens.length ? opens.map((x) => `${x.horizon === 'swing' ? 'SW' : 'IN'} ${x.direction}`).join(' / ') : 'Sin posicion';
-    return `<div class="train-row"><b>${p.symbol}<small>${p.venue}</small></b><span class="train-status">${p.feed || 'OK'}</span><span>${fmtPrice(p.price)}</span><span>${p.indicators?.confidence || 0}%</span><span>${p.indicators?.horizon || 'watch'}</span><span>${positionLabel}<small>Flot. ${floating.toFixed(2)} · Real. ${realized.toFixed(2)}</small></span></div>`;
+    return `<div class="train-row"><b>${p.symbol}<small>${p.venue}</small></b><span class="train-status">${p.feed || 'OK'}</span><span>${fmtPrice(p.price)}</span><span>${p.indicators?.confidence || 0}%</span><span>${p.indicators?.horizon || 'watch'}</span><span>${positionLabel}<small>Flot. ${floating.toFixed(2)} | Real. ${realized.toFixed(2)}</small></span></div>`;
   }).join('');
   const html = `<div class="train-pairs"><div class="train-head"><span>PAR</span><span>FEED</span><span>PRECIO REAL</span><span>CONF. IA</span><span>PLAN</span><span>POSICION DEMO</span></div>${rows || '<div class="empty-state">Validando pares reales disponibles...</div>'}</div>`;
   if ($('trainingPairsTable')) $('trainingPairsTable').innerHTML = html;
@@ -2546,8 +2687,8 @@ function renderTrainingLevelTable() {
 }
 
 async function askAiAnalysis() {
-  const prompt = `Analiza ${state.symbol} con precio ${fmtPrice(state.ticker?.price || 0)} y las últimas velas. Dame lectura operativa sin ejecutar órdenes.`;
-  $('aiOutput').textContent = 'Quant está pensando...';
+  const prompt = `Analiza ${state.symbol} con precio ${fmtPrice(state.ticker?.price || 0)} y las ultimas velas. Dame lectura operativa sin ejecutar ordenes.`;
+  $('aiOutput').textContent = 'Quant esta pensando...';
   await askQuant(prompt, true);
 }
 
@@ -2556,21 +2697,25 @@ async function sendChat() {
   const text = input.value.trim();
   if (!text) return;
   input.value = '';
-  addChat('Tú', text);
+  addChat('Tu', text);
   state.messages.push({ role: 'user', content: text });
   await askQuant(text, false);
 }
 
 async function askQuant(text, writeToAi) {
   try {
-    logEvent('OK', 'PRIMARY_REASONING · consultando DeepSeek');
-    const context = `Símbolo: ${state.symbol}\nTicker: ${JSON.stringify(state.ticker)}\nVelas: ${state.candles.length}\nSeñal: ${$('signalMessage').textContent}\nTrading real: ${state.env.realTrading ? 'activo' : 'bloqueado'}`;
+    logEvent('OK', 'PRIMARY_REASONING | consultando DeepSeek');
+    const context = `Simbolo: ${state.symbol}
+Ticker: ${JSON.stringify(state.ticker)}
+Velas: ${state.candles.length}
+Senal: ${$('signalMessage').textContent}
+Trading real: ${state.env.realTrading ? 'activo' : 'bloqueado'}`;
     const fullContext = context + '\n\nWallet actual:\n' + walletContext() + '\n\nMacro/news actual:\n' + macroContext() + '\n\nTraining actual:\n' + trainingContext();
     const answer = await window.quant.chat(state.messages.slice(-14), fullContext || text);
     state.messages.push({ role: 'assistant', content: answer });
     addChat('Quant', answer);
     if (writeToAi) $('aiOutput').textContent = answer;
-    logEvent('OK', 'MEMORY_WRITTEN · respuesta registrada en sesión');
+    logEvent('OK', 'MEMORY_WRITTEN | respuesta registrada en sesion');
     autoSaveConversation();
   } catch (err) {
     addChat('Quant', `No pude consultar el modelo ahora: ${err.message}`);
@@ -2600,8 +2745,7 @@ function renderChatMessage(role, text) {
   const div = document.createElement('div');
   const isQuant = role.toLowerCase().includes('quant');
   div.className = `chat-msg ${isQuant ? 'quant-msg' : 'user-msg'}`;
-  div.innerHTML = isQuant
-    ? `<b>${role}</b>${formatQuantText(text)}`
+  div.innerHTML = isQuant ? `<b>${role}</b>${formatQuantText(text)}`
     : `<b>${role}:</b> ${escapeHtml(text)}`;
   $('chatLog').appendChild(div);
   $('chatLog').scrollTop = $('chatLog').scrollHeight;
@@ -2610,27 +2754,27 @@ function renderChatMessage(role, text) {
 function addChat(role, text) {
   renderChatMessage(role, text);
   window.quant.memoryWrite('message', { role, text }).then(loadMemoryStats).catch(() => {
-    $('memoryNow').textContent = `${state.messages.length} msg · ${state.sessionTrades} trades`;
+    $('memoryNow').textContent = `${state.messages.length} msg | ${state.sessionTrades} trades`;
   });
 }
 
 function formatQuantText(text) {
-  const clean = String(text || '').replace(/\*\*(.*?)\*\*/g, '$1').replace(/^\s*[-*]\s+/gm, '• ');
+  const clean = String(text || '').replace(/\*\*(.*?)\*\*/g, '$1').replace(/^\s*[-*]\s+/gm, '* ');
   const lines = clean.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const chunks = [];
   let list = [];
   const flushList = () => {
     if (!list.length) return;
-    chunks.push(`<ul>${list.map((item) => `<li>${escapeHtml(item.replace(/^•\s*/, ''))}</li>`).join('')}</ul>`);
+    chunks.push(`<ul>${list.map((item) => `<li>${escapeHtml(item.replace(/^\*\s*/, ''))}</li>`).join('')}</ul>`);
     list = [];
   };
   for (const line of lines) {
     if (/^#{1,4}\s+/.test(line)) {
       flushList();
       chunks.push(`<h4>${escapeHtml(line.replace(/^#{1,4}\s+/, ''))}</h4>`);
-    } else if (/^•\s+/.test(line) || /^\d+[\.)]\s+/.test(line)) {
+    } else if (/^\*\s+/.test(line) || /^\d+[\.)]\s+/.test(line)) {
       list.push(line.replace(/^\d+[\.)]\s+/, ''));
-    } else if (/^[A-ZÁÉÍÓÚÑ][^:]{2,36}:$/.test(line)) {
+    } else if (/^[A-Z][^:]{2,36}:$/.test(line)) {
       flushList();
       chunks.push(`<h4>${escapeHtml(line.replace(/:$/, ''))}</h4>`);
     } else {
@@ -2645,7 +2789,7 @@ function formatQuantText(text) {
 async function loadMemoryStats() {
   try {
     const stats = await window.quant.memoryStats();
-    $('memoryNow').textContent = `${stats.messages} msg · ${stats.trades} trades`;
+    $('memoryNow').textContent = `${stats.messages} msg | ${stats.trades} trades`;
     const box = $('settingsBox');
     if (box && state.env) {
       const existing = box.innerHTML;
@@ -2654,7 +2798,7 @@ async function loadMemoryStats() {
       }
     }
   } catch {
-    $('memoryNow').textContent = `${state.messages.length} msg · ${state.sessionTrades} trades`;
+    $('memoryNow').textContent = `${state.messages.length} msg | ${state.sessionTrades} trades`;
   }
 }
 
@@ -2664,7 +2808,7 @@ function renderMt5PositionRow(p) {
   const dirClass = p.direction === 'BUY' ? 'train-status' : 'train-bad';
   const slTp = `${p.sl ? Number(p.sl).toFixed(5) : '--'} / ${p.tp ? Number(p.tp).toFixed(5) : '--'}`;
   const ts = p.time ? new Date(Number(p.time) * 1000).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : '--';
-  return `<div style="display:grid;grid-template-columns:80px 100px 70px 80px 90px 90px 80px 80px 1fr;gap:6px;padding:9px 10px;border-bottom:1px solid #1a2535;font-size:13px;align-items:center" title="Abierta: ${ts} · Comentario: ${escapeHtml(p.comment || '')}">
+  return `<div style="display:grid;grid-template-columns:80px 100px 70px 80px 90px 90px 80px 80px 1fr;gap:6px;padding:9px 10px;border-bottom:1px solid #1a2535;font-size:13px;align-items:center" title="Abierta: ${ts} | Comentario: ${escapeHtml(p.comment || '')}">
     <span style="color:#8fa3c0">#${p.ticket}</span>
     <b>${escapeHtml(p.symbol)}</b>
     <span class="${dirClass}">${p.direction}</span>
@@ -2687,7 +2831,7 @@ async function loadPositions() {
     const data = await window.quant.positions();
     const mt5Accounts = data.mt5Accounts || [];
 
-    // ── MT5: un bloque por cuenta ─────────────────────────────
+    // MT5: un bloque por cuenta
     if (badge) badge.innerHTML = '';
     if (mt5Table) {
       if (!mt5Accounts.length) {
@@ -2715,15 +2859,14 @@ async function loadPositions() {
             <span>P&L <b style="color:${profitColor}">${profit >= 0 ? '+' : ''}${profit.toFixed(2)} ${cur}</b></span>
             <span style="color:#8fa3c0">${positions.length} posicion${positions.length !== 1 ? 'es' : ''}</span>
           </div>`;
-          const rows = positions.length
-            ? positions.map(renderMt5PositionRow).join('')
+          const rows = positions.length ? positions.map(renderMt5PositionRow).join('')
             : '<div style="padding:10px 12px;color:#8fa3c0;font-size:13px">Sin posiciones abiertas en esta cuenta.</div>';
           return header + rows;
         }).join('<div style="height:12px"></div>');
       }
     }
 
-    // ── Binance ───────────────────────────────────────────────
+    // Binance
     const bin = data.binance || {};
     if (binTable) {
       if (!bin.ok) {
@@ -2753,7 +2896,7 @@ async function loadPositions() {
   }
 }
 
-// ── Backtesting ───────────────────────────────────────────────────────────────
+// Backtesting
 
 let _backtestFilePath = null;
 
@@ -2782,7 +2925,7 @@ async function backtestRun() {
       return;
     }
     renderBacktestResults(result);
-    setText('backtestFileName', `${result.file} — ${result.tradeCount} operaciones`);
+    setText('backtestFileName', `${result.file} - ${result.tradeCount} operaciones`);
   } catch (err) {
     setText('backtestFileName', `Error: ${err.message}`);
     logEvent('WARN', `backtest: ${err.message}`);
@@ -2815,8 +2958,8 @@ function renderBacktestResults(result) {
   const wf = s.walkForward;
   const oosOk = wf.oosWinRate >= wf.isWinRate * 0.8;
   $('backtestWF').innerHTML = `
-    <div class="balance-row"><span>IS (70%) — ${wf.splitAt} ops</span><b>WR ${wf.isWinRate}%</b><span>muestra de entrenamiento</span></div>
-    <div class="balance-row"><span>OOS (30%) — resto</span><b style="color:${oosOk ? '#43d787' : '#ff5252'}">WR ${wf.oosWinRate}%</b><span>${oosOk ? 'Edge validado fuera de muestra' : 'Posible overfitting'}</span></div>
+    <div class="balance-row"><span>IS (70%) - ${wf.splitAt} ops</span><b>WR ${wf.isWinRate}%</b><span>muestra de entrenamiento</span></div>
+    <div class="balance-row"><span>OOS (30%) - resto</span><b style="color:${oosOk ? '#43d787' : '#ff5252'}">WR ${wf.oosWinRate}%</b><span>${oosOk ? 'Edge validado fuera de muestra' : 'Posible overfitting'}</span></div>
     <div class="balance-row"><span>P&L OOS</span><b style="color:${wf.oosNetProfit >= 0 ? '#43d787' : '#ff5252'}">${wf.oosNetProfit >= 0 ? '+' : ''}${wf.oosNetProfit}</b></div>
     <div class="balance-row"><span>Veredicto</span><b style="color:${oosOk ? '#43d787' : '#f0a500'}">${oosOk ? 'EDGE REAL' : 'REVISAR ESTRATEGIA'}</b></div>`;
 
@@ -2845,7 +2988,7 @@ function renderBacktestResults(result) {
       <span style="color:${pnlColor2};font-weight:600">${ss.netProfit >= 0 ? '+' : ''}${ss.netProfit}</span>
       <div style="background:#1a2535;border-radius:3px;height:6px;overflow:hidden"><div style="background:${pnlColor2};width:${contrib}%;height:100%"></div></div>
     </div>`;
-  }).join('') || '<div class="empty-state" style="padding:20px">Sin datos por símbolo.</div>';
+  }).join('') || '<div class="empty-state" style="padding:20px">Sin datos por simbolo.</div>';
 }
 
 function drawEquityCurve(curve) {
@@ -2912,10 +3055,8 @@ async function loadOrders() {
 }
 
 function renderOrdersTable(trades) {
-  const filtered = _ordersFilter === 'all'
-    ? trades
-    : _ordersFilter === 'blocked'
-      ? trades.filter((t) => t.status === 'blocked' || t.status === 'final_safety_lock' || t.reason)
+  const filtered = _ordersFilter === 'all' ? trades
+    : _ordersFilter === 'blocked' ? trades.filter((t) => t.status === 'blocked' || t.status === 'final_safety_lock' || t.reason)
       : trades.filter((t) => !t.status || t.status === 'executed' || t.status === 'opened' || t.status === 'closed');
 
   const count = $('ordersCount');
@@ -2954,7 +3095,7 @@ function renderOrdersTable(trades) {
   if (table) table.innerHTML = rows || '<div class="empty-state" style="padding:32px 0">Sin ordenes registradas aun.</div>';
 }
 
-// ── Alertas ───────────────────────────────────────────────────────────────────
+// Alertas
 
 let _alertConfig = null;
 const _alertSent = new Set(); // dedup: evita re-enviar la misma alerta en el mismo ciclo
@@ -3000,7 +3141,7 @@ async function saveAlertConfig() {
       email:    $('alertEmailTo')?.value.trim()  || 'kinotrance@gmail.com',
       smtpUser: $('alertSmtpUser')?.value.trim() || '',
       smtpPass: $('alertSmtpPass')?.value.trim() || '',
-      enabled:  $('alertEnabled')?.checked ?? true,
+      enabled:  !!$('alertEnabled')?.checked,
       triggers
     };
     _alertConfig = await window.quant.alertConfigWrite(cfg);
@@ -3037,8 +3178,7 @@ async function loadAlertLog() {
     const logs = await window.quant.alertLog(50);
     const table = $('alertLogTable');
     if (!table) return;
-    table.innerHTML = logs.length
-      ? logs.map((l) => `<div style="display:grid;grid-template-columns:160px 1fr;gap:8px;padding:8px 10px;border-bottom:1px solid #1a2535;font-size:13px">
+    table.innerHTML = logs.length ? logs.map((l) => `<div style="display:grid;grid-template-columns:160px 1fr;gap:8px;padding:8px 10px;border-bottom:1px solid #1a2535;font-size:13px">
           <span style="color:#8fa3c0">${new Date(l.ts).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</span>
           <span>${escapeHtml(l.subject)}</span>
         </div>`).join('')
@@ -3048,25 +3188,32 @@ async function loadAlertLog() {
   }
 }
 
-// Llamado desde el ciclo de actualización de señal — comprueba condiciones y envía si corresponde
+// Llamado desde el ciclo de actualizacion de senal; comprueba condiciones y envia si corresponde
 async function checkAndFireAlerts(signal, pair) {
   if (!_alertConfig?.enabled || !_alertConfig?.smtpUser) return;
   const now = Date.now();
 
-  // ── Señal fuerte ──────────────────────────────────────────
+  // Senal fuerte
   const tSignal = _alertConfig.triggers?.strongSignal;
   if (tSignal?.enabled && signal?.confidence >= (tSignal.minConfidence || 82) && signal?.bias !== 'NEUTRAL') {
     const key = `strongSignal:${pair?.symbol}:${signal.bias}:${String(signal.confidence)}`;
     if (!_alertSent.has(key)) {
       _alertSent.add(key);
-      const subject = `Señal fuerte: ${pair?.symbol} ${signal.bias} (${signal.confidence}%)`;
-      const body = `Par: ${pair?.symbol} | Venue: ${pair?.venue}\nDirección: ${signal.bias}\nConfianza: ${signal.confidence}%\nSetup: ${signal.setup || 'N/A'}\nPrecio actual: ${pair?.price}\nHorizonte: ${signal.horizon || 'N/A'}\nVol ratio: ${signal.volumeRatio?.toFixed(2) || 'N/A'}\nSpread: ${((pair?.spreadPct || 0) * 100).toFixed(4)}%`;
+  // Senal fuerte
+      const body = `Par: ${pair?.symbol} | Venue: ${pair?.venue}
+Direccion: ${signal.bias}
+Confianza: ${signal.confidence}%
+Setup: ${signal.setup || 'N/A'}
+Precio actual: ${pair?.price}
+Horizonte: ${signal.horizon || 'N/A'}
+Vol ratio: ${signal.volumeRatio?.toFixed(2) || 'N/A'}
+Spread: ${((pair?.spreadPct || 0) * 100).toFixed(4)}%`;
       window.quant.sendAlert(subject, body).catch(() => {});
       logEvent('OK', `Alerta enviada: ${subject}`);
     }
   }
 
-  // ── Spread excesivo ──────────────────────────────────────
+  // Spread excesivo
   const tSpread = _alertConfig.triggers?.highSpread;
   if (tSpread?.enabled && pair?.spreadPct > (tSpread.maxSpreadPct || 0.0015)) {
     const key = `highSpread:${pair?.symbol}:${Math.floor(now / 300000)}`; // una vez cada 5 min
@@ -3182,7 +3329,7 @@ async function loadCalibrationStatus() {
     const st  = $('calibrationStatus');
     const det = $('calibrationDetail');
     if (!cal?.ok) {
-      if (st)  st.textContent  = cal?.reason || 'Sin calibración guardada';
+      if (st)  st.textContent  = cal?.reason || 'Sin calibracion guardada';
       if (det) det.textContent = '';
       return;
     }
@@ -3191,16 +3338,19 @@ async function loadCalibrationStatus() {
     if (det) {
       const rows = Object.entries(cal.symbolRatios || {})
         .sort((a, b) => b[1].n - a[1].n).slice(0, 8)
-        .map(([sym, v]) => `${sym}: hist ${(v.histWr * 100).toFixed(0)}% → live ${(v.liveWr * 100).toFixed(0)}% (×${v.ratio.toFixed(2)}, ${v.n} trades)`)
+        .map(([sym, v]) => `${sym}: hist ${(v.histWr * 100).toFixed(0)}% -> live ${(v.liveWr * 100).toFixed(0)}% (x${v.ratio.toFixed(2)}, ${v.n} trades)`)
         .join('\n');
-      det.textContent = `${cal.label}\n\nPor símbolo:\n${rows || 'Sin desglose por símbolo'}`;
+      det.textContent = `${cal.label}
+
+Por simbolo:
+${rows || 'Sin desglose por simbolo'}`;
     }
   } catch (err) {
     logEvent('WARN', `loadCalibrationStatus: ${err.message}`);
   }
 }
 
-// ── Conversaciones ────────────────────────────────────────────────────────────
+// Conversaciones
 
 function genConvId() {
   return `conv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -3215,37 +3365,37 @@ function autoSaveConversation() {
 }
 
 function startNewConversation() {
-  // Guarda la sesión actual antes de crear una nueva
+  // Guarda la sesion actual antes de crear una nueva
   autoSaveConversation();
   state.conversationId = genConvId();
   state.messages       = [];
   const box = $('chatLog');
   if (box) box.innerHTML = '';
-  addChat('Quant', 'Nueva conversación iniciada. ¿En qué te ayudo?');
+  addChat('Quant', 'Nueva conversacion iniciada. ?En que te ayudo?');
   setView('dashboard');
 }
 
 async function loadConversationsList() {
   const list = $('convList');
   if (!list) return;
-  list.innerHTML = '<p style="color:#8fa3c0;font-size:13px">Cargando…</p>';
+  list.innerHTML = '<p style="color:#8fa3c0;font-size:13px">Cargando...</p>';
   try {
     const convs = await window.quant.conversationsList();
     if (!convs.length) {
-      list.innerHTML = '<p style="color:#8fa3c0;font-size:13px">No hay conversaciones guardadas todavía. Las conversaciones se guardan automáticamente cuando hablas con Quant.</p>';
+      list.innerHTML = '<p style="color:#8fa3c0;font-size:13px">No hay conversaciones guardadas todavia. Las conversaciones se guardan automaticamente cuando hablas con Quant.</p>';
       return;
     }
     list.innerHTML = convs.map((c) => `
       <div class="conv-row" data-id="${escapeHtml(c.id)}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:6px;background:#0d1825;border:1px solid #1e3050;border-radius:8px;cursor:pointer">
         <div style="flex:1;min-width:0" class="conv-load-btn">
           <div style="font-weight:600;color:#c5d3e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.name)}</div>
-          <div style="font-size:12px;color:#5a7fa8;margin-top:2px">${new Date(c.updatedAt).toLocaleString('es-CO')} · ${c.messageCount} mensajes</div>
+          <div style="font-size:12px;color:#5a7fa8;margin-top:2px">${new Date(c.updatedAt).toLocaleString('es-CO')} | ${c.messageCount} mensajes</div>
         </div>
-        <button class="ghost-btn conv-rename-btn" style="padding:4px 10px;font-size:12px">✎ Renombrar</button>
-        <button class="ghost-btn conv-delete-btn" style="padding:4px 10px;font-size:12px;color:#e05a5a;border-color:#e05a5a">✕ Eliminar</button>
+        <button class="ghost-btn conv-rename-btn" style="padding:4px 10px;font-size:12px">Renombrar</button>
+        <button class="ghost-btn conv-delete-btn" style="padding:4px 10px;font-size:12px;color:#e05a5a;border-color:#e05a5a">Eliminar</button>
       </div>`).join('');
 
-    // Delegación de eventos
+    // Delegacion de eventos
     list.querySelectorAll('.conv-load-btn').forEach((btn) => {
       btn.addEventListener('click', () => openConversation(btn.closest('.conv-row').dataset.id));
     });
@@ -3260,9 +3410,9 @@ async function loadConversationsList() {
   }
 }
 
-// Boot cognitivo: si existe una conversación previa, la restaura silenciosamente.
+// Boot cognitivo: si existe una conversacion previa, la restaura silenciosamente.
 // No emite mensajes teatrales. Si no hay nada que decir, no dice nada.
-// Devuelve true si restauró contexto, false en caso contrario.
+// Devuelve true si restauro contexto, false en caso contrario.
 async function loadLastConversationIfAny() {
   try {
     const convs = await window.quant.conversationsList();
@@ -3282,9 +3432,9 @@ async function loadLastConversationIfAny() {
     if (!box) return false;
     box.innerHTML = '';
     for (const m of state.messages) {
-      renderChatMessage(m.role === 'user' ? 'Tú' : 'Quant', m.content);
+      renderChatMessage(m.role === 'user' ? 'Tu' : 'Quant', m.content);
     }
-    logEvent('OK', `Contexto restaurado: ${last.name || 'última conversación'}`);
+    logEvent('OK', `Contexto restaurado: ${last.name || 'ultima conversacion'}`);
     return true;
   } catch (err) {
     logEvent('WARN', `Restaurar contexto: ${err.message}`);
@@ -3295,8 +3445,8 @@ async function loadLastConversationIfAny() {
 async function openConversation(id) {
   try {
     const data = await window.quant.conversationLoad(id);
-    if (!data.ok) { alert(`No se pudo cargar la conversación: ${data.error}`); return; }
-    // Guarda la sesión activa antes de cambiar
+    if (!data.ok) { alert(`No se pudo cargar la conversacion: ${data.error}`); return; }
+    // Guarda la sesion activa antes de cambiar
     autoSaveConversation();
     state.conversationId = id;
     state.messages = Array.isArray(data.messages) ? data.messages : [];
@@ -3305,11 +3455,11 @@ async function openConversation(id) {
     if (box) {
       box.innerHTML = '';
       for (const m of state.messages) {
-        addChat(m.role === 'user' ? 'Tú' : 'Quant', m.content);
+        addChat(m.role === 'user' ? 'Tu' : 'Quant', m.content);
       }
     }
     setView('dashboard');
-    logEvent('OK', `Conversación cargada: ${data.name}`);
+    logEvent('OK', `Conversacion cargada: ${data.name}`);
   } catch (err) {
     logEvent('WARN', `openConversation: ${err.message}`);
   }
@@ -3337,7 +3487,7 @@ function showRenameDialog(id) {
 }
 
 async function confirmDeleteConversation(id) {
-  if (!confirm('¿Eliminar esta conversación? Esta acción no se puede deshacer.')) return;
+  if (!confirm('?Eliminar esta conversacion? Esta accion no se puede deshacer.')) return;
   try {
     await window.quant.conversationDelete(id);
     if (state.conversationId === id) {
@@ -3345,7 +3495,7 @@ async function confirmDeleteConversation(id) {
       state.messages = [];
     }
     loadConversationsList();
-    logEvent('OK', `Conversación ${id} eliminada`);
+    logEvent('OK', `Conversacion ${id} eliminada`);
   } catch (err) {
     logEvent('WARN', `deleteConversation: ${err.message}`);
   }
@@ -3367,18 +3517,21 @@ async function manualCalibration() {
     if (det) {
       const rows = Object.entries(cal.symbolRatios || {})
         .sort((a, b) => b[1].n - a[1].n).slice(0, 8)
-        .map(([sym, v]) => `${sym}: hist ${(v.histWr * 100).toFixed(0)}% → live ${(v.liveWr * 100).toFixed(0)}% (×${v.ratio.toFixed(2)}, ${v.n} trades)`)
+        .map(([sym, v]) => `${sym}: hist ${(v.histWr * 100).toFixed(0)}% -> live ${(v.liveWr * 100).toFixed(0)}% (x${v.ratio.toFixed(2)}, ${v.n} trades)`)
         .join('\n');
-      det.textContent = `${cal.label}\n\nPor símbolo:\n${rows || 'Sin desglose por símbolo'}`;
+      det.textContent = `${cal.label}
+
+Por simbolo:
+${rows || 'Sin desglose por simbolo'}`;
     }
-    logEvent('OK', `Calibración nocturna manual: ${cal.label}`);
+    logEvent('OK', `Calibracion nocturna manual: ${cal.label}`);
   } catch (err) {
     if (st) st.textContent = `Error: ${err.message}`;
     logEvent('WARN', `manualCalibration: ${err.message}`);
   }
 }
 
-// ── Cálculo de tamaño por riesgo % ───────────────────────────────────────────
+// Calculo de tamano por riesgo %
 async function calcSizeFromRisk() {
   const symbol    = state.symbol;
   const stopPrice = parseFloat($('stopLossInput').value);
@@ -3392,14 +3545,14 @@ async function calcSizeFromRisk() {
     if (info) info.textContent = 'Stop demasiado cercano al precio actual (< 0.05%).'; return;
   }
 
-  if (info) info.textContent = 'Calculando…';
+  if (info) info.textContent = 'Calculando...';
   try {
     const res = await window.quant.calcPositionSize(symbol, riskPct, entryPrice, stopPrice);
     if (res?.ok === false) { if (info) info.textContent = `Error: ${res.error}`; return; }
     $('qtyInput').value = res.qty;
     if (info) info.textContent =
-      `Size: ${res.qty} ${symbol.replace(/USDT|BTC|ETH|BNB/, '')} · ` +
-      `Riesgo: ${res.riskAmount.toFixed(2)} USDT (${riskPct}% de ${res.capital.toFixed(2)}) · ` +
+      `Size: ${res.qty} ${symbol.replace(/USDT|BTC|ETH|BNB/, '')} | ` +
+      `Riesgo: ${res.riskAmount.toFixed(2)} USDT (${riskPct}% de ${res.capital.toFixed(2)}) | ` +
       `Delta stop: ${res.priceDelta.toFixed(4)}`;
     logEvent('OK', `Size calculado: ${res.qty} ${symbol} @ riesgo ${riskPct}%`);
   } catch (err) {
@@ -3408,7 +3561,7 @@ async function calcSizeFromRisk() {
   }
 }
 
-// ── Envío de orden (real o bloqueada) ────────────────────────────────────────
+// Envio de orden (real o bloqueada)
 async function submitOrder(side) {
   const symbol      = state.symbol;
   const venue       = state.platform;
@@ -3420,49 +3573,50 @@ async function submitOrder(side) {
   const expected     = `CONFIRMO ${side} ${symbol}`.toUpperCase();
   const rb           = $('orderResultBox');
 
-  // ── Candado 1: REAL_TRADING desactivado ────────────────────────────────
+  // Candado 1: REAL_TRADING desactivado
   if (!state.env.realTrading) {
     logEvent('WARN', `Orden ${side} ${symbol} bloqueada: REAL_TRADING=false`);
     window.quant.memoryWrite('trade', { status: 'blocked', reason: 'REAL_TRADING=false', side, symbol, qty, venue, stopPrice, macro_context: currentNewsContext(symbol) }).then(loadMemoryStats);
-    if (rb) { rb.style.display = 'block'; rb.style.color = '#e05a5a'; rb.textContent = `⛔ Bloqueada: REAL_TRADING=false en .env. Actívalo y reinicia la app para operar real.`; }
+    if (rb) { rb.style.display = 'block'; rb.style.color = '#e05a5a'; rb.textContent = `BLOQUEADA: REAL_TRADING=false en .env. Activalo y reinicia la app para operar real.`; }
     return;
   }
 
-  // ── Candado 2: venue distinto de BINANCE ───────────────────────────────
+  // Candado 2: venue distinto de BINANCE
   if (venue !== 'BINANCE') {
-    if (rb) { rb.style.display = 'block'; rb.style.color = '#e09a3a'; rb.textContent = `⚠ Ejecución real actualmente solo disponible en BINANCE. Cambia el venue.`; }
+    if (rb) { rb.style.display = 'block'; rb.style.color = '#e09a3a'; rb.textContent = `ALERTA: Ejecucion real actualmente solo disponible en BINANCE. Cambia el venue.`; }
     return;
   }
 
-  // ── Candado 3: validaciones básicas ───────────────────────────────────
-  if (!qty || qty <= 0) { if (rb) { rb.style.display='block'; rb.style.color='#e05a5a'; rb.textContent='Cantidad inválida.'; } return; }
+  // Candado 3: validaciones basicas
+  if (!qty || qty <= 0) { if (rb) { rb.style.display='block'; rb.style.color='#e05a5a'; rb.textContent='Cantidad invalida.'; } return; }
   if (orderType === 'LIMIT' && (!limitPrice || limitPrice <= 0)) {
-    if (rb) { rb.style.display='block'; rb.style.color='#e05a5a'; rb.textContent='Ingresa un precio límite.'; } return;
+    if (rb) { rb.style.display='block'; rb.style.color='#e05a5a'; rb.textContent='Ingresa un precio limite.'; } return;
   }
 
-  // ── Candado 4: confirmación textual exacta ─────────────────────────────
+  // Candado 4: confirmacion textual exacta
   if (confirmation !== expected) {
-    logEvent('WARN', `Orden ${side} ${symbol} bloqueada: confirmación incorrecta`);
-    if (rb) { rb.style.display='block'; rb.style.color='#e09a3a'; rb.textContent=`⚠ Escribe exactamente: ${expected}`; }
+    logEvent('WARN', `Orden ${side} ${symbol} bloqueada: confirmacion incorrecta`);
+    if (rb) { rb.style.display='block'; rb.style.color='#e09a3a'; rb.textContent=`ALERTA: Escribe exactamente: ${expected}`; }
     return;
   }
 
-  // ── Macro risk gate ────────────────────────────────────────────────────
+  // Macro risk gate
   const macro = macroRiskLevel(symbol);
   if (macro.risk === 'high') {
-    const ok = confirm(`⚠ Riesgo macro ALTO: ${macro.reasons.join(', ')}.\n¿Confirmas igualmente la orden ${side} ${qty} ${symbol}?`);
+    const ok = confirm(`ALERTA: Riesgo macro ALTO: ${macro.reasons.join(', ')}.
+Confirmas igualmente la orden ${side} ${qty} ${symbol}?`);
     if (!ok) { if (rb) { rb.style.display='block'; rb.style.color='#e09a3a'; rb.textContent='Orden cancelada por riesgo macro.'; } return; }
   }
 
-  // ── Envío ──────────────────────────────────────────────────────────────
-  if (rb) { rb.style.display='block'; rb.style.color='#8fa3c0'; rb.textContent=`Enviando ${orderType} ${side} ${qty} ${symbol}…`; }
+  // Envio
+  if (rb) { rb.style.display='block'; rb.style.color='#8fa3c0'; rb.textContent=`Enviando ${orderType} ${side} ${qty} ${symbol}...`; }
   logEvent('OK', `Enviando orden real: ${orderType} ${side} ${qty} ${symbol}`);
 
   try {
     const res = await window.quant.placeOrder(side, symbol, qty, orderType, limitPrice);
     if (!res.ok) throw new Error(res.error || 'Error desconocido');
 
-    const msg = `✅ ${res.status} · ID ${res.orderId} · ${res.qty} ${symbol.replace(/USDT$/, '')} @ ${fmtPrice(res.price)} · ${fmtPrice(res.notional)} USDT`;
+    const msg = `OK ${res.status} | ID ${res.orderId} | ${res.qty} ${symbol.replace(/USDT$/, '')} @ ${fmtPrice(res.price)} | ${fmtPrice(res.notional)} USDT`;
     if (rb) { rb.style.display='block'; rb.style.color='#4caf7d'; rb.textContent=msg; }
     logEvent('OK', `Orden ejecutada: ${msg}`);
 
@@ -3476,10 +3630,10 @@ async function submitOrder(side) {
     });
     loadMemoryStats();
 
-    // Limpiar confirmación para evitar doble envío accidental
+    // Limpiar confirmacion para evitar doble envio accidental
     $('confirmInput').value = '';
 
-    // Disparar alerta de email si está configurado
+    // Disparar alerta de email si esta configurado
     if (_alertConfig?.enabled) {
       window.quant.sendAlert(
         `Orden ejecutada: ${side} ${symbol}`,
@@ -3487,7 +3641,7 @@ async function submitOrder(side) {
       ).catch(() => {});
     }
   } catch (err) {
-    if (rb) { rb.style.display='block'; rb.style.color='#e05a5a'; rb.textContent=`❌ ${err.message}`; }
+    if (rb) { rb.style.display='block'; rb.style.color='#e05a5a'; rb.textContent=`ERROR ${err.message}`; }
     logEvent('ERR', `Orden fallida: ${err.message}`);
     await window.quant.memoryWrite('trade', { status: 'error', reason: err.message, side, symbol, qty, venue, ts: new Date().toISOString() });
     loadMemoryStats();
@@ -3498,6 +3652,25 @@ function updateClock() {
   const now = new Date();
   $('clockNow').textContent = now.toTimeString().slice(0, 8);
   $('dateNow').textContent = now.toLocaleDateString('es-CO');
+}
+
+async function refreshTrainingLoopStatus(force = false) {
+  const now = Date.now();
+  if (!force && state.training.loopStatusFetchedAt && (now - state.training.loopStatusFetchedAt) < 10000) {
+    return state.training.loopStatus;
+  }
+  try {
+    const response = await fetch(window.quantConfig.getEndpoint('/api/training/demo/loop/status'), {
+      credentials: 'include'
+    });
+    if (response.status !== 200) return state.training.loopStatus;
+    const payload = await response.json();
+    state.training.loopStatus = payload && payload.scheduler ? payload.scheduler : null;
+    state.training.loopStatusFetchedAt = now;
+  } catch (_) {
+    state.training.loopStatusFetchedAt = now;
+  }
+  return state.training.loopStatus;
 }
 
 // PHASE 1: Update hero section with live data
@@ -3537,8 +3710,11 @@ async function updateHeroSection() {
       window.quantStateManager.killSwitch.lastUpdated = new Date(statusData.bot.updatedAt);
     }
 
+    await refreshTrainingLoopStatus();
+
     // Update hero controller UI with synced state
     window.heroController.updateUI();
+    renderDashboardExecutive();
 
     // Fetch trades for P&L calculation (less frequently - every 10 seconds)
     const now = Date.now();
@@ -3582,7 +3758,7 @@ async function updateHeroSection() {
               const symbol = lastTrade.payload?.symbol || state.symbol;
               const price = lastTrade.payload?.price || '--';
               const timeAgo = getTimeAgoText(new Date(lastTrade.ts));
-              window.heroController.updateLastAction(`${side} ${symbol} @ ${price} • ${timeAgo}`);
+              window.heroController.updateLastAction(`${side} ${symbol} @ ${price} | ${timeAgo}`);
             } else {
               window.heroController.updateLastAction('No operations yet');
             }
@@ -3640,8 +3816,7 @@ function getTimeAgoText(date) {
 // PHASE 2: Consume Quant API Contract v1 - Trading Real endpoints
 async function setTradingRealBackend(enabled) {
   try {
-    const endpoint = enabled
-      ? window.quantConfig.getEndpoint('/api/bot/trading-real/on')
+    const endpoint = enabled ? window.quantConfig.getEndpoint('/api/bot/trading-real/on')
       : window.quantConfig.getEndpoint('/api/bot/trading-real/off');
 
     const response = await fetch(endpoint, {
@@ -3682,8 +3857,7 @@ async function setTradingRealBackend(enabled) {
 
 async function setTrainingBackend(enabled) {
   try {
-    const endpoint = enabled
-      ? window.quantConfig.getEndpoint('/api/bot/training/on')
+    const endpoint = enabled ? window.quantConfig.getEndpoint('/api/bot/training/on')
       : window.quantConfig.getEndpoint('/api/bot/training/off');
 
     const response = await fetch(endpoint, {
@@ -3718,8 +3892,7 @@ async function setTrainingBackend(enabled) {
 
 async function setKillSwitchBackend(enabled) {
   try {
-    const endpoint = enabled
-      ? window.quantConfig.getEndpoint('/api/bot/kill-switch/on')
+    const endpoint = enabled ? window.quantConfig.getEndpoint('/api/bot/kill-switch/on')
       : window.quantConfig.getEndpoint('/api/bot/kill-switch/off');
 
     const response = await fetch(endpoint, {

@@ -57,7 +57,7 @@ test('full UI exposes the unified shell without legacy lab runtime coupling', ()
   assert.notEqual(indexBuffer[0], 0xef, 'index.html should not start with a UTF-8 BOM');
   assert.doesNotMatch(
     indexHtml,
-    /â€”|â€“|â€|â†|âŒ|â—|âš|âŸ|â¬|Ã[\u0080-\u00bf]|Â·|ðŸ|Ã°|Ãƒ|âˆ’/,
+    /(?:\uFFFD|\u00C3[\u0080-\u00BF]|\u00C2[\u0080-\u00BF]|\u00E2[\u0080-\u00BF]{2}|\u00F0[\u0080-\u00BF]{2})/,
     'index.html should not contain common mojibake sequences'
   );
 
@@ -72,6 +72,17 @@ test('full UI exposes the unified shell without legacy lab runtime coupling', ()
   assert.match(indexHtml, /data-nav-group="system"/);
   assert.match(indexHtml, /<button class="nav-item active" data-view="dashboard">/);
   assert.match(indexHtml, /<section class="view active" id="view-dashboard">/);
+  assert.match(indexHtml, /class="dashboard-executive"/);
+  assert.match(indexHtml, /class="[^"]*\bdashboard-hero\b/);
+  assert.match(indexHtml, /class="[^"]*\bdashboard-workspace\b/);
+  assert.match(indexHtml, /class="[^"]*\bdashboard-rail\b/);
+  assert.match(indexHtml, /class="[^"]*\bdashboard-activity\b/);
+  assert.match(indexHtml, /id="dashboardOpenPositions"/);
+  assert.match(indexHtml, /id="dashboardStrategyRanking"/);
+  assert.match(indexHtml, /id="dashboardSignalCandidates"/);
+  assert.match(indexHtml, /id="dashboardRecentTrades"/);
+  assert.match(indexHtml, /id="dashboardRecentLessons"/);
+  assert.match(indexHtml, /id="dashboardPerformanceSnapshot"/);
   assert.doesNotMatch(indexHtml, /id="view-lab"/);
   assert.doesNotMatch(indexHtml, /<button class="nav-item[^"]*" data-view="lab">/);
   assert.doesNotMatch(indexHtml, /data-view="lab"/);
@@ -106,4 +117,12 @@ test('frontend defaults and boot path keep training on until backend sync wins',
   assert.match(stateManager, /training:\s*\{\s*enabled:\s*true,/s);
   assert.match(stateManager, /reset:\s*\(\)\s*=>\s*\{[\s\S]*training\.enabled = true;/);
   assert.match(renderer, /await runSelfAudit\(\);\s*await updateHeroSection\(\);/);
+  assert.match(renderer, /refreshTrainingLoopStatus\(\)/);
+  assert.match(renderer, /dashboardTrainingRailStatus', trainingRailStatus/);
+  assert.match(renderer, /compactDashboardText\(lesson\.lesson \|\| lesson\.text \|\| 'Sin nota detallada\.', 92\)/);
+  assert.doesNotMatch(
+    renderer,
+    /(?:\u00C3[\u0080-\u00BF]|\u00C2[\u0080-\u00BF]|\u00E2[\u0080-\u00BF]{2}|\uFFFD)/,
+    'renderer.js should not keep known mojibake in visible dashboard, chat, or manual trading copy'
+  );
 });

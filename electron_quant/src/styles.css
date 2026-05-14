@@ -3031,7 +3031,7 @@ select:hover, input:hover, select:focus, input:focus {
   padding: 14px;
   gap: 14px;
   background: transparent;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 332px;
 }
 
 .app-shell--global .side-card,
@@ -3080,13 +3080,365 @@ select:hover, input:hover, select:focus, input:focus {
   border-color: rgba(139, 92, 246, 0.16);
 }
 
+/* Commit 3 dashboard executive workspace */
+#view-dashboard {
+  padding-right: 0;
+}
+
+.dashboard-executive {
+  display: grid;
+  gap: 14px;
+}
+
+.dashboard-section-label,
+.dashboard-metric-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(216, 180, 254, 0.78);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.dashboard-hero {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-color: rgba(139, 92, 246, 0.24);
+  background:
+    radial-gradient(circle at top right, rgba(168, 85, 247, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(17, 24, 39, 0.92), rgba(8, 13, 25, 0.96));
+}
+
+.dashboard-hero-balance {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.dashboard-hero-copy h1 {
+  margin: 6px 0 6px;
+  font-family: var(--font-mono);
+  font-size: clamp(22px, 3vw, 30px);
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+}
+
+.dashboard-hero-copy p {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.dashboard-balance-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 16px;
+  background: rgba(8, 13, 25, 0.78);
+  border: 1px solid rgba(139, 92, 246, 0.18);
+  border-radius: 18px;
+  box-shadow: inset 0 1px rgba(255,255,255,0.03);
+}
+
+.dashboard-balance-value {
+  font-family: var(--font-mono);
+  font-size: clamp(22px, 3vw, 34px);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+}
+
+.dashboard-balance-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.dashboard-balance-caption,
+.dashboard-stat-copy,
+.dashboard-sync-line,
+.dashboard-market-inline {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.dashboard-hero-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dashboard-stat-card {
+  grid-column: span 1;
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  background: rgba(8, 13, 25, 0.64);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  border-radius: 16px;
+}
+
+.dashboard-stat-value,
+.dashboard-state-line .state-value {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.dashboard-state-line,
+.dashboard-toggle-line,
+.dashboard-action-row,
+.dashboard-sync-line,
+.dashboard-market-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dashboard-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(168, 85, 247, 0.95);
+  box-shadow: 0 0 14px rgba(168, 85, 247, 0.4);
+}
+
+.dashboard-inline-btn {
+  justify-self: start;
+  padding: 5px 9px;
+  font-size: 10px;
+}
+
+.dashboard-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.72fr) minmax(285px, 0.88fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.dashboard-context-strip {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr 0.9fr 0.8fr;
+  gap: 10px;
+}
+
+.dashboard-context-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  background: rgba(8, 13, 25, 0.58);
+  border: 1px solid rgba(139, 92, 246, 0.14);
+  border-radius: 16px;
+}
+
+.dashboard-context-card .dashboard-stat-value {
+  font-size: 18px;
+}
+
+.dashboard-main-column {
+  min-width: 0;
+}
+
+.dashboard-chart-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px 18px;
+}
+
+.dashboard-panel-head {
+  margin-bottom: 0;
+}
+
+.dashboard-chart-tools {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-chart-canvas {
+  min-height: 500px;
+}
+
+.dashboard-chart-canvas #tradeChart {
+  min-height: 500px;
+  border-radius: 14px;
+}
+
+.dashboard-rail {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-rail-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.dashboard-rail-card--signal {
+  padding-bottom: 18px;
+}
+
+.signal-stats--rail {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-rail-status-grid,
+.dashboard-performance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dashboard-rail-stat,
+.dashboard-performance-item {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  background: rgba(8, 13, 25, 0.58);
+  border: 1px solid rgba(139, 92, 246, 0.12);
+  border-radius: 14px;
+}
+
+.dashboard-rail-stat span,
+.dashboard-performance-item span {
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dashboard-rail-stat b,
+.dashboard-performance-item b {
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+.dashboard-compact-list,
+.dashboard-activity-list {
+  display: grid;
+  gap: 10px;
+}
+
+.dashboard-list-item {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  background: rgba(8, 13, 25, 0.56);
+  border: 1px solid rgba(139, 92, 246, 0.12);
+  border-radius: 14px;
+}
+
+.dashboard-list-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dashboard-list-item b,
+.dashboard-list-item strong {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.dashboard-list-item p,
+.dashboard-list-item small {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dashboard-empty {
+  padding: 16px;
+  border: 1px dashed rgba(139, 92, 246, 0.2);
+  border-radius: 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+  background: rgba(8, 13, 25, 0.44);
+}
+
+.dashboard-activity {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dashboard-activity-card,
+.dashboard-manual-panel {
+  padding: 16px;
+}
+
+.dashboard-cta-btn {
+  padding: 7px 10px;
+  font-size: 11px;
+}
+
+.dashboard-manual-panel .manual-grid {
+  margin-top: 6px;
+}
+
+@media (max-width: 1320px) {
+  .dashboard-hero-grid,
+  .dashboard-context-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-rail {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-rail-card--signal {
+    grid-column: 1 / -1;
+  }
+
+  .dashboard-activity {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 960px) {
+  .dashboard-hero-balance,
+  .dashboard-hero-grid,
+  .dashboard-context-strip,
+  .dashboard-rail,
+  .dashboard-rail-status-grid,
+  .dashboard-performance-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-stat-card,
+  .dashboard-context-card {
+    grid-column: auto;
+  }
+
+  .dashboard-chart-canvas,
+  .dashboard-chart-canvas #tradeChart {
+    min-height: 320px;
+  }
+}
+
 @media (max-width: 1450px) {
   .app-shell--global {
     grid-template-columns: 248px minmax(0, 1fr);
   }
 
   .app-shell--global .shell-content {
-    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-columns: minmax(0, 1fr) 300px;
   }
 }
 

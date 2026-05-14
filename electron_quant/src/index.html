@@ -15,7 +15,7 @@
   <div class="app-shell app-shell--global">
     <aside class="sidebar shell-sidebar">
       <div class="brand brand--global">
-        <div class="brand-mark">◆</div>
+        <div class="brand-mark">Q</div>
         <div>
           <div class="brand-title">QUANT</div>
           <div class="brand-sub">GLOBAL MARKET OPERATIONS</div>
@@ -80,12 +80,12 @@
       </div>
       <div class="top-spacer"></div>
       <div class="last-update">Ultima actualizacion: <span id="lastUpdate">--:--:--</span></div>
-      <span id="syncStatusBadge" style="font-size:11px;letter-spacing:.5px;cursor:default" title="Estado de sincronización MT5 con cloud"></span>
+      <span id="syncStatusBadge" style="font-size:11px;letter-spacing:.5px;cursor:default" title="Estado de sincronizacion MT5 con cloud"></span>
       <button class="ghost-btn" id="topClearMemoryBtn">Limpiar memoria</button>
-      <button class="ghost-btn refresh-data" id="refreshBtn">⟳ Actualizar datos</button>
+      <button class="ghost-btn refresh-data" id="refreshBtn">Actualizar datos</button>
       <button class="primary-btn safety-hidden" id="enableTradingBtn">HABILITAR TRADING</button>
-      <a id="desktopDownloadBtn" href="#" style="display:none" class="ghost-btn">⬇ Descargar escritorio</a>
-      <button class="ghost-btn" data-jump="settings">⚙ Configuracion ⌄</button>
+      <a id="desktopDownloadBtn" href="#" style="display:none" class="ghost-btn">Descargar escritorio</a>
+      <button class="ghost-btn" data-jump="settings">Configuracion</button>
     </header>
 
     <main class="content shell-content">
@@ -101,207 +101,272 @@
       </section>
 
       <section class="view active" id="view-dashboard">
-        <!-- REDESIGN: Status Bar Compacta (Horizontal) -->
-        <div class="quant-status-bar">
-          <div class="status-item">
-            <span class="status-label">MODE</span>
-            <span class="state-value" id="botStateMode">IDLE</span>
-          </div>
-
-          <div class="status-item trading-indicator">
-            <span class="indicator-dot trading-live" id="tradingRealDot"></span>
-            <span class="status-label">TRADING REAL</span>
-            <span class="control-status" id="tradingRealStatus">OFF</span>
-            <button class="toggle-btn tiny" id="tradingRealToggle" data-toggle="trading-real">
-              <span class="toggle-state">ENABLE</span>
-            </button>
-          </div>
-
-          <div class="status-item training-indicator">
-            <span class="indicator-dot training-sim" id="trainingDot"></span>
-            <span class="status-label">TRAINING</span>
-            <span class="control-status" id="trainingStatus">OFF</span>
-            <button class="toggle-btn tiny" id="trainingToggle" data-toggle="training">
-              <span class="toggle-state">ENABLE</span>
-            </button>
-          </div>
-
-          <div class="status-item">
-            <span class="status-label">CONFIDENCE</span>
-            <span id="confidenceText">0%</span>
-          </div>
-
-          <div class="status-item pnl-item">
-            <span class="status-label">P&L TODAY</span>
-            <span class="metric-value" id="botStatePnl">+$0.00</span>
-          </div>
-
-          <div class="status-spacer"></div>
-
-          <button class="btn-secondary" id="pauseTradingBtn" title="Pausa operaciones">⏸</button>
-          <button class="btn-danger kill-switch" id="killSwitchBtn" title="Stop all real trading">⚠</button>
-
-          <!-- Kill Switch Confirmation Modal (hidden by default) -->
-          <div class="kill-switch-confirm" id="killSwitchConfirm" style="display: none;">
-            <div class="confirm-box">
-              <p>CONFIRM: Stop real trading?</p>
-              <p class="confirm-hint">3 seconds required</p>
-              <div class="confirm-progress">
-                <div class="confirm-bar" id="confirmBar"></div>
+        <div class="dashboard-executive">
+          <section class="panel dashboard-hero">
+            <div class="dashboard-hero-balance">
+              <div class="dashboard-hero-copy">
+                <span class="dashboard-section-label">Executive Workspace</span>
+                <h1>Control operativo de Quant</h1>
+                <p>Resumen ejecutivo del motor, el training paper y el activo principal antes de entrar al workspace de ejecucion.</p>
               </div>
-              <div class="confirm-buttons">
-                <button class="btn-secondary" id="cancelKillBtn">CANCEL</button>
-                <button class="btn-danger" id="confirmKillBtn" disabled>CONFIRM</button>
+              <div class="dashboard-balance-card">
+                <span class="dashboard-metric-label">Balance / Equity</span>
+                <strong class="dashboard-balance-value" id="dashboardEquityValue">$100,000.00</strong>
+                <div class="dashboard-balance-meta">
+                  <span class="metric-value" id="botStatePnl">+$0.00</span>
+                  <span class="metric-change" id="botStatePnlPct">0.00%</span>
+                </div>
+                <span class="dashboard-balance-caption" id="memoryNow">0 msg - 0 trades</span>
               </div>
             </div>
-          </div>
-        </div>
 
-        <!-- KPI GRID: Activo Principal + Sidekicks -->
-        <div class="kpi-grid-compact">
-          <div class="kpi-card asset-card">
-            <div class="label">ACTIVO PRINCIPAL</div>
-            <select id="platformSelect" class="platform-select">
-              <option value="BINANCE">BINANCE</option>
-              <option value="MT5">MT5</option>
-            </select>
-            <div class="symbol-combo" id="assetCombo">
-              <input id="assetSearch" autocomplete="off" spellcheck="false" placeholder="Buscar par..." />
-              <button id="assetDropBtn">⌄</button>
-              <div class="symbol-menu" id="assetMenu"></div>
+            <div class="dashboard-hero-grid">
+              <article class="dashboard-stat-card dashboard-stat-card--state">
+                <span class="dashboard-metric-label">Estado general</span>
+                <div class="dashboard-state-line">
+                  <span class="state-value" id="botStateMode">IDLE</span>
+                  <span class="dashboard-dot dashboard-dot--sync"></span>
+                </div>
+                <p class="dashboard-stat-copy" id="dashboardModeSummary">Modo seguro</p>
+              </article>
+
+              <article class="dashboard-stat-card dashboard-stat-card--toggle">
+                <span class="dashboard-metric-label">Training</span>
+                <div class="dashboard-toggle-line">
+                  <span class="indicator-dot training-sim" id="trainingDot"></span>
+                  <span class="control-status" id="trainingStatus">OFF</span>
+                </div>
+                <button class="ghost-btn dashboard-inline-btn" id="trainingToggle" data-toggle="training">Toggle</button>
+              </article>
+
+              <article class="dashboard-stat-card dashboard-stat-card--toggle">
+                <span class="dashboard-metric-label">Trading real</span>
+                <div class="dashboard-toggle-line">
+                  <span class="indicator-dot trading-live" id="tradingRealDot"></span>
+                  <span class="control-status" id="tradingRealStatus">OFF</span>
+                </div>
+                <button class="ghost-btn dashboard-inline-btn" id="tradingRealToggle" data-toggle="trading-real">Toggle</button>
+              </article>
+
+              <article class="dashboard-stat-card">
+                <span class="dashboard-metric-label">Scheduler</span>
+                <strong class="dashboard-stat-value" id="dashboardSchedulerStatus">Sin senal</strong>
+                <p class="dashboard-stat-copy">Ticks: <span id="dashboardTicksRun">No expuesto</span></p>
+              </article>
+
+              <article class="dashboard-stat-card">
+                <span class="dashboard-metric-label">Posiciones</span>
+                <strong class="dashboard-stat-value" id="dashboardOpenPositionsCount">0 abiertas</strong>
+                <p class="dashboard-stat-copy">Cerradas: <span id="dashboardClosedTradesCount">0</span></p>
+              </article>
+
+              <article class="dashboard-stat-card">
+                <span class="dashboard-metric-label">Confianza IA</span>
+                <strong class="dashboard-stat-value" id="confidenceText">0%</strong>
+                <p class="dashboard-stat-copy">Lectura compacta del stack analitico activo</p>
+              </article>
             </div>
-            <div class="sub" id="assetSub">Binance Spot - API</div>
-          </div>
 
-          <div class="kpi-card">
-            <div class="label">PRECIO ACTUAL</div>
-            <div class="kpi-value" id="priceNow">-</div>
-            <div class="positive" id="priceChange">-</div>
-          </div>
+            <div class="dashboard-context-strip">
+              <article class="dashboard-context-card dashboard-context-card--pair">
+                <span class="dashboard-metric-label">Activo principal</span>
+                <select id="platformSelect" class="platform-select">
+                  <option value="BINANCE">BINANCE</option>
+                  <option value="MT5">MT5</option>
+                </select>
+                <div class="symbol-combo" id="assetCombo">
+                  <input id="assetSearch" autocomplete="off" spellcheck="false" placeholder="Buscar par..." />
+                  <button id="assetDropBtn">v</button>
+                  <div class="symbol-menu" id="assetMenu"></div>
+                </div>
+                <p class="dashboard-stat-copy" id="assetSub">Binance Spot - API</p>
+              </article>
 
-          <div class="kpi-card">
-            <div class="label">SPREAD</div>
-            <div class="kpi-value" id="spreadNow">-</div>
-            <div class="sub" id="spreadSub">0.00%</div>
-          </div>
+              <article class="dashboard-context-card dashboard-context-card--market">
+                <span class="dashboard-metric-label">Pulso del activo</span>
+                <strong class="dashboard-stat-value" id="priceNow">-</strong>
+                <p class="dashboard-stat-copy" id="priceChange">-</p>
+                <div class="dashboard-market-inline">
+                  <span>Spread <b id="spreadNow">-</b></span>
+                  <span id="spreadSub">0.00%</span>
+                </div>
+              </article>
 
-          <div class="kpi-card">
-            <div class="label">HORA DEL SERVIDOR</div>
-            <div class="kpi-value" id="clockNow">--:--:--</div>
-            <div class="sub" id="dateNow">--/--/----</div>
-          </div>
+              <article class="dashboard-context-card dashboard-context-card--clock">
+                <span class="dashboard-metric-label">Ultima actualizacion</span>
+                <strong class="dashboard-stat-value" id="clockNow">--:--:--</strong>
+                <p class="dashboard-stat-copy" id="dateNow">--/--/----</p>
+                <div class="dashboard-sync-line">
+                  <span id="dashboardLastUpdate">--:--:--</span>
+                  <span id="dashboardSyncStatusBadge" title="Estado de sincronizacion MT5 con cloud"></span>
+                </div>
+              </article>
 
-          <div class="kpi-card memory-card">
-            <div class="label">MEMORIA / TRADES</div>
-            <div class="kpi-value" id="memoryNow">0 msg - 0 trades</div>
-            <div class="sub">Persistente local</div>
-          </div>
-        </div>
-
-        <div class="kpi-grid">
-          <div class="kpi-card asset-card">
-            <div class="label">ACTIVO PRINCIPAL</div>
-            <select id="platformSelect" class="platform-select">
-              <option value="BINANCE">BINANCE</option>
-              <option value="MT5">MT5</option>
-            </select>
-            <div class="symbol-combo" id="assetCombo">
-              <input id="assetSearch" autocomplete="off" spellcheck="false" placeholder="Buscar par..." />
-              <button id="assetDropBtn">⌄</button>
-              <div class="symbol-menu" id="assetMenu"></div>
+              <article class="dashboard-context-card dashboard-context-card--actions">
+                <span class="dashboard-metric-label">Controles</span>
+                <div class="dashboard-action-row">
+                  <button class="btn-secondary" id="pauseTradingBtn" title="Pausa operaciones">Pausa</button>
+                  <button class="btn-danger kill-switch" id="killSwitchBtn" title="Stop all real trading">Kill</button>
+                </div>
+              </article>
             </div>
-            <div class="sub" id="assetSub">Binance Spot - API</div>
-          </div>
 
-          <div class="kpi-card">
-            <div class="label">PRECIO ACTUAL</div>
-            <div class="kpi-value" id="priceNow">-</div>
-            <div class="positive" id="priceChange">-</div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="label">SPREAD</div>
-            <div class="kpi-value" id="spreadNow">-</div>
-            <div class="sub" id="spreadSub">0.00%</div>
-          </div>
-
-          <div class="kpi-card">
-            <div class="label">HORA DEL SERVIDOR</div>
-            <div class="kpi-value" id="clockNow">--:--:--</div>
-            <div class="sub" id="dateNow">--/--/----</div>
-          </div>
-
-          <div class="kpi-card memory-card">
-            <div class="label">MEMORIA / TRADES</div>
-            <div class="kpi-value" id="memoryNow">0 msg - 0 trades</div>
-            <div class="sub">Persistente local</div>
-          </div>
-        </div>
-
-        <!-- REDESIGN: Dashboard Grid - Gráfica Protagonista -->
-        <div class="dashboard-grid-new">
-          <!-- GRÁFICA: Centro absoluto -->
-          <section class="panel chart-panel chart-main">
-            <div class="panel-head">
-              <h2 id="chartTitle">GRAFICO EN TIEMPO REAL - BTCUSDT - M1</h2>
-              <button class="tiny-btn" id="expandChartBtn">↗</button>
-            </div>
-            <div class="tf-row" id="tfRow">
-              <button class="tf active" data-tf="M1">M1</button>
-              <button class="tf" data-tf="M5">M5</button>
-              <button class="tf" data-tf="M15">M15</button>
-              <button class="tf" data-tf="H1">H1</button>
-              <button class="tf" data-tf="H4">H4</button>
-              <button class="tf" data-tf="D1">D1</button>
-              <span class="tool-label">↯ Indicadores</span>
-            </div>
-            <div class="indicator-row">
-              <label><input type="checkbox" id="sslChannelToggle" checked /> SSL Channel</label>
-              <label><input type="checkbox" id="sslHybridToggle" checked /> SSL Hybrid</label>
-              <label><input type="checkbox" id="atrBandsToggle" checked /> Baseline + ATR Bands</label>
-            </div>
-            <div class="ohlc-line" id="ohlcLine">O - H - L - C - Vol -</div>
-            <canvas id="tradeChart"></canvas>
-          </section>
-
-          <!-- SIDEKICK: Señal IA pequeña -->
-          <section class="panel signal-panel signal-compact">
-            <div class="panel-head"><h2>SENAL IA (DEEPSEEK)</h2><span class="badge neutral" id="signalBadge">NEUTRAL</span></div>
-            <canvas id="gaugeCanvas"></canvas>
-            <div class="signal-message" id="signalMessage">Buen momento para no hacer nada</div>
-            <div class="signal-stats">
-              <div><small>Direccion</small><b id="sigDir">NEUTRAL</b></div>
-              <div><small>Fuerza</small><b id="sigStrength">MEDIA</b></div>
-              <div><small>Volatilidad</small><b id="sigVol">BAJA</b></div>
-              <div><small>Regimen ADX14</small><b id="sigRegime">--</b></div>
-            </div>
-            <div class="analysis-box" id="signalSummary">Esperando datos vivos...</div>
-          </section>
-        </div>
-
-        <div class="dashboard-grid">
-          <section class="panel news-panel">
-            <div class="panel-head"><h2>NOTICIAS & MACRO (TIEMPO REAL)</h2></div>
-            <div class="tab-row">
-              <button class="tab active" id="finnhubBtn">Finnhub</button>
-              <button class="tab" id="alphaBtn">Alpha Vantage</button>
-            </div>
-            <div class="news-list" id="newsList"></div>
-            <button class="news-more" data-jump="news">Ver todas las noticias -></button>
-          </section>
-
-          <section class="panel economic-panel">
-            <div class="panel-head"><h2>PROXIMOS EVENTOS ECONOMICOS</h2></div>
-            <div class="economic-list">
-              <div class="econ-row"><span>14:30</span><span>USD</span><b>Solicitudes de Desempleo</b><em class="impact high">Alto</em><small>En 42m</small></div>
-              <div class="econ-row"><span>15:45</span><span>USD</span><b>PMI Manufacturero</b><em class="impact mid">Medio</em><small>En 1h 57m</small></div>
-              <div class="econ-row"><span>16:00</span><span>CAD</span><b>Decision de Tasa de Interes</b><em class="impact high">Alto</em><small>En 2h 12m</small></div>
-              <div class="econ-row"><span>16:30</span><span>USD</span><b>PIB Trimestral (QoQ)</b><em class="impact high">Alto</em><small>En 3h 42m</small></div>
+            <div class="kill-switch-confirm" id="killSwitchConfirm" style="display: none;">
+              <div class="confirm-box">
+                <p>CONFIRM: Stop real trading?</p>
+                <p class="confirm-hint">3 seconds required</p>
+                <div class="confirm-progress">
+                  <div class="confirm-bar" id="confirmBar"></div>
+                </div>
+                <div class="confirm-buttons">
+                  <button class="btn-secondary" id="cancelKillBtn">CANCEL</button>
+                  <button class="btn-danger" id="confirmKillBtn" disabled>CONFIRM</button>
+                </div>
+              </div>
             </div>
           </section>
 
-          <section class="panel manual-panel-inline">
-            <div class="panel-head"><h2>TRADING MANUAL</h2></div>
+          <div class="dashboard-workspace">
+            <div class="dashboard-main-column">
+              <section class="panel dashboard-chart-panel">
+                <div class="panel-head dashboard-panel-head">
+                  <div>
+                    <span class="dashboard-section-label">Workspace</span>
+                    <h2 id="chartTitle">GRAFICO EN TIEMPO REAL - BTCUSDT - M1</h2>
+                  </div>
+                  <button class="tiny-btn" id="expandChartBtn">Actualizar chart</button>
+                </div>
+                <div class="dashboard-chart-tools">
+                  <div class="tf-row" id="tfRow">
+                    <button class="tf active" data-tf="M1">M1</button>
+                    <button class="tf" data-tf="M5">M5</button>
+                    <button class="tf" data-tf="M15">M15</button>
+                    <button class="tf" data-tf="H1">H1</button>
+                    <button class="tf" data-tf="H4">H4</button>
+                    <button class="tf" data-tf="D1">D1</button>
+                  </div>
+                  <div class="indicator-row">
+                    <label><input type="checkbox" id="sslChannelToggle" checked /> SSL Channel</label>
+                    <label><input type="checkbox" id="sslHybridToggle" checked /> SSL Hybrid</label>
+                    <label><input type="checkbox" id="atrBandsToggle" checked /> Baseline + ATR Bands</label>
+                    <span class="tool-label">OHLC, timeframes e indicadores del feed actual</span>
+                  </div>
+                </div>
+                <div class="ohlc-line" id="ohlcLine">O - H - L - C - Vol -</div>
+                <div class="dashboard-chart-canvas">
+                  <canvas id="tradeChart"></canvas>
+                </div>
+              </section>
+            </div>
+
+            <aside class="dashboard-rail">
+              <section class="panel dashboard-rail-card dashboard-rail-card--signal">
+                <div class="panel-head dashboard-panel-head">
+                  <div>
+                    <span class="dashboard-section-label">Operational pulse</span>
+                    <h2>Senal actual</h2>
+                  </div>
+                  <span class="badge neutral" id="signalBadge">NEUTRAL</span>
+                </div>
+                <canvas id="gaugeCanvas"></canvas>
+                <div class="signal-message" id="signalMessage">Esperando contexto para resumir la senal.</div>
+                <div class="signal-stats signal-stats--rail">
+                  <div><small>Direccion</small><b id="sigDir">NEUTRAL</b></div>
+                  <div><small>Fuerza</small><b id="sigStrength">MEDIA</b></div>
+                  <div><small>Volatilidad</small><b id="sigVol">BAJA</b></div>
+                  <div><small>Regimen ADX14</small><b id="sigRegime">--</b></div>
+                </div>
+                <div class="analysis-box" id="signalSummary">Sin lectura disponible todavia.</div>
+              </section>
+
+              <section class="panel dashboard-rail-card">
+                <div class="panel-head dashboard-panel-head">
+                  <div>
+                    <span class="dashboard-section-label">Operational rail</span>
+                    <h2>Training y scheduler</h2>
+                  </div>
+                </div>
+                <div class="dashboard-rail-status-grid">
+                  <div class="dashboard-rail-stat"><span>Training</span><b id="dashboardTrainingRailStatus">Sin senal</b></div>
+                  <div class="dashboard-rail-stat"><span>Scheduler</span><b id="dashboardSchedulerRailStatus">No expuesto</b></div>
+                  <div class="dashboard-rail-stat"><span>Ticks</span><b id="dashboardSchedulerRailTicks">-</b></div>
+                  <div class="dashboard-rail-stat"><span>Open / Closed</span><b id="dashboardPositionRailStats">0 / 0</b></div>
+                </div>
+              </section>
+
+              <section class="panel dashboard-rail-card">
+                <div class="panel-head dashboard-panel-head">
+                  <div>
+                    <span class="dashboard-section-label">Open positions</span>
+                    <h2>Compacto</h2>
+                  </div>
+                </div>
+                <div id="dashboardOpenPositions" class="dashboard-compact-list"></div>
+              </section>
+
+              <section class="panel dashboard-rail-card">
+                <div class="panel-head dashboard-panel-head">
+                  <div>
+                    <span class="dashboard-section-label">Strategy ranking</span>
+                    <h2>Top 5</h2>
+                  </div>
+                </div>
+                <div id="dashboardStrategyRanking" class="dashboard-compact-list"></div>
+              </section>
+
+              <section class="panel dashboard-rail-card">
+                <div class="panel-head dashboard-panel-head">
+                  <div>
+                    <span class="dashboard-section-label">Signal candidates</span>
+                    <h2>Top 5</h2>
+                  </div>
+                </div>
+                <div id="dashboardSignalCandidates" class="dashboard-compact-list"></div>
+              </section>
+            </aside>
+          </div>
+
+          <div class="dashboard-activity">
+            <section class="panel dashboard-activity-card">
+              <div class="panel-head dashboard-panel-head">
+                <div>
+                  <span class="dashboard-section-label">Recent activity</span>
+                  <h2>Recent Trades</h2>
+                </div>
+                <button class="ghost-btn dashboard-cta-btn" data-jump="history">Ver mas</button>
+              </div>
+              <div id="dashboardRecentTrades" class="dashboard-activity-list"></div>
+            </section>
+
+            <section class="panel dashboard-activity-card">
+              <div class="panel-head dashboard-panel-head">
+                <div>
+                  <span class="dashboard-section-label">Learning memory</span>
+                  <h2>Recent Lessons</h2>
+                </div>
+                <button class="ghost-btn dashboard-cta-btn" data-jump="training">Abrir Training</button>
+              </div>
+              <div id="dashboardRecentLessons" class="dashboard-activity-list"></div>
+            </section>
+
+            <section class="panel dashboard-activity-card">
+              <div class="panel-head dashboard-panel-head">
+                <div>
+                  <span class="dashboard-section-label">Performance</span>
+                  <h2>Snapshot</h2>
+                </div>
+              </div>
+              <div id="dashboardPerformanceSnapshot" class="dashboard-performance-grid"></div>
+            </section>
+          </div>
+
+          <section class="panel dashboard-manual-panel">
+            <div class="panel-head dashboard-panel-head">
+              <div>
+                <span class="dashboard-section-label">Execution pad</span>
+                <h2>Trading Manual</h2>
+              </div>
+            </div>
             <div class="manual-grid">
               <label>VENUE<input id="manualVenueDisplay" value="BINANCE" readonly /></label>
               <label>SIMBOLO<input id="manualSymbolDisplay" value="BTCUSDT" readonly /></label>
@@ -324,26 +389,6 @@
             <div id="orderResultBox" style="margin-top:10px;font-size:13px;display:none"></div>
             <div class="manual-pending-note" style="margin-top:10px;padding:6px 10px;border-left:2px solid #4a6080;font-size:11px;color:#8fa3c0;font-style:italic;line-height:1.45">TAKE-PROFIT y MULTIPLICADOR aun no se transmiten al backend. Quedan capturados localmente hasta que el contrato de orden los acepte.</div>
           </section>
-
-          <section class="panel recent-panel">
-            <div class="panel-head"><h2>TRADES RECIENTES</h2></div>
-            <div class="recent-head"><span>HORA</span><span>SIMBOLO</span><span>TIPO</span><span>CANTIDAD</span><span>PRECIO</span><span>RESULTADO</span></div>
-            <div class="empty-trades"><span>[i]</span><b>Aun no hay trades</b><span>Cuando ejecutes operaciones, apareceran aqui.</span></div>
-            <button class="news-more" data-jump="history">Ver historial completo -></button>
-          </section>
-
-          <section class="panel performance-panel">
-            <div class="panel-head"><h2>RENDIMIENTO (HOY)</h2></div>
-            <div class="perf-grid">
-              <div><small>P&L Diario</small><b>+0.00 USD</b></div>
-              <div><small>Trades Ganadores</small><b>0 (0%)</b></div>
-              <div><small>Factor Beneficio</small><b>0.00</b></div>
-              <div><small>Drawdown</small><b>0.00%</b></div>
-              <div><small>Expectativa</small><b>0.00</b></div>
-              <div><small>Sharpe Ratio</small><b>0.00</b></div>
-            </div>
-            <canvas id="perfChart"></canvas>
-          </section>
         </div>
       </section>
       <section class="view" id="view-markets">
@@ -364,7 +409,7 @@
       <section class="view" id="view-wallet">
         <div class="view-head"><h1>Wallet</h1><p>Saldos reales separados por Binance Spot, Funding, Earn y MT5.</p></div>
         <div class="panel full-panel wallet-view-panel">
-          <div class="panel-head"><h2>WALLET - BINANCE / MT5</h2><button class="tiny-btn" id="walletRefresh">⟳</button></div>
+          <div class="panel-head"><h2>WALLET - BINANCE / MT5</h2><button class="tiny-btn" id="walletRefresh">Actualizar</button></div>
           <div class="wallet-grid" id="walletGrid"></div>
         </div>
       </section>
@@ -373,10 +418,10 @@
         <!-- REDESIGN: Training Lab - Laboratorio Cognitivo -->
         <div class="training-header">
           <div class="training-hero-compact">
-            <div class="training-mark">◎</div>
+            <div class="training-mark">Q</div>
             <div>
               <h1>TRAINING LAB <span>DEMO</span></h1>
-              <p>Simulación con datos reales. Aprendizaje persistente.</p>
+              <p>Simulacion con datos reales. Aprendizaje persistente.</p>
             </div>
           </div>
           <div class="training-mode-pill"><span class="dot"></span> Demo Mode</div>
@@ -398,7 +443,7 @@
         <!-- EQUITY CURVE: Protagonista -->
         <div class="panel training-equity-panel">
           <div class="panel-head">
-            <h2>CURVA DE EQUITY (EVOLUCIÓN)</h2>
+            <h2>CURVA DE EQUITY (EVOLUCION)</h2>
             <button class="tiny-btn" id="trainingReselectBtn">Revalidar pares</button>
           </div>
           <canvas id="trainingEquityChart" style="width:100%;height:260px;background:#101927;border:1px solid var(--border-subtle);border-radius:4px;"></canvas>
@@ -408,19 +453,19 @@
         <div class="training-tabs-container">
           <div class="tabs-header">
             <button class="training-tab active" data-tab="pairs">
-              <span class="tab-icon">▥</span> PARES ACTIVOS
+              <span class="tab-icon">[PARES]</span> PARES ACTIVOS
             </button>
             <button class="training-tab" data-tab="positions">
-              <span class="tab-icon">⊕</span> POSICIONES
+              <span class="tab-icon">[POS]</span> POSICIONES
             </button>
             <button class="training-tab" data-tab="strategy">
-              <span class="tab-icon">⭐</span> ESTRATEGIAS
+              <span class="tab-icon">[TOP]</span> ESTRATEGIAS
             </button>
             <button class="training-tab" data-tab="lessons">
-              <span class="tab-icon">📚</span> LECCIONES
+              <span class="tab-icon">[LEC]</span> LECCIONES
             </button>
             <button class="training-tab" data-tab="trades">
-              <span class="tab-icon">◷</span> OPERACIONES
+              <span class="tab-icon">[OPS]</span> OPERACIONES
             </button>
           </div>
 
@@ -428,7 +473,7 @@
           <div class="training-tab-content active" id="tab-pairs">
             <div class="panel">
               <div class="panel-head"><h2>PARES EN TRAINING (GESTIONADOS POR QUANT)</h2></div>
-              <div class="training-disclaimer">Training solo usa simulación. Ordenes reales bloqueadas.</div>
+              <div class="training-disclaimer">Training solo usa simulacion. Ordenes reales bloqueadas.</div>
               <div class="training-table" id="trainingPairsTable"></div>
             </div>
           </div>
@@ -466,7 +511,7 @@
               <div class="panel-head"><h2>MEMORIA DE APRENDIZAJE</h2><span id="trainingUpdated">--:--:--</span></div>
               <div class="training-memory-grid">
                 <div><small>Lecciones guardadas</small><b id="trainLessons">0</b></div>
-                <div><small>Última lección</small><span id="trainLastLesson">Aun no hay trades cerrados.</span></div>
+                <div><small>Ultima leccion</small><span id="trainLastLesson">Aun no hay trades cerrados.</span></div>
                 <div><small>Feed real</small><b id="trainFeedState">Validando</b></div>
                 <div><small>Persistencia</small><b id="trainPersistence">Activa</b></div>
               </div>
@@ -477,7 +522,7 @@
           <!-- TAB 5: Operaciones -->
           <div class="training-tab-content" id="tab-trades">
             <div class="panel">
-              <div class="panel-head"><h2>ÚLTIMAS OPERACIONES (DEMO)</h2></div>
+              <div class="panel-head"><h2>ULTIMAS OPERACIONES (DEMO)</h2></div>
               <div class="training-table" id="trainingTradesTable"></div>
             </div>
           </div>
@@ -492,7 +537,7 @@
         <div class="panel full-panel">
           <div class="panel-head">
             <h2>HISTORIAL DE ORDENES</h2>
-            <button class="tiny-btn" id="ordersRefreshBtn">⟳ Actualizar</button>
+            <button class="tiny-btn" id="ordersRefreshBtn">Actualizar</button>
           </div>
           <div class="orders-filter-row" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
             <button class="tab active" data-orders-filter="all" id="ordersFilterAll">Todas</button>
@@ -511,8 +556,8 @@
 
         <div class="panel full-panel" style="margin-bottom:18px">
           <div class="panel-head">
-            <h2>MT5 — POSICIONES ABIERTAS</h2>
-            <button class="tiny-btn" id="positionsRefreshBtn">⟳ Actualizar todo</button>
+            <h2>MT5 - POSICIONES ABIERTAS</h2>
+            <button class="tiny-btn" id="positionsRefreshBtn">Actualizar todo</button>
           </div>
           <div id="mt5AccountBadge" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:13px;color:#8fa3c0"></div>
           <div class="orders-head" style="display:grid;grid-template-columns:80px 100px 70px 80px 90px 90px 80px 80px 1fr;gap:6px;padding:6px 10px;background:#0d1520;border-radius:4px;font-size:11px;color:#8fa3c0;font-weight:600;text-transform:uppercase;letter-spacing:.04em">
@@ -522,7 +567,7 @@
         </div>
 
         <div class="panel full-panel">
-          <div class="panel-head"><h2>BINANCE — ORDENES ABIERTAS (PENDIENTES)</h2></div>
+          <div class="panel-head"><h2>BINANCE - ORDENES ABIERTAS (PENDIENTES)</h2></div>
           <div class="orders-head" style="display:grid;grid-template-columns:120px 100px 70px 90px 100px 100px 1fr;gap:6px;padding:6px 10px;background:#0d1520;border-radius:4px;font-size:11px;color:#8fa3c0;font-weight:600;text-transform:uppercase;letter-spacing:.04em">
             <span>ID Orden</span><span>Simbolo</span><span>Lado</span><span>Tipo</span><span>Cantidad</span><span>Precio</span><span>Estado</span>
           </div>
@@ -534,14 +579,14 @@
         <div class="panel full-panel">
           <div class="panel-head" style="display:flex;align-items:center;justify-content:space-between">
             <h2>SESIONES GUARDADAS</h2>
-            <button class="primary-btn" id="newConvBtn" style="padding:5px 14px;font-size:13px">+ Nueva conversación</button>
+            <button class="primary-btn" id="newConvBtn" style="padding:5px 14px;font-size:13px">+ Nueva conversacion</button>
           </div>
           <div id="convList" style="margin-top:8px"></div>
         </div>
-        <!-- Diálogo de renombrar (inline) -->
+        <!-- Dialogo de renombrar (inline) -->
         <div id="convRenameBox" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#0f1923;border:1px solid #2e4268;border-radius:10px;padding:24px 28px;z-index:9999;min-width:340px">
-          <p style="color:#c5d3e8;margin:0 0 12px;font-weight:600">Renombrar conversación</p>
-          <input id="convRenameInput" style="width:100%;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:6px;padding:8px 12px;font-size:14px;box-sizing:border-box" placeholder="Nuevo nombre…" />
+          <p style="color:#c5d3e8;margin:0 0 12px;font-weight:600">Renombrar conversacion</p>
+          <input id="convRenameInput" style="width:100%;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:6px;padding:8px 12px;font-size:14px;box-sizing:border-box" placeholder="Nuevo nombre..." />
           <div style="display:flex;gap:10px;margin-top:14px">
             <button class="primary-btn" id="convRenameSaveBtn">Guardar</button>
             <button class="ghost-btn"   id="convRenameCancelBtn">Cancelar</button>
@@ -550,17 +595,17 @@
       </section>
       <section class="view" id="view-history"><div class="view-head"><h1>Rendimiento</h1><p>Bitacora de acciones, senales y decisiones.</p></div><div class="panel full-panel"><div class="pipeline-list tall" id="historyList"></div></div></section>
       <section class="view" id="view-backtest">
-        <div class="view-head"><h1>Backtesting</h1><p>Carga tu historial de trades desde MT5 o Binance y obtén estadísticas completas con validación walk-forward 70/30.</p></div>
+        <div class="view-head"><h1>Backtesting</h1><p>Carga tu historial de trades desde MT5 o Binance y obten estadisticas completas con validacion walk-forward 70/30.</p></div>
 
         <div class="panel full-panel" style="margin-bottom:18px">
           <div class="panel-head"><h2>CARGAR HISTORIAL DE TRADES</h2></div>
           <p style="color:#8fa3c0;font-size:13px;margin:0 0 14px">
-            En MT5: <b>Ver → Terminal → Historial de cuenta → clic derecho → Guardar como informe detallado</b> y elige formato CSV.<br>
-            En Binance: <b>Órdenes → Historial de órdenes → Exportar</b>.
+            En MT5: <b>Ver -> Terminal -> Historial de cuenta -> clic derecho -> Guardar como informe detallado</b> y elige formato CSV.<br>
+            En Binance: <b>Ordenes -> Historial de ordenes -> Exportar</b>.
           </p>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
             <button class="primary-btn" id="backtestSelectBtn">Seleccionar CSV...</button>
-            <span id="backtestFileName" style="color:#8fa3c0;font-size:13px">Ningún archivo seleccionado</span>
+            <span id="backtestFileName" style="color:#8fa3c0;font-size:13px">Ningun archivo seleccionado</span>
             <button class="ghost-btn" id="backtestRunBtn" style="display:none">Analizar</button>
           </div>
         </div>
@@ -594,7 +639,7 @@
         </div>
 
         <div id="backtestEmpty" class="panel full-panel empty-state" style="margin-top:0">
-          Selecciona un archivo CSV para comenzar el análisis.
+          Selecciona un archivo CSV para comenzar el analisis.
         </div>
       </section>
       <section class="view" id="view-alerts">
@@ -603,15 +648,15 @@
         <div class="panel full-panel" style="margin-bottom:18px">
           <div class="panel-head"><h2>CONFIGURACION DE EMAIL</h2></div>
           <p style="color:#8fa3c0;font-size:13px;margin:0 0 14px">
-            Usa una <b>Contraseña de aplicación</b> de Google (no tu contraseña normal).<br>
-            En tu cuenta Google: <b>Seguridad → Verificación en 2 pasos → Contraseñas de aplicaciones</b> → crear una para "Correo / Windows".
+            Usa una <b>Contrasena de aplicacion</b> de Google (no tu contrasena normal).<br>
+            En tu cuenta Google: <b>Seguridad -> Verificacion en 2 pasos -> Contrasenas de aplicaciones</b> -> crear una para "Correo / Windows".
           </p>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
             <label style="font-size:13px;color:#8fa3c0">Email destino<br>
               <input id="alertEmailTo" type="email" value="kinotrance@gmail.com" style="width:100%;margin-top:4px;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:5px;padding:7px 10px;font-size:13px;box-sizing:border-box" /></label>
             <label style="font-size:13px;color:#8fa3c0">Gmail (remitente)<br>
               <input id="alertSmtpUser" type="email" placeholder="tucuenta@gmail.com" style="width:100%;margin-top:4px;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:5px;padding:7px 10px;font-size:13px;box-sizing:border-box" /></label>
-            <label style="font-size:13px;color:#8fa3c0">Contraseña de aplicación Google<br>
+            <label style="font-size:13px;color:#8fa3c0">Contrasena de aplicacion Google<br>
               <input id="alertSmtpPass" type="password" placeholder="xxxx xxxx xxxx xxxx" style="width:100%;margin-top:4px;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:5px;padding:7px 10px;font-size:13px;box-sizing:border-box" /></label>
             <div style="display:flex;flex-direction:column;justify-content:flex-end;gap:8px">
               <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#8fa3c0;cursor:pointer">
@@ -633,7 +678,7 @@
         <div class="panel full-panel">
           <div class="panel-head">
             <h2>HISTORIAL DE ALERTAS ENVIADAS</h2>
-            <button class="tiny-btn" id="alertLogRefreshBtn">⟳</button>
+            <button class="tiny-btn" id="alertLogRefreshBtn">Actualizar</button>
           </div>
           <div class="orders-head" style="display:grid;grid-template-columns:160px 1fr;gap:8px;padding:6px 10px;background:#0d1520;border-radius:4px;font-size:11px;color:#8fa3c0;font-weight:600;text-transform:uppercase">
             <span>Fecha / Hora</span><span>Asunto</span>
@@ -646,16 +691,16 @@
         <div class="panel full-panel">
           <div class="panel-head"><h2>INSTRUCCIONES PERSONALIZADAS PARA QUANT</h2></div>
           <p style="color:#8fa3c0;font-size:13px;margin:0 0 12px">Estas instrucciones se inyectan al inicio de cada conversacion. Dile a Quant como debe comportarse, que priorizar o como comunicarse contigo.</p>
-          <textarea id="customInstructionsInput" placeholder="Ej: Responde siempre en español. Prioriza crypto sobre forex. Se conciso y directo. No uses listas largas." style="width:100%;min-height:200px;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:6px;padding:12px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
+          <textarea id="customInstructionsInput" placeholder="Ej: Responde siempre en espanol. Prioriza crypto sobre forex. Se conciso y directo. No uses listas largas." style="width:100%;min-height:200px;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:6px;padding:12px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
           <div style="display:flex;align-items:center;gap:14px;margin-top:10px">
             <button class="primary-btn" id="saveCustomInstructionsBtn">Guardar instrucciones</button>
             <span id="customInstructionsStatus" style="color:#8fa3c0;font-size:13px"></span>
           </div>
-          <div class="panel-head" style="margin-top:28px"><h2>CALIBRACIÓN NOCTURNA</h2></div>
-          <p style="color:#8fa3c0;font-size:13px;margin:0 0 12px">Calcula <b>live_wr / hist_wr</b> desde todo el historial JSONL y persiste los ratios en <code>calibration.json</code>. Se ejecuta automáticamente cada hora; también puedes forzarla aquí.</p>
+          <div class="panel-head" style="margin-top:28px"><h2>CALIBRACION NOCTURNA</h2></div>
+          <p style="color:#8fa3c0;font-size:13px;margin:0 0 12px">Calcula <b>live_wr / hist_wr</b> desde todo el historial JSONL y persiste los ratios en <code>calibration.json</code>. Se ejecuta automaticamente cada hora; tambien puedes forzarla aqui.</p>
           <div style="display:flex;align-items:center;gap:14px;margin-top:4px">
             <button class="primary-btn" id="runCalibrationBtn">Recalibrar ahora</button>
-            <span id="calibrationStatus" style="color:#8fa3c0;font-size:13px">—</span>
+            <span id="calibrationStatus" style="color:#8fa3c0;font-size:13px">-</span>
           </div>
           <div id="calibrationDetail" style="margin-top:10px;font-size:13px;color:#8fa3c0"></div>
           <div class="panel-head" style="margin-top:28px"><h2>APIS DE ESTA SESION</h2></div>

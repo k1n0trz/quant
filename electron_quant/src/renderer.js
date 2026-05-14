@@ -1205,27 +1205,28 @@ async function refreshWallet() {
 function renderWallet(data) {
   state.wallet = data;
   const bw = data.binance || {};
-  const spotRows = (bw.spot || []).slice(0, 12).map((b) => `<div class="balance-row"><span>${b.asset}</span><b>${b.free.toPrecision(8)}</b><span>locked ${b.locked.toPrecision(4)}</span></div>`).join('');
+  const walletRowClass = 'balance-row shell-table-row shell-table-row--wallet';
+  const spotRows = (bw.spot || []).slice(0, 12).map((b) => `<div class="${walletRowClass}"><span>${b.asset}</span><b>${b.free.toPrecision(8)}</b><span>locked ${b.locked.toPrecision(4)}</span></div>`).join('');
   const fundingRows = (bw.funding || []).slice(0, 10).map((b) => {
     const free = Number(b.free || b.amount || 0);
-    return `<div class="balance-row"><span>${b.asset || b.coin}</span><b>${free.toPrecision(8)}</b><span>funding</span></div>`;
+    return `<div class="${walletRowClass}"><span>${b.asset || b.coin}</span><b>${free.toPrecision(8)}</b><span>funding</span></div>`;
   }).join('');
   const earnRows = (bw.earn || []).slice(0, 10).map((b) => {
     const amount = Number(b.totalAmount || b.amount || 0);
     const apr = Number(b.latestAnnualPercentageRate || 0) * 100;
     const rewards = Number(b.cumulativeTotalRewards || b.cumulativeRealTimeRewards || 0);
-    return `<div class="balance-row"><span>${b.asset}</span><b>${amount.toPrecision(8)}</b><span>APR ${apr.toFixed(3)}% | rewards ${rewards.toPrecision(5)}</span></div>`;
+    return `<div class="${walletRowClass}"><span>${b.asset}</span><b>${amount.toPrecision(8)}</b><span>APR ${apr.toFixed(3)}% | rewards ${rewards.toPrecision(5)}</span></div>`;
   }).join('');
   const valuationRows = (bw.valuation || []).slice(0, 16).map((v) => {
     const apr = v.apr ? ` | APR ${(v.apr * 100).toFixed(3)}%` : '';
-    return `<div class="balance-row"><span>${v.source} ${v.asset}</span><b>$${v.valueUsd.toFixed(4)}</b><span>${v.valueCop ? `COP ${Math.round(v.valueCop).toLocaleString('es-CO')}` : 'COP n/a'}${apr}</span></div>`;
+    return `<div class="${walletRowClass}"><span>${v.source} ${v.asset}</span><b>$${v.valueUsd.toFixed(4)}</b><span>${v.valueCop ? `COP ${Math.round(v.valueCop).toLocaleString('es-CO')}` : 'COP n/a'}${apr}</span></div>`;
   }).join('');
   const diagnosticRows = [
-    bw.error ? `<div class="balance-row"><span>Estado</span><b style="color:#f87171">${escapeHtml(bw.error.slice(0, 110))}</b></div>` : '',
-    `<div class="balance-row"><span>Tipo</span><b>${bw.accountType || 'SPOT'}</b></div>`,
-    `<div class="balance-row"><span>Trade</span><b>${bw.canTrade ? 'Si' : 'No'}</b></div>`,
-    `<div class="balance-row"><span>Deposit</span><b>${bw.canDeposit ? 'Si' : 'No'}</b></div>`,
-    `<div class="balance-row"><span>Withdraw</span><b>${bw.canWithdraw ? 'Si' : 'No'}</b></div>`
+    bw.error ? `<div class="${walletRowClass}"><span>Estado</span><b style="color:#f87171">${escapeHtml(bw.error.slice(0, 110))}</b><span></span></div>` : '',
+    `<div class="${walletRowClass}"><span>Tipo</span><b>${bw.accountType || 'SPOT'}</b><span></span></div>`,
+    `<div class="${walletRowClass}"><span>Trade</span><b>${bw.canTrade ? 'Si' : 'No'}</b><span></span></div>`,
+    `<div class="${walletRowClass}"><span>Deposit</span><b>${bw.canDeposit ? 'Si' : 'No'}</b><span></span></div>`,
+    `<div class="${walletRowClass}"><span>Withdraw</span><b>${bw.canWithdraw ? 'Si' : 'No'}</b><span></span></div>`
   ].join('');
   // MT5 multi-account cards
   const mt5Accounts = data.mt5Accounts || [];
@@ -1239,26 +1240,26 @@ function renderWallet(data) {
         const profitColor = profit >= 0 ? '#43d787' : '#ff5252';
         if (!acc.available) {
           return `<div class="wallet-card"><h3>MT5 | ${escapeHtml(String(acc.login || '--'))} <small style="color:#f87171">ERROR</small></h3>
-            <div class="balance-row"><span>Servidor</span><b>${escapeHtml(acc.server || '--')}</b></div>
-            <div class="balance-row"><span>Error</span><b style="color:#f87171">${escapeHtml((acc.error || 'No accesible').slice(0, 120))}</b></div></div>`;
+            <div class="${walletRowClass}"><span>Servidor</span><b>${escapeHtml(acc.server || '--')}</b><span></span></div>
+            <div class="${walletRowClass}"><span>Error</span><b style="color:#f87171">${escapeHtml((acc.error || 'No accesible').slice(0, 120))}</b><span></span></div></div>`;
         }
         return `<div class="wallet-card"><h3>MT5 | ${acc.login} <small style="background:${modeColor}22;color:${modeColor};padding:2px 7px;border-radius:3px;font-size:11px">${modeLabel}</small></h3>
-          <div class="balance-row"><span>Servidor</span><b>${escapeHtml(acc.server || '--')}</b></div>
-          <div class="balance-row"><span>Moneda</span><b>${cur}</b></div>
-          <div class="balance-row"><span>Balance</span><b>${Number(acc.balance || 0).toFixed(2)} ${cur}</b><span>${acc.balanceCop ? `COP ${Math.round(acc.balanceCop).toLocaleString('es-CO')}` : ''}</span></div>
-          <div class="balance-row"><span>Equity</span><b>${Number(acc.equity || 0).toFixed(2)} ${cur}</b><span>${acc.equityCop ? `COP ${Math.round(acc.equityCop).toLocaleString('es-CO')}` : ''}</span></div>
-          <div class="balance-row"><span>Margen libre</span><b>${Number(acc.margin_free || 0).toFixed(2)} ${cur}</b></div>
-          <div class="balance-row"><span>P&L flotante</span><b style="color:${profitColor}">${profit >= 0 ? '+' : ''}${profit.toFixed(2)} ${cur}</b></div>
-          <div class="balance-row"><span>Posiciones</span><b>${(acc.positions || []).length}</b></div></div>`;
+          <div class="${walletRowClass}"><span>Servidor</span><b>${escapeHtml(acc.server || '--')}</b><span></span></div>
+          <div class="${walletRowClass}"><span>Moneda</span><b>${cur}</b><span></span></div>
+          <div class="${walletRowClass}"><span>Balance</span><b>${Number(acc.balance || 0).toFixed(2)} ${cur}</b><span>${acc.balanceCop ? `COP ${Math.round(acc.balanceCop).toLocaleString('es-CO')}` : ''}</span></div>
+          <div class="${walletRowClass}"><span>Equity</span><b>${Number(acc.equity || 0).toFixed(2)} ${cur}</b><span>${acc.equityCop ? `COP ${Math.round(acc.equityCop).toLocaleString('es-CO')}` : ''}</span></div>
+          <div class="${walletRowClass}"><span>Margen libre</span><b>${Number(acc.margin_free || 0).toFixed(2)} ${cur}</b><span></span></div>
+          <div class="${walletRowClass}"><span>P&L flotante</span><b style="color:${profitColor}">${profit >= 0 ? '+' : ''}${profit.toFixed(2)} ${cur}</b><span></span></div>
+          <div class="${walletRowClass}"><span>Posiciones</span><b>${(acc.positions || []).length}</b><span></span></div></div>`;
       }).join('')
-    : `<div class="wallet-card"><h3>MT5</h3><div class="balance-row"><span>Estado</span><b>${escapeHtml(data.mt5?.message || 'Adapter desactivado o sin cuentas configuradas')}</b></div></div>`;
+    : `<div class="wallet-card"><h3>MT5</h3><div class="${walletRowClass}"><span>Estado</span><b>${escapeHtml(data.mt5?.message || 'Adapter desactivado o sin cuentas configuradas')}</b><span></span></div></div>`;
 
   $('walletGrid').innerHTML =
     `<div class="wallet-card"><h3>BINANCE | DIAGNOSTICO</h3>${diagnosticRows}</div>` +
-    `<div class="wallet-card"><h3>BINANCE | VALORACION</h3><div class="balance-row"><span>Total aprox.</span><b>$${Number(bw.totalUsd || 0).toFixed(4)}</b><span>${bw.totalCop ? `COP ${Math.round(bw.totalCop).toLocaleString('es-CO')}` : 'COP n/a'}</span></div><div class="balance-row"><span>USD/COP</span><b>${bw.usdCop ? Number(bw.usdCop).toFixed(2) : 'n/a'}</b><span>referencial</span></div>${valuationRows}</div>` +
-    `<div class="wallet-card"><h3>BINANCE SPOT</h3>${spotRows || '<div class="balance-row"><span>Sin saldos Spot visibles</span><b>0</b></div>'}</div>` +
-    `<div class="wallet-card"><h3>BINANCE FUNDING</h3>${fundingRows || `<div class="balance-row"><span>${bw.fundingError ? 'Error' : 'Sin saldos Funding'}</span><b>${escapeHtml((bw.fundingError || '0').slice(0, 80))}</b></div>`}</div>` +
-    `<div class="wallet-card"><h3>BINANCE EARN</h3>${earnRows || `<div class="balance-row"><span>${bw.earnError ? 'Error' : 'Sin posiciones Earn'}</span><b>${escapeHtml((bw.earnError || '0').slice(0, 80))}</b></div>`}</div>` +
+    `<div class="wallet-card"><h3>BINANCE | VALORACION</h3><div class="${walletRowClass}"><span>Total aprox.</span><b>$${Number(bw.totalUsd || 0).toFixed(4)}</b><span>${bw.totalCop ? `COP ${Math.round(bw.totalCop).toLocaleString('es-CO')}` : 'COP n/a'}</span></div><div class="${walletRowClass}"><span>USD/COP</span><b>${bw.usdCop ? Number(bw.usdCop).toFixed(2) : 'n/a'}</b><span>referencial</span></div>${valuationRows}</div>` +
+    `<div class="wallet-card"><h3>BINANCE SPOT</h3>${spotRows || `<div class="${walletRowClass}"><span>Sin saldos Spot visibles</span><b>0</b><span></span></div>`}</div>` +
+    `<div class="wallet-card"><h3>BINANCE FUNDING</h3>${fundingRows || `<div class="${walletRowClass}"><span>${bw.fundingError ? 'Error' : 'Sin saldos Funding'}</span><b>${escapeHtml((bw.fundingError || '0').slice(0, 80))}</b><span></span></div>`}</div>` +
+    `<div class="wallet-card"><h3>BINANCE EARN</h3>${earnRows || `<div class="${walletRowClass}"><span>${bw.earnError ? 'Error' : 'Sin posiciones Earn'}</span><b>${escapeHtml((bw.earnError || '0').slice(0, 80))}</b><span></span></div>`}</div>` +
     mt5Cards;
 }
 
@@ -2924,7 +2925,7 @@ function renderMt5PositionRow(p) {
   const dirClass = p.direction === 'BUY' ? 'train-status' : 'train-bad';
   const slTp = `${p.sl ? Number(p.sl).toFixed(5) : '--'} / ${p.tp ? Number(p.tp).toFixed(5) : '--'}`;
   const ts = p.time ? new Date(Number(p.time) * 1000).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : '--';
-  return `<div style="display:grid;grid-template-columns:80px 100px 70px 80px 90px 90px 80px 80px 1fr;gap:6px;padding:9px 10px;border-bottom:1px solid #1a2535;font-size:13px;align-items:center" title="Abierta: ${ts} | Comentario: ${escapeHtml(p.comment || '')}">
+  return `<div class="shell-table-row shell-table-row--mt5" title="Abierta: ${ts} | Comentario: ${escapeHtml(p.comment || '')}">
     <span style="color:#8fa3c0">#${p.ticket}</span>
     <b>${escapeHtml(p.symbol)}</b>
     <span class="${dirClass}">${p.direction}</span>
@@ -2994,7 +2995,7 @@ async function loadPositions() {
           const sideClass = o.side === 'BUY' ? 'train-status' : 'train-bad';
           const ts = o.time ? new Date(Number(o.time)).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) : '--';
           const filled = o.executedQty > 0 ? ` (${Number(o.executedQty).toFixed(4)} lleno)` : '';
-          return `<div style="display:grid;grid-template-columns:120px 100px 70px 90px 100px 100px 1fr;gap:6px;padding:9px 10px;border-bottom:1px solid #1a2535;font-size:13px;align-items:center" title="Creada: ${ts}">
+          return `<div class="shell-table-row shell-table-row--binance" title="Creada: ${ts}">
             <span style="color:#8fa3c0">${o.orderId}</span>
             <b>${escapeHtml(o.symbol)}</b>
             <span class="${sideClass}">${o.side}</span>
@@ -3096,7 +3097,7 @@ function renderBacktestResults(result) {
     const contrib = ((Math.abs(ss.netProfit) / totalAbs) * 100).toFixed(1);
     const pnlColor2 = ss.netProfit >= 0 ? '#43d787' : '#ff5252';
     const wrColor2  = ss.winRate >= 0.55 ? '#43d787' : ss.winRate >= 0.45 ? '#f0a500' : '#ff5252';
-    return `<div style="display:grid;grid-template-columns:120px 80px 60px 60px 100px 100px;gap:8px;padding:8px 10px;border-bottom:1px solid #1a2535;font-size:13px;align-items:center">
+    return `<div class="shell-table-row shell-table-row--backtest">
       <b>${escapeHtml(ss.symbol)}</b>
       <span>${ss.trades}</span>
       <span>${ss.wins}</span>
@@ -3197,7 +3198,7 @@ function renderOrdersTable(trades) {
     const rawReason = t.reason || t.type || t.status || '';
     const reason = escapeHtml(REASON_LABELS[rawReason] || rawReason || 'Sin detalle');
     const venue = escapeHtml(t.venue || 'BINANCE');
-    return `<div style="display:grid;grid-template-columns:140px 90px 70px 90px 1fr 120px;gap:8px;padding:8px 10px;border-bottom:1px solid #1a2535;font-size:13px;align-items:center">
+    return `<div class="shell-table-row shell-table-row--order">
       <span style="color:#8fa3c0">${dateStr}</span>
       <b>${symbol}</b>
       <span class="${sideClass}">${escapeHtml(side)}</span>
@@ -3237,7 +3238,7 @@ function renderAlertTriggers() {
   if (!grid || !_alertConfig) return;
   const triggers = _alertConfig.triggers || {};
   grid.innerHTML = Object.entries(triggers).map(([key, t]) =>
-    `<label style="display:flex;align-items:flex-start;gap:10px;background:#0d1520;padding:12px;border-radius:6px;cursor:pointer;font-size:13px">
+    `<label class="legacy-trigger-card">
       <input type="checkbox" data-trigger-key="${key}" ${t.enabled ? 'checked' : ''} style="margin-top:2px" />
       <span style="color:#c5d3e8">${escapeHtml(t.label)}</span>
     </label>`
@@ -3294,7 +3295,7 @@ async function loadAlertLog() {
     const logs = await window.quant.alertLog(50);
     const table = $('alertLogTable');
     if (!table) return;
-    table.innerHTML = logs.length ? logs.map((l) => `<div style="display:grid;grid-template-columns:160px 1fr;gap:8px;padding:8px 10px;border-bottom:1px solid #1a2535;font-size:13px">
+    table.innerHTML = logs.length ? logs.map((l) => `<div class="shell-table-row shell-table-row--alert">
           <span style="color:#8fa3c0">${new Date(l.ts).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</span>
           <span>${escapeHtml(l.subject)}</span>
         </div>`).join('')
@@ -3502,10 +3503,10 @@ async function loadConversationsList() {
       return;
     }
     list.innerHTML = convs.map((c) => `
-      <div class="conv-row" data-id="${escapeHtml(c.id)}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:6px;background:#0d1825;border:1px solid #1e3050;border-radius:8px;cursor:pointer">
+      <div class="conv-row legacy-conversation-card" data-id="${escapeHtml(c.id)}">
         <div style="flex:1;min-width:0" class="conv-load-btn">
           <div style="font-weight:600;color:#c5d3e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.name)}</div>
-          <div style="font-size:12px;color:#5a7fa8;margin-top:2px">${new Date(c.updatedAt).toLocaleString('es-CO')} | ${c.messageCount} mensajes</div>
+          <div class="legacy-conversation-meta">${new Date(c.updatedAt).toLocaleString('es-CO')} | ${c.messageCount} mensajes</div>
         </div>
         <button class="ghost-btn conv-rename-btn" style="padding:4px 10px;font-size:12px">Renombrar</button>
         <button class="ghost-btn conv-delete-btn" style="padding:4px 10px;font-size:12px;color:#e05a5a;border-color:#e05a5a">Eliminar</button>

@@ -429,9 +429,20 @@
         <div class="panel full-panel"><input class="search" id="marketSearch" placeholder="Buscar simbolo, ej. BTC, SOL, ETH..." /><div class="market-table" id="marketTable"></div></div>
       </section>
 
-      <section class="view" id="view-news">
-        <div class="view-head"><h1>Noticias & Macro</h1><p>Lectura rapida de noticias, sentimiento y eventos macro conectados.</p></div>
-        <div class="two-col"><div class="panel"><h2>Finnhub</h2><div id="newsFinnhubPage" class="news-list tall"></div></div><div class="panel"><h2>Alpha Vantage</h2><div id="newsAlphaPage" class="news-list tall"></div></div></div>
+      <section class="view legacy-shell-view" id="view-news">
+        <div class="view-head legacy-view-head"><h1>Noticias & Macro</h1><p>Lectura rapida de noticias, sentimiento y eventos macro conectados.</p></div>
+        <div class="legacy-view-stack">
+          <div class="two-col legacy-split-grid">
+            <div class="panel legacy-panel">
+              <div class="panel-head"><h2>Finnhub</h2></div>
+              <div id="newsFinnhubPage" class="news-list tall shell-table-body"></div>
+            </div>
+            <div class="panel legacy-panel">
+              <div class="panel-head"><h2>Alpha Vantage</h2></div>
+              <div id="newsAlphaPage" class="news-list tall shell-table-body"></div>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="view" id="view-ai">
@@ -439,11 +450,13 @@
         <div class="panel full-panel"><button class="primary-btn" id="askAiBtn">Analizar activo actual</button><div class="analysis-box large" id="aiOutput">Sin analisis solicitado.</div></div>
       </section>
 
-      <section class="view" id="view-wallet">
-        <div class="view-head"><h1>Wallet</h1><p>Saldos reales separados por Binance Spot, Funding, Earn y MT5.</p></div>
-        <div class="panel full-panel wallet-view-panel">
+      <section class="view legacy-shell-view" id="view-wallet">
+        <div class="view-head legacy-view-head"><h1>Wallet</h1><p>Saldos reales separados por Binance Spot, Funding, Earn y MT5.</p></div>
+        <div class="legacy-view-stack">
+        <div class="panel full-panel legacy-panel wallet-view-panel">
           <div class="panel-head"><h2>WALLET - BINANCE / MT5</h2><button class="tiny-btn" id="walletRefresh">Actualizar</button></div>
           <div class="wallet-grid" id="walletGrid"></div>
+        </div>
         </div>
       </section>
 
@@ -565,179 +578,190 @@
         <div style="display:none" id="trainingLevelTable"></div>
       </section>
       <section class="view" id="view-manual"><div class="view-head"><h1>Trading Manual</h1><p>La consola manual principal vive en el dashboard para evitar duplicados.</p></div><div class="panel full-panel empty-state">Usa el bloque Trading Manual del dashboard.</div></section>
-      <section class="view" id="view-orders">
-        <div class="view-head"><h1>Ordenes</h1><p>Registro de instrucciones de trading enviadas, bloqueadas o canceladas. Incluye ordenes reales cuando el modo real este activo.</p></div>
-        <div class="panel full-panel">
+      <section class="view legacy-shell-view" id="view-orders">
+        <div class="view-head legacy-view-head"><h1>Ordenes</h1><p>Registro de instrucciones de trading enviadas, bloqueadas o canceladas. Incluye ordenes reales cuando el modo real este activo.</p></div>
+        <div class="legacy-view-stack">
+        <div class="panel full-panel legacy-panel">
           <div class="panel-head">
             <h2>HISTORIAL DE ORDENES</h2>
             <button class="tiny-btn" id="ordersRefreshBtn">Actualizar</button>
           </div>
-          <div class="orders-filter-row" style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+          <div class="orders-filter-row legacy-filter-row">
             <button class="tab active" data-orders-filter="all" id="ordersFilterAll">Todas</button>
             <button class="tab" data-orders-filter="blocked" id="ordersFilterBlocked">Bloqueadas</button>
             <button class="tab" data-orders-filter="executed" id="ordersFilterExecuted">Ejecutadas</button>
-            <span id="ordersCount" style="margin-left:auto;color:#8fa3c0;font-size:13px;align-self:center"></span>
+            <span id="ordersCount" class="legacy-count-pill"></span>
           </div>
-          <div class="orders-head" style="display:grid;grid-template-columns:140px 90px 70px 90px 1fr 120px;gap:8px;padding:6px 10px;background:#0d1520;border-radius:4px;font-size:11px;color:#8fa3c0;font-weight:600;text-transform:uppercase;letter-spacing:.04em">
+          <div class="shell-table shell-table--orders orders-head">
             <span>Fecha / Hora</span><span>Simbolo</span><span>Lado</span><span>Cantidad</span><span>Motivo</span><span>Venue</span>
           </div>
-          <div id="ordersTable" style="max-height:520px;overflow-y:auto"></div>
+          <div id="ordersTable" class="shell-table-body"></div>
+        </div>
         </div>
       </section>
-      <section class="view" id="view-positions">
-        <div class="view-head"><h1>Posiciones</h1><p>Posiciones abiertas en tiempo real por plataforma: MT5 (real y demo) y Binance ordenes abiertas.</p></div>
+      <section class="view legacy-shell-view" id="view-positions">
+        <div class="view-head legacy-view-head"><h1>Posiciones</h1><p>Posiciones abiertas en tiempo real por plataforma: MT5 (real y demo) y Binance ordenes abiertas.</p></div>
 
-        <div class="panel full-panel" style="margin-bottom:18px">
+        <div class="legacy-view-stack">
+        <div class="panel full-panel legacy-panel legacy-panel-spaced">
           <div class="panel-head">
             <h2>MT5 - POSICIONES ABIERTAS</h2>
             <button class="tiny-btn" id="positionsRefreshBtn">Actualizar todo</button>
           </div>
-          <div id="mt5AccountBadge" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:14px;font-size:13px;color:#8fa3c0"></div>
-          <div class="orders-head" style="display:grid;grid-template-columns:80px 100px 70px 80px 90px 90px 80px 80px 1fr;gap:6px;padding:6px 10px;background:#0d1520;border-radius:4px;font-size:11px;color:#8fa3c0;font-weight:600;text-transform:uppercase;letter-spacing:.04em">
+          <div id="mt5AccountBadge" class="legacy-chip-grid"></div>
+          <div class="shell-table shell-table--positions orders-head">
             <span>Ticket</span><span>Simbolo</span><span>Dir.</span><span>Volumen</span><span>Apertura</span><span>Precio actual</span><span>P&L</span><span>Swap</span><span>SL / TP</span>
           </div>
-          <div id="mt5PositionsTable" style="max-height:340px;overflow-y:auto"></div>
+          <div id="mt5PositionsTable" class="shell-table-body"></div>
         </div>
 
-        <div class="panel full-panel">
+        <div class="panel full-panel legacy-panel">
           <div class="panel-head"><h2>BINANCE - ORDENES ABIERTAS (PENDIENTES)</h2></div>
-          <div class="orders-head" style="display:grid;grid-template-columns:120px 100px 70px 90px 100px 100px 1fr;gap:6px;padding:6px 10px;background:#0d1520;border-radius:4px;font-size:11px;color:#8fa3c0;font-weight:600;text-transform:uppercase;letter-spacing:.04em">
+          <div class="shell-table shell-table--positions shell-table--positions-binance orders-head">
             <span>ID Orden</span><span>Simbolo</span><span>Lado</span><span>Tipo</span><span>Cantidad</span><span>Precio</span><span>Estado</span>
           </div>
-          <div id="binanceOrdersTable" style="max-height:340px;overflow-y:auto"></div>
+          <div id="binanceOrdersTable" class="shell-table-body"></div>
+        </div>
         </div>
       </section>
-      <section class="view" id="view-conversations">
-        <div class="view-head"><h1>Conversaciones</h1><p>Historial de sesiones con Quant. Carga, renombra o elimina conversaciones pasadas.</p></div>
-        <div class="panel full-panel">
-          <div class="panel-head" style="display:flex;align-items:center;justify-content:space-between">
+      <section class="view legacy-shell-view" id="view-conversations">
+        <div class="view-head legacy-view-head"><h1>Conversaciones</h1><p>Historial de sesiones con Quant. Carga, renombra o elimina conversaciones pasadas.</p></div>
+        <div class="legacy-view-stack">
+        <div class="panel full-panel legacy-panel">
+          <div class="panel-head legacy-panel-head-spread">
             <h2>SESIONES GUARDADAS</h2>
-            <button class="primary-btn" id="newConvBtn" style="padding:5px 14px;font-size:13px">+ Nueva conversacion</button>
+            <button class="primary-btn legacy-inline-action" id="newConvBtn">+ Nueva conversacion</button>
           </div>
-          <div id="convList" style="margin-top:8px"></div>
+          <div id="convList" class="legacy-list"></div>
         </div>
         <!-- Dialogo de renombrar (inline) -->
-        <div id="convRenameBox" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#0f1923;border:1px solid #2e4268;border-radius:10px;padding:24px 28px;z-index:9999;min-width:340px">
-          <p style="color:#c5d3e8;margin:0 0 12px;font-weight:600">Renombrar conversacion</p>
-          <input id="convRenameInput" style="width:100%;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:6px;padding:8px 12px;font-size:14px;box-sizing:border-box" placeholder="Nuevo nombre..." />
-          <div style="display:flex;gap:10px;margin-top:14px">
+        <div id="convRenameBox" class="legacy-modal" style="display:none">
+          <p class="legacy-modal-title">Renombrar conversacion</p>
+          <input id="convRenameInput" class="legacy-input" placeholder="Nuevo nombre..." />
+          <div class="legacy-modal-actions">
             <button class="primary-btn" id="convRenameSaveBtn">Guardar</button>
             <button class="ghost-btn"   id="convRenameCancelBtn">Cancelar</button>
           </div>
         </div>
+        </div>
       </section>
-      <section class="view" id="view-history"><div class="view-head"><h1>Rendimiento</h1><p>Bitacora de acciones, senales y decisiones.</p></div><div class="panel full-panel"><div class="pipeline-list tall" id="historyList"></div></div></section>
-      <section class="view" id="view-backtest">
-        <div class="view-head"><h1>Backtesting</h1><p>Carga tu historial de trades desde MT5 o Binance y obten estadisticas completas con validacion walk-forward 70/30.</p></div>
+      <section class="view legacy-shell-view" id="view-history"><div class="view-head legacy-view-head"><h1>Rendimiento</h1><p>Bitacora de acciones, senales y decisiones.</p></div><div class="legacy-view-stack"><div class="panel full-panel legacy-panel"><div class="pipeline-list tall shell-table-body" id="historyList"></div></div></div></section>
+      <section class="view legacy-shell-view" id="view-backtest">
+        <div class="view-head legacy-view-head"><h1>Backtesting</h1><p>Carga tu historial de trades desde MT5 o Binance y obten estadisticas completas con validacion walk-forward 70/30.</p></div>
 
-        <div class="panel full-panel" style="margin-bottom:18px">
+        <div class="legacy-view-stack">
+        <div class="panel full-panel legacy-panel legacy-panel-spaced">
           <div class="panel-head"><h2>CARGAR HISTORIAL DE TRADES</h2></div>
-          <p style="color:#8fa3c0;font-size:13px;margin:0 0 14px">
+          <p class="legacy-support-copy">
             En MT5: <b>Ver -> Terminal -> Historial de cuenta -> clic derecho -> Guardar como informe detallado</b> y elige formato CSV.<br>
             En Binance: <b>Ordenes -> Historial de ordenes -> Exportar</b>.
           </p>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <div class="legacy-inline-actions">
             <button class="primary-btn" id="backtestSelectBtn">Seleccionar CSV...</button>
-            <span id="backtestFileName" style="color:#8fa3c0;font-size:13px">Ningun archivo seleccionado</span>
+            <span id="backtestFileName" class="legacy-inline-status">Ningun archivo seleccionado</span>
             <button class="ghost-btn" id="backtestRunBtn" style="display:none">Analizar</button>
           </div>
         </div>
 
-        <div id="backtestResults" style="display:none">
+        <div id="backtestResults" class="legacy-view-stack" style="display:none">
           <div class="training-kpis" id="backtestKpis"></div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px">
-            <div class="panel">
+          <div class="legacy-split-grid legacy-split-grid--analysis">
+            <div class="panel legacy-panel">
               <div class="panel-head"><h2>WALK-FORWARD OOS 70/30</h2></div>
               <div id="backtestWF"></div>
             </div>
-            <div class="panel">
+            <div class="panel legacy-panel">
               <div class="panel-head"><h2>MEJOR / PEOR OPERACION</h2></div>
               <div id="backtestBestWorst"></div>
             </div>
           </div>
 
-          <div class="panel full-panel" style="margin-bottom:18px">
+          <div class="panel full-panel legacy-panel legacy-panel-spaced">
             <div class="panel-head"><h2>CURVA DE EQUITY</h2></div>
-            <canvas id="backtestEquityChart" style="width:100%;height:180px"></canvas>
+            <canvas id="backtestEquityChart" class="legacy-chart-canvas"></canvas>
           </div>
 
-          <div class="panel full-panel">
+          <div class="panel full-panel legacy-panel">
             <div class="panel-head"><h2>RESULTADOS POR SIMBOLO</h2></div>
-            <div class="orders-head" style="display:grid;grid-template-columns:120px 80px 60px 60px 100px 100px;gap:8px;padding:6px 10px;background:#0d1520;border-radius:4px;font-size:11px;color:#8fa3c0;font-weight:600;text-transform:uppercase">
+            <div class="shell-table shell-table--backtest orders-head">
               <span>Simbolo</span><span>Trades</span><span>Wins</span><span>Win%</span><span>Net P&L</span><span>Contribucion</span>
             </div>
-            <div id="backtestSymbolTable" style="max-height:400px;overflow-y:auto"></div>
+            <div id="backtestSymbolTable" class="shell-table-body"></div>
           </div>
         </div>
 
-        <div id="backtestEmpty" class="panel full-panel empty-state" style="margin-top:0">
+        <div id="backtestEmpty" class="panel full-panel legacy-panel empty-state">
           Selecciona un archivo CSV para comenzar el analisis.
         </div>
+        </div>
       </section>
-      <section class="view" id="view-alerts">
-        <div class="view-head"><h1>Alertas</h1><p>Notificaciones por email cuando Quant detecta condiciones relevantes de mercado o riesgo.</p></div>
+      <section class="view legacy-shell-view" id="view-alerts">
+        <div class="view-head legacy-view-head"><h1>Alertas</h1><p>Notificaciones por email cuando Quant detecta condiciones relevantes de mercado o riesgo.</p></div>
 
-        <div class="panel full-panel" style="margin-bottom:18px">
+        <div class="legacy-view-stack">
+        <div class="panel full-panel legacy-panel legacy-panel-spaced">
           <div class="panel-head"><h2>CONFIGURACION DE EMAIL</h2></div>
-          <p style="color:#8fa3c0;font-size:13px;margin:0 0 14px">
+          <p class="legacy-support-copy">
             Usa una <b>Contrasena de aplicacion</b> de Google (no tu contrasena normal).<br>
             En tu cuenta Google: <b>Seguridad -> Verificacion en 2 pasos -> Contrasenas de aplicaciones</b> -> crear una para "Correo / Windows".
           </p>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
-            <label style="font-size:13px;color:#8fa3c0">Email destino<br>
-              <input id="alertEmailTo" type="email" value="kinotrance@gmail.com" style="width:100%;margin-top:4px;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:5px;padding:7px 10px;font-size:13px;box-sizing:border-box" /></label>
-            <label style="font-size:13px;color:#8fa3c0">Gmail (remitente)<br>
-              <input id="alertSmtpUser" type="email" placeholder="tucuenta@gmail.com" style="width:100%;margin-top:4px;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:5px;padding:7px 10px;font-size:13px;box-sizing:border-box" /></label>
-            <label style="font-size:13px;color:#8fa3c0">Contrasena de aplicacion Google<br>
-              <input id="alertSmtpPass" type="password" placeholder="xxxx xxxx xxxx xxxx" style="width:100%;margin-top:4px;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:5px;padding:7px 10px;font-size:13px;box-sizing:border-box" /></label>
-            <div style="display:flex;flex-direction:column;justify-content:flex-end;gap:8px">
-              <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#8fa3c0;cursor:pointer">
+          <div class="legacy-form-grid">
+            <label class="legacy-field">Email destino<br>
+              <input id="alertEmailTo" type="email" value="kinotrance@gmail.com" class="legacy-input" /></label>
+            <label class="legacy-field">Gmail (remitente)<br>
+              <input id="alertSmtpUser" type="email" placeholder="tucuenta@gmail.com" class="legacy-input" /></label>
+            <label class="legacy-field">Contrasena de aplicacion Google<br>
+              <input id="alertSmtpPass" type="password" placeholder="xxxx xxxx xxxx xxxx" class="legacy-input" /></label>
+            <div class="legacy-field legacy-field-toggle">
+              <label class="legacy-checkbox-row">
                 <input type="checkbox" id="alertEnabled" checked /> Alertas activas</label>
             </div>
           </div>
-          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <div class="legacy-inline-actions">
             <button class="primary-btn" id="alertSaveBtn">Guardar configuracion</button>
             <button class="ghost-btn"   id="alertTestBtn">Enviar correo de prueba</button>
-            <span id="alertConfigStatus" style="font-size:13px;color:#8fa3c0"></span>
+            <span id="alertConfigStatus" class="legacy-inline-status"></span>
           </div>
         </div>
 
-        <div class="panel full-panel" style="margin-bottom:18px">
+        <div class="panel full-panel legacy-panel legacy-panel-spaced">
           <div class="panel-head"><h2>TRIGGERS DE ALERTA</h2></div>
-          <div id="alertTriggersGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
+          <div id="alertTriggersGrid" class="legacy-form-grid legacy-form-grid--compact"></div>
         </div>
 
-        <div class="panel full-panel">
+        <div class="panel full-panel legacy-panel">
           <div class="panel-head">
             <h2>HISTORIAL DE ALERTAS ENVIADAS</h2>
             <button class="tiny-btn" id="alertLogRefreshBtn">Actualizar</button>
           </div>
-          <div class="orders-head" style="display:grid;grid-template-columns:160px 1fr;gap:8px;padding:6px 10px;background:#0d1520;border-radius:4px;font-size:11px;color:#8fa3c0;font-weight:600;text-transform:uppercase">
+          <div class="shell-table shell-table--alerts orders-head">
             <span>Fecha / Hora</span><span>Asunto</span>
           </div>
-          <div id="alertLogTable" style="max-height:300px;overflow-y:auto"></div>
+          <div id="alertLogTable" class="shell-table-body"></div>
+        </div>
         </div>
       </section>
-      <section class="view" id="view-settings">
-        <div class="view-head"><h1>Configuracion</h1><p>Instrucciones personalizadas para Quant y estado de claves.</p></div>
-        <div class="panel full-panel">
+      <section class="view legacy-shell-view" id="view-settings">
+        <div class="view-head legacy-view-head"><h1>Configuracion</h1><p>Instrucciones personalizadas para Quant y estado de claves.</p></div>
+        <div class="legacy-view-stack">
+        <div class="panel full-panel legacy-panel">
           <div class="panel-head"><h2>INSTRUCCIONES PERSONALIZADAS PARA QUANT</h2></div>
-          <p style="color:#8fa3c0;font-size:13px;margin:0 0 12px">Estas instrucciones se inyectan al inicio de cada conversacion. Dile a Quant como debe comportarse, que priorizar o como comunicarse contigo.</p>
-          <textarea id="customInstructionsInput" placeholder="Ej: Responde siempre en espanol. Prioriza crypto sobre forex. Se conciso y directo. No uses listas largas." style="width:100%;min-height:200px;background:#131d2e;color:#c5d3e8;border:1px solid #2e4268;border-radius:6px;padding:12px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box"></textarea>
-          <div style="display:flex;align-items:center;gap:14px;margin-top:10px">
+          <p class="legacy-support-copy">Estas instrucciones se inyectan al inicio de cada conversacion. Dile a Quant como debe comportarse, que priorizar o como comunicarse contigo.</p>
+          <textarea id="customInstructionsInput" class="legacy-textarea" placeholder="Ej: Responde siempre en espanol. Prioriza crypto sobre forex. Se conciso y directo. No uses listas largas."></textarea>
+          <div class="legacy-inline-actions">
             <button class="primary-btn" id="saveCustomInstructionsBtn">Guardar instrucciones</button>
-            <span id="customInstructionsStatus" style="color:#8fa3c0;font-size:13px"></span>
+            <span id="customInstructionsStatus" class="legacy-inline-status"></span>
           </div>
-          <div class="panel-head" style="margin-top:28px"><h2>CALIBRACION NOCTURNA</h2></div>
-          <p style="color:#8fa3c0;font-size:13px;margin:0 0 12px">Calcula <b>live_wr / hist_wr</b> desde todo el historial JSONL y persiste los ratios en <code>calibration.json</code>. Se ejecuta automaticamente cada hora; tambien puedes forzarla aqui.</p>
-          <div style="display:flex;align-items:center;gap:14px;margin-top:4px">
+          <div class="panel-head legacy-panel-head-offset"><h2>CALIBRACION NOCTURNA</h2></div>
+          <p class="legacy-support-copy">Calcula <b>live_wr / hist_wr</b> desde todo el historial JSONL y persiste los ratios en <code>calibration.json</code>. Se ejecuta automaticamente cada hora; tambien puedes forzarla aqui.</p>
+          <div class="legacy-inline-actions">
             <button class="primary-btn" id="runCalibrationBtn">Recalibrar ahora</button>
-            <span id="calibrationStatus" style="color:#8fa3c0;font-size:13px">-</span>
+            <span id="calibrationStatus" class="legacy-inline-status">-</span>
           </div>
-          <div id="calibrationDetail" style="margin-top:10px;font-size:13px;color:#8fa3c0"></div>
-          <div class="panel-head" style="margin-top:28px"><h2>APIS DE ESTA SESION</h2></div>
-          <form id="apiConfigForm" class="api-config-form">
+          <div id="calibrationDetail" class="legacy-detail-copy"></div>
+          <div class="panel-head legacy-panel-head-offset"><h2>APIS DE ESTA SESION</h2></div>
+          <form id="apiConfigForm" class="api-config-form legacy-api-config-form">
             <label>Binance API Key<input id="apiBinanceKey" type="password" autocomplete="off" placeholder="Guardar o dejar vacio para conservar" /></label>
             <label>Binance Secret<input id="apiBinanceSecret" type="password" autocomplete="off" placeholder="Guardar o dejar vacio para conservar" /></label>
             <label>DeepSeek API Key<input id="apiDeepseekKey" type="password" autocomplete="off" placeholder="sk-..." /></label>
@@ -761,8 +785,9 @@
               <span id="apiConfigStatus">Cargando configuracion...</span>
             </div>
           </form>
-          <div class="panel-head" style="margin-top:28px"><h2>ESTADO DEL SISTEMA</h2></div>
-          <div id="settingsBox" class="settings-grid"></div>
+          <div class="panel-head legacy-panel-head-offset"><h2>ESTADO DEL SISTEMA</h2></div>
+          <div id="settingsBox" class="settings-grid legacy-settings-grid"></div>
+        </div>
         </div>
       </section>
     </main>

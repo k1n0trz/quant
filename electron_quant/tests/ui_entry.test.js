@@ -172,3 +172,57 @@ test('global shell chat dock supports compact desktop, collapsed tablet, and mob
   assert.match(renderer, /\$\('chatDockToggle'\)\.addEventListener\('click',/);
   assert.match(renderer, /\$\('chatDockCollapse'\)\.addEventListener\('click',/);
 });
+
+test('legacy views inherit the purple shell wrappers, table surfaces, and generated row classes', () => {
+  const repoRoot = path.resolve(__dirname, '..');
+  const indexHtml = fs.readFileSync(path.join(repoRoot, 'src', 'index.html'), 'utf8');
+  const stylesCss = fs.readFileSync(path.join(repoRoot, 'src', 'styles.css'), 'utf8');
+  const renderer = fs.readFileSync(path.join(repoRoot, 'src', 'renderer.js'), 'utf8');
+
+  assert.match(indexHtml, /<section class="view legacy-shell-view" id="view-news">/);
+  assert.match(indexHtml, /<section class="view legacy-shell-view" id="view-wallet">/);
+  assert.match(indexHtml, /<section class="view legacy-shell-view" id="view-orders">/);
+  assert.match(indexHtml, /<section class="view legacy-shell-view" id="view-positions">/);
+  assert.match(indexHtml, /<section class="view legacy-shell-view" id="view-conversations">/);
+  assert.match(indexHtml, /<section class="view legacy-shell-view" id="view-history">/);
+  assert.match(indexHtml, /<section class="view legacy-shell-view" id="view-backtest">/);
+  assert.match(indexHtml, /<section class="view legacy-shell-view" id="view-alerts">/);
+  assert.match(indexHtml, /<section class="view legacy-shell-view" id="view-settings">/);
+
+  assert.match(indexHtml, /class="view-head legacy-view-head"/);
+  assert.match(indexHtml, /class="legacy-view-stack"/);
+  assert.match(indexHtml, /class="panel full-panel legacy-panel"/);
+  assert.match(indexHtml, /class="[^"]*shell-table shell-table--orders[^"]*"/);
+  assert.match(indexHtml, /class="[^"]*shell-table shell-table--positions[^"]*"/);
+  assert.match(indexHtml, /class="[^"]*shell-table shell-table--backtest[^"]*"/);
+  assert.match(indexHtml, /class="[^"]*shell-table shell-table--alerts[^"]*"/);
+  assert.match(indexHtml, /id="ordersTable" class="shell-table-body"/);
+  assert.match(indexHtml, /id="mt5PositionsTable" class="shell-table-body"/);
+  assert.match(indexHtml, /id="binanceOrdersTable" class="shell-table-body"/);
+  assert.match(indexHtml, /id="backtestSymbolTable" class="shell-table-body"/);
+  assert.match(indexHtml, /id="alertLogTable" class="shell-table-body"/);
+  assert.match(indexHtml, /id="convList" class="legacy-list"/);
+  assert.match(indexHtml, /id="alertTriggersGrid" class="legacy-form-grid legacy-form-grid--compact"/);
+  assert.match(indexHtml, /id="settingsBox" class="settings-grid legacy-settings-grid"/);
+
+  assert.match(stylesCss, /\.legacy-shell-view\b/);
+  assert.match(stylesCss, /\.legacy-view-head\b/);
+  assert.match(stylesCss, /\.legacy-view-stack\b/);
+  assert.match(stylesCss, /\.legacy-panel\b/);
+  assert.match(stylesCss, /\.shell-table\b/);
+  assert.match(stylesCss, /\.shell-table-body\b/);
+  assert.match(stylesCss, /\.shell-table-row\b/);
+  assert.match(stylesCss, /\.legacy-list\b/);
+  assert.match(stylesCss, /\.legacy-form-grid\b/);
+  assert.match(stylesCss, /\.legacy-modal\b/);
+  assert.match(stylesCss, /\.legacy-chip-grid\b/);
+
+  assert.match(renderer, /walletRowClass = 'balance-row shell-table-row shell-table-row--wallet';/);
+  assert.match(renderer, /class="shell-table-row shell-table-row--order"/);
+  assert.match(renderer, /class="shell-table-row shell-table-row--mt5"/);
+  assert.match(renderer, /class="shell-table-row shell-table-row--binance"/);
+  assert.match(renderer, /class="shell-table-row shell-table-row--backtest"/);
+  assert.match(renderer, /class="shell-table-row shell-table-row--alert"/);
+  assert.match(renderer, /class="legacy-trigger-card"/);
+  assert.match(renderer, /class="[^"]*legacy-conversation-card[^"]*"/);
+});

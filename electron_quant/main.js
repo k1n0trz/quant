@@ -45,6 +45,11 @@ const CLOUD_ENV_KEYS = [
   'MT5_ACCOUNT2_LOGIN','MT5_ACCOUNT2_PASSWORD','MT5_ACCOUNT2_SERVER',
   'WEB_AUTH_ENABLED','WEB_AUTH_EMAIL','WEB_AUTH_PASSWORD',
   'TRAINING_BACKEND_WRITER_ENABLED',
+  'TRAINING_BACKEND_LOOP_ENABLED','TRAINING_BACKEND_LOOP_SCHEDULER_ENABLED',
+  'TRAINING_BACKEND_LOOP_INTERVAL_MS',
+  'TRAINING_BACKEND_DEMO_ENTRY_ENABLED',
+  'TRAINING_BACKEND_DEMO_ENTRY_ALLOW_DEFENSIVE_SIGNAL',
+  'TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED',
   'QUANT_WEB_PORT','QUANT_WEB_HOST','QUANT_DATA_DIR','QUANT_SYNC_URL','QUANT_SYNC_KEY',
   'QUANT_DESKTOP_DOWNLOAD_URL','DEFAULT_PROVIDER','QUANT_PRIMARY_MODEL',
   'DEEPSEEK_MODEL','DEEPSEEK_BASE_URL','DEEPINFRA_MODEL','DEEPINFRA_BASE_URL',
@@ -2341,7 +2346,7 @@ function startLocalWebServer() {
         autoStartTrainingDemoLoopScheduler({
           env: { ...ENV, ...process.env },
           deps: {
-            readTrainingStateSnapshot: () => trainingStateReader.read(),
+            readTrainingStateSnapshot: () => trainingStateReader.readSnapshot(),
             writeTrainingState: (nextState) => writeTrainingState(nextState),
             getTicker: (symbol) => ticker(symbol),
             readMt5Snapshot: () => readMt5Snapshot(),

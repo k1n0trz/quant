@@ -137,3 +137,38 @@ test('frontend defaults and boot path keep training on until backend sync wins',
     'renderer.js should not keep known mojibake in visible dashboard, chat, or manual trading copy'
   );
 });
+
+test('global shell chat dock supports compact desktop, collapsed tablet, and mobile overlay defaults', () => {
+  const repoRoot = path.resolve(__dirname, '..');
+  const indexHtml = fs.readFileSync(path.join(repoRoot, 'src', 'index.html'), 'utf8');
+  const stylesCss = fs.readFileSync(path.join(repoRoot, 'src', 'styles.css'), 'utf8');
+  const renderer = fs.readFileSync(path.join(repoRoot, 'src', 'renderer.js'), 'utf8');
+
+  assert.match(indexHtml, /<section class="panel chat-dock" id="chatDock"/);
+  assert.match(indexHtml, /id="chatDockToggle"/);
+  assert.match(indexHtml, /id="chatDockCollapse"/);
+  assert.match(indexHtml, /id="chatDockOverlay"/);
+  assert.match(indexHtml, /id="chatDockBody"/);
+  assert.match(indexHtml, /id="chatLog"/);
+  assert.match(indexHtml, /id="chatInput"/);
+  assert.match(indexHtml, /id="sendChat"/);
+  assert.match(indexHtml, /id="chatContextPanel"/);
+
+  assert.match(stylesCss, /\.app-shell--global\s+\.shell-content\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*clamp\(320px,\s*28vw,\s*380px\);/);
+  assert.match(stylesCss, /\.chat-dock\[data-chat-state="compact"\]/);
+  assert.match(stylesCss, /\.chat-dock\[data-chat-state="collapsed"\]/);
+  assert.match(stylesCss, /\.chat-dock-overlay/);
+  assert.match(stylesCss, /@media\s*\(max-width:\s*1220px\)[\s\S]*data-chat-state="collapsed"/);
+  assert.match(stylesCss, /@media\s*\(max-width:\s*980px\)[\s\S]*position:\s*fixed/);
+
+  assert.match(renderer, /const CHAT_DOCK_STORAGE_KEY = 'quant-global-chat-dock-state';/);
+  assert.match(renderer, /function getDefaultChatDockState\(/);
+  assert.match(renderer, /function applyChatDockState\(/);
+  assert.match(renderer, /function setChatDockState\(/);
+  assert.match(renderer, /window\.matchMedia\('\(max-width: 980px\)'\)/);
+  assert.match(renderer, /window\.matchMedia\('\(max-width: 1220px\)'\)/);
+  assert.match(renderer, /localStorage\.getItem\(CHAT_DOCK_STORAGE_KEY\)/);
+  assert.match(renderer, /localStorage\.setItem\(CHAT_DOCK_STORAGE_KEY,\s*nextState\)/);
+  assert.match(renderer, /\$\('chatDockToggle'\)\.addEventListener\('click',/);
+  assert.match(renderer, /\$\('chatDockCollapse'\)\.addEventListener\('click',/);
+});

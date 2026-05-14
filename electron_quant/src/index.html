@@ -89,15 +89,48 @@
     </header>
 
     <main class="content shell-content">
-      <section class="panel chat-dock">
-        <div class="chat-head">QUANT COPILOT <span>analista permanente</span></div>
-        <div class="chat-log" id="chatLog"></div>
-        <div class="chat-input-row">
-          <input id="chatInput" placeholder="Pregunta a Quant sobre mercado, training o riesgo..." />
-          <button class="primary-btn" id="sendChat">Enviar</button>
+      <button
+        class="chat-dock-overlay"
+        id="chatDockOverlay"
+        type="button"
+        aria-controls="chatDock"
+        aria-expanded="false"
+      >
+        Quant
+      </button>
+
+      <section class="panel chat-dock" id="chatDock" data-chat-state="compact">
+        <div class="chat-dock-header">
+          <div class="chat-head">QUANT COPILOT <span>analista permanente</span></div>
+          <div class="chat-dock-actions">
+            <button
+              class="ghost-btn chat-dock-action"
+              id="chatDockToggle"
+              type="button"
+              aria-controls="chatDockBody"
+              aria-expanded="false"
+            >
+              Expandir
+            </button>
+            <button
+              class="ghost-btn chat-dock-action"
+              id="chatDockCollapse"
+              type="button"
+              aria-controls="chatDockBody"
+            >
+              Colapsar
+            </button>
+          </div>
         </div>
-        <div class="mini-pipeline-head">CONTEXTO ACTIVO</div>
-        <div class="mini-pipeline" id="chatContextPanel"></div>
+        <div class="chat-dock-body" id="chatDockBody">
+          <div class="chat-log" id="chatLog"></div>
+          <div class="chat-input-row">
+            <input id="chatInput" placeholder="Pregunta a Quant sobre mercado, training o riesgo..." />
+            <button class="primary-btn" id="sendChat">Enviar</button>
+          </div>
+          <div class="mini-pipeline-head">CONTEXTO ACTIVO</div>
+          <div class="mini-pipeline" id="chatContextPanel"></div>
+        </div>
       </section>
 
       <section class="view active" id="view-dashboard">

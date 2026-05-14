@@ -60,6 +60,111 @@ const setValue = (id, value) => {
   if (el) el.value = value;
 };
 
+const CHAT_DOCK_STORAGE_KEY = 'quant-global-chat-dock-state';
+
+function isMobileChatDockViewport() {
+  return window.matchMedia('(max-width: 980px)').matches;
+}
+
+function isTabletChatDockViewport() {
+  return window.matchMedia('(max-width: 1220px)').matches && !isMobileChatDockViewport();
+}
+
+function normalizeChatDockState(stateName) {
+  return ['expanded', 'compact', 'collapsed'].includes(stateName) ? stateName : 'compact';
+}
+
+function getDefaultChatDockState() {
+  if (window.matchMedia('(max-width: 980px)').matches) return 'collapsed';
+  if (window.matchMedia('(max-width: 1220px)').matches) return 'collapsed';
+  return 'compact';
+}
+
+function readStoredChatDockState() {
+  try {
+    const storedState = localStorage.getItem(CHAT_DOCK_STORAGE_KEY);
+    return storedState ? normalizeChatDockState(storedState) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function resolveChatDockStateForViewport(stateName) {
+  const normalized = normalizeChatDockState(stateName);
+  if (isMobileChatDockViewport()) {
+    return normalized === 'expanded' ? 'expanded' : 'collapsed';
+  }
+  if (isTabletChatDockViewport() && normalized === 'compact') {
+    return 'collapsed';
+  }
+  return normalized;
+}
+
+function updateChatDockControls(nextState) {
+  const toggle = $('chatDockToggle');
+  const collapse = $('chatDockCollapse');
+  const overlay = $('chatDockOverlay');
+  const expanded = nextState === 'expanded';
+  if (toggle) {
+    toggle.textContent = expanded ? 'Compactar' : 'Expandir';
+    toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  }
+  if (collapse) {
+    collapse.textContent = isMobileChatDockViewport() ? 'Cerrar' : 'Colapsar';
+    collapse.hidden = nextState === 'collapsed' && !isMobileChatDockViewport();
+  }
+  if (overlay) {
+    overlay.textContent = expanded ? 'Cerrar chat' : 'Quant';
+    overlay.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  }
+}
+
+function applyChatDockState(nextState) {
+  const dock = $('chatDock');
+  const body = $('chatDockBody');
+  if (!dock || !body) return;
+  const resolvedState = resolveChatDockStateForViewport(nextState);
+  dock.dataset.chatState = resolvedState;
+  dock.dataset.chatViewport = isMobileChatDockViewport() ? 'mobile' : isTabletChatDockViewport() ? 'tablet' : 'desktop';
+  body.hidden = resolvedState === 'collapsed';
+  document.body.classList.toggle('chat-dock-mobile-open', isMobileChatDockViewport() && resolvedState === 'expanded');
+  updateChatDockControls(resolvedState);
+}
+
+function setChatDockState(nextState, persist = true) {
+  const normalizedState = normalizeChatDockState(nextState);
+  applyChatDockState(normalizedState);
+  if (!persist) return;
+  try {
+    localStorage.setItem(CHAT_DOCK_STORAGE_KEY, nextState);
+  } catch (_) {
+    // Ignore storage failures and keep the in-memory UI state.
+  }
+}
+
+function cycleChatDockState() {
+  const dock = $('chatDock');
+  const currentState = dock?.dataset.chatState || getDefaultChatDockState();
+  if (isMobileChatDockViewport()) {
+    setChatDockState(currentState === 'expanded' ? 'collapsed' : 'expanded');
+    return;
+  }
+  if (currentState === 'expanded') {
+    setChatDockState('compact');
+    return;
+  }
+  setChatDockState('expanded');
+}
+
+function collapseChatDock() {
+  setChatDockState('collapsed');
+}
+
+function restoreChatDockState() {
+  const storedState = readStoredChatDockState();
+  applyChatDockState(storedState || getDefaultChatDockState());
+}
+
 const state = {
   symbol: 'BTCUSDT',
   platform: 'BINANCE',
@@ -255,6 +360,7 @@ async function boot() {
   }
 
   bindUi();
+  restoreChatDockState();
   drawPerf();
   drawGauge(50);
   // Boot cognitivo: restaura la ultima conversacion si existe; si no, silencio honesto.
@@ -333,6 +439,9 @@ function bindUi() {
   document.querySelectorAll('.nav-item').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
   document.querySelectorAll('[data-jump]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.jump)));
   document.querySelectorAll('.tf').forEach((b) => b.addEventListener('click', () => setTf(b.dataset.tf)));
+  $('chatDockToggle').addEventListener('click', () => cycleChatDockState());
+  $('chatDockCollapse').addEventListener('click', () => collapseChatDock());
+  $('chatDockOverlay').addEventListener('click', () => cycleChatDockState());
   $('platformSelect').addEventListener('change', () => setPlatform($('platformSelect').value));
   $('refreshBtn').addEventListener('click', () => refreshAll());
   $('walletRefresh').addEventListener('click', () => refreshWallet());
@@ -3980,6 +4089,11 @@ function drawPerf() {
   ctx.strokeStyle = '#2979ff'; ctx.beginPath(); ctx.moveTo(14, rect.height / 2 - 2); ctx.lineTo(rect.width - 14, rect.height / 2 - 2); ctx.stroke();
 }
 
-window.addEventListener('resize', () => { drawChart(); drawGauge(64); drawPerf(); });
+window.addEventListener('resize', () => {
+  drawChart();
+  drawGauge(64);
+  drawPerf();
+  restoreChatDockState();
+});
 window.addEventListener('beforeunload', () => { saveTrainingState(); });
 boot();

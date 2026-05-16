@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('quant', {
   riskConfigRead: () => ipcRenderer.invoke('risk-config-read'),
   apiConfigRead: () => ipcRenderer.invoke('api-config-read'),
   apiConfigWrite: (cfg) => ipcRenderer.invoke('api-config-write', cfg),
+  apiConfigImportEnv: () => ipcRenderer.invoke('api-config-import-env'),
   symbols: () => ipcRenderer.invoke('binance-symbols'),
   mt5Symbols: () => ipcRenderer.invoke('mt5-symbols'),
   mt5Rates: (symbol, timeframe, count) => ipcRenderer.invoke('mt5-rates', symbol, timeframe, count),

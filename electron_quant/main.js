@@ -163,6 +163,7 @@ const USER_API_FIELDS = [
   'QUANT_SYNC_URL','QUANT_SYNC_KEY'
 ];
 const SENSITIVE_API_FIELDS = USER_API_FIELDS.filter((key) => /KEY|SECRET|PASSWORD|PASS/.test(key));
+const ENV_IMPORT_API_FIELDS = USER_API_FIELDS.filter((key) => key !== 'REAL_TRADING');
 const botStateStore = createJsonStore(backendStateFile, () => createDefaultBotState());
 const riskConfigStore = createJsonStore(riskConfigFile, () => createDefaultRiskConfig());
 
@@ -372,7 +373,36 @@ function writeApiConfigForUser(email, body = {}) {
   return { ok: true, ...apiConfigStatus(normalized) };
 }
 
+function importApiConfigFromEnvForUser(email, options = {}) {
+  const normalized = normalizeEmail(email || WEB_AUTH_EMAIL);
+  const overwrite = options.overwrite !== false;
+  const store = readUserApiStore();
+  const current = { ...(store.configs[normalized] || {}) };
+  const imported = [];
+  for (const key of ENV_IMPORT_API_FIELDS) {
+    const value = String(ENV[key] ?? process.env[key] ?? '').trim();
+    if (!value) continue;
+    if (!overwrite && current[key]) continue;
+    current[key] = value;
+    imported.push(key);
+  }
+  store.configs[normalized] = current;
+  writeUserApiStore(store);
+  logger.info('api-config.import-env', {
+    user: normalized,
+    importedCount: imported.length,
+    overwrite
+  });
+  return {
+    ok: true,
+    importedCount: imported.length,
+    imported,
+    ...apiConfigStatus(normalized)
+  };
+}
+
 seedDefaultUsers();
+importApiConfigFromEnvForUser(WEB_AUTH_EMAIL, { overwrite: true });
 ensureEnvExampleFile();
 if (!fs.existsSync(backendStateFile)) writeBotState(createDefaultBotState());
 if (!fs.existsSync(riskConfigFile)) writeRiskConfig(createDefaultRiskConfig());
@@ -1700,6 +1730,7 @@ async function handleApi(req, res, url) {
     if (modularResult) return sendJson(res, modularResult.body, modularResult.status);
     if (url.pathname === '/api/api-config-read') return sendJson(res, cfgStatus);
     if (url.pathname === '/api/api-config-write' && req.method === 'POST') return sendJson(res, writeApiConfigForUser(currentUser, body));
+    if (url.pathname === '/api/api-config-import-env' && req.method === 'POST') return sendJson(res, importApiConfigFromEnvForUser(currentUser, { overwrite: true }));
     const runtimePolicy = backendRuntimePolicy(userEnv);
     if (url.pathname === '/api/env-status') return sendJson(res, {
       user: cfgStatus.user,
@@ -2423,6 +2454,7 @@ ipcMain.handle('env-status', () => {
 });
 ipcMain.handle('api-config-read',  () => apiConfigStatus(WEB_AUTH_EMAIL, effectiveEnvForUser(WEB_AUTH_EMAIL)));
 ipcMain.handle('api-config-write', (_e, cfg) => writeApiConfigForUser(WEB_AUTH_EMAIL, cfg));
+ipcMain.handle('api-config-import-env', () => importApiConfigFromEnvForUser(WEB_AUTH_EMAIL, { overwrite: true }));
 ipcMain.handle('bot-state-read', () => readBotState());
 ipcMain.handle('risk-config-read', () => readRiskConfig());
 ipcMain.handle('binance-symbols', () => binanceSymbols());

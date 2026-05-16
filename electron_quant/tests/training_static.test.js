@@ -61,6 +61,8 @@ assert(html.includes('0 / 20'), 'La UI debe mostrar 20 modelos activos esperados
 assert(main.includes('user_api_config.json'), 'Las API keys deben persistirse por usuario, no en una configuracion global compartida.');
 assert(main.includes("ensureUser('mateo'"), 'Debe existir usuario Mateo sembrado para pruebas de aislamiento.');
 assert(main.includes('/api/api-config-read') && main.includes('/api/api-config-write'), 'Main debe exponer endpoints para leer/escribir APIs por sesion autenticada.');
+assert(main.includes('/api/api-config-import-env') && main.includes('importApiConfigFromEnvForUser'), 'Main debe poder materializar APIs ya configuradas en .env al store persistente del usuario.');
+assert(main.includes("key !== 'REAL_TRADING'"), 'La importacion desde .env no debe activar trading real por accidente.');
 assert(main.includes('currentUserFromRequest'), 'Las rutas web deben resolver el usuario desde la cookie de sesion.');
 assert(main.includes('apiConfigStatus'), 'El estado del sistema debe usar la configuracion efectiva del usuario autenticado.');
 assert(renderer.includes('apiConfigRead') && renderer.includes('apiConfigWrite'), 'Renderer debe poder leer/escribir configuracion API por usuario.');

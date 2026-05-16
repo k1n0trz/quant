@@ -145,10 +145,17 @@ test('settings api form cannot fall back to native navigation and reports saved 
   const main = fs.readFileSync(path.join(repoRoot, 'main.js'), 'utf8');
 
   assert.match(indexHtml, /<form id="apiConfigForm"[^>]*onsubmit="return false;"/);
+  assert.match(indexHtml, /id="apiConfigImportEnvBtn"/);
+  assert.match(renderer, /credentials: 'same-origin'/);
   assert.match(renderer, /const bindEvent = \(id, eventName, handler, options = undefined\) =>/);
   assert.match(renderer, /bindEvent\('apiConfigForm', 'submit', saveApiConfig\)/);
   assert.match(renderer, /bindEvent\('apiConfigSaveBtn', 'click', saveApiConfig\)/);
+  assert.match(renderer, /bindEvent\('apiConfigImportEnvBtn', 'click', importApiConfigFromEnv\)/);
+  assert.match(renderer, /apiConfigImportEnv:\s+\(\)\s+=>\s+apiPost\('api-config-import-env', \{\}\)/);
   assert.match(renderer, /Guardada y oculta/);
   assert.match(renderer, /Guardadas: \$\{saved\}/);
+  assert.match(main, /importApiConfigFromEnvForUser/);
+  assert.match(main, /\/api\/api-config-import-env/);
+  assert.match(main, /key !== 'REAL_TRADING'/);
   assert.match(main, /Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'/);
 });

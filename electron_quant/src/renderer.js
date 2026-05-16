@@ -1,10 +1,16 @@
 if (!window.quant) {
-  const apiGet  = (path)         => fetch(`/api/${path}`).then((r) => r.json());
-  const apiPost = (path, payload) => fetch(`/api/${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload || {}) }).then((r) => r.json());
+  const parseJsonResponse = async (r) => {
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || data.reason || `HTTP ${r.status}`);
+    return data;
+  };
+  const apiGet  = (path)         => fetch(`/api/${path}`, { credentials: 'same-origin' }).then(parseJsonResponse);
+  const apiPost = (path, payload) => fetch(`/api/${path}`, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload || {}) }).then(parseJsonResponse);
   window.quant = {
     envStatus:             ()                          => apiGet('env-status'),
     apiConfigRead:         ()                          => apiGet('api-config-read'),
     apiConfigWrite:        (cfg)                       => apiPost('api-config-write', cfg),
+    apiConfigImportEnv:    ()                          => apiPost('api-config-import-env', {}),
     symbols:               ()                          => apiGet('binance-symbols'),
     mt5Symbols:            ()                          => apiGet('mt5-symbols'),
     mt5Rates:              (symbol, tf, count)         => apiGet(`mt5-rates?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(tf)}&count=${count || 180}`),
@@ -368,6 +374,7 @@ function bindUi() {
   bindEvent('saveCustomInstructionsBtn', 'click', saveCustomInstructions);
   bindEvent('apiConfigForm', 'submit', saveApiConfig);
   bindEvent('apiConfigSaveBtn', 'click', saveApiConfig);
+  bindEvent('apiConfigImportEnvBtn', 'click', importApiConfigFromEnv);
   bindEvent('runCalibrationBtn', 'click', manualCalibration);
   bindEvent('newConvBtn', 'click', startNewConversation);
   bindEvent('ordersRefreshBtn', 'click', loadOrders);
@@ -3334,7 +3341,7 @@ async function loadApiConfig() {
 }
 
 async function saveApiConfig(event) {
-  event.preventDefault();
+  event?.preventDefault?.();
   const st = $('apiConfigStatus');
   const payload = {};
   for (const [key, id] of Object.entries(API_FIELD_INPUTS)) {
@@ -3346,7 +3353,8 @@ async function saveApiConfig(event) {
   }
   try {
     if (st) st.textContent = 'Guardando APIs...';
-    await window.quant.apiConfigWrite(payload);
+    const result = await window.quant.apiConfigWrite(payload);
+    if (!result?.ok) throw new Error(result?.error || result?.reason || 'api_config_write_failed');
     state.env = await window.quant.envStatus();
     renderStatus();
     await loadApiConfig();
@@ -3354,6 +3362,24 @@ async function saveApiConfig(event) {
   } catch (err) {
     if (st) st.textContent = 'Error al guardar APIs.';
     logEvent('WARN', `saveApiConfig: ${err.message}`);
+  }
+}
+
+async function importApiConfigFromEnv(event) {
+  event?.preventDefault?.();
+  const st = $('apiConfigStatus');
+  try {
+    if (st) st.textContent = 'Importando APIs desde .env...';
+    const result = await window.quant.apiConfigImportEnv();
+    if (!result?.ok) throw new Error(result?.error || result?.reason || 'api_config_import_env_failed');
+    state.env = await window.quant.envStatus();
+    renderStatus();
+    await loadApiConfig();
+    if (st) st.textContent = `APIs importadas desde .env (${result.importedCount || 0}).`;
+    logEvent('OK', `APIs importadas desde .env (${result.importedCount || 0})`);
+  } catch (err) {
+    if (st) st.textContent = 'Error al importar .env.';
+    logEvent('WARN', `importApiConfigFromEnv: ${err.message}`);
   }
 }
 

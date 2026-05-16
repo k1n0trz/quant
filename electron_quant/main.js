@@ -1617,7 +1617,12 @@ function serveStatic(req, res, urlLike) {
     return 'text/html';
   };
   const sendFile = (full, contentType) => {
-    res.writeHead(200, { 'Content-Type': `${contentType}; charset=utf-8` });
+    res.writeHead(200, {
+      'Content-Type': `${contentType}; charset=utf-8`,
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
     fs.createReadStream(full).pipe(res);
   };
 

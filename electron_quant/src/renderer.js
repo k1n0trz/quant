@@ -59,6 +59,12 @@ const setValue = (id, value) => {
   const el = $(id);
   if (el) el.value = value;
 };
+const bindEvent = (id, eventName, handler, options = undefined) => {
+  const el = $(id);
+  if (!el) return false;
+  el.addEventListener(eventName, handler, options);
+  return true;
+};
 
 const state = {
   symbol: 'BTCUSDT',
@@ -333,19 +339,19 @@ function bindUi() {
   document.querySelectorAll('.nav-item').forEach((b) => b.addEventListener('click', () => setView(b.dataset.view)));
   document.querySelectorAll('[data-jump]').forEach((b) => b.addEventListener('click', () => setView(b.dataset.jump)));
   document.querySelectorAll('.tf').forEach((b) => b.addEventListener('click', () => setTf(b.dataset.tf)));
-  $('platformSelect').addEventListener('change', () => setPlatform($('platformSelect').value));
-  $('refreshBtn').addEventListener('click', () => refreshAll());
-  $('walletRefresh').addEventListener('click', () => refreshWallet());
-  $('trainingReselectBtn').addEventListener('click', () => initTrainingMode(true));
-  $('finnhubBtn').addEventListener('click', () => refreshNews('finnhub'));
-  $('alphaBtn').addEventListener('click', () => refreshNews('alpha'));
-  $('sendChat').addEventListener('click', sendChat);
-  $('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });
-  $('askAiBtn').addEventListener('click', askAiAnalysis);
-  $('marketSearch').addEventListener('input', renderMarketTable);
-  $('buyBtn').addEventListener('click',  () => submitOrder('BUY'));
-  $('sellBtn').addEventListener('click', () => submitOrder('SELL'));
-  $('cancelBtn').addEventListener('click', () => {
+  bindEvent('platformSelect', 'change', () => setPlatform($('platformSelect').value));
+  bindEvent('refreshBtn', 'click', () => refreshAll());
+  bindEvent('walletRefresh', 'click', () => refreshWallet());
+  bindEvent('trainingReselectBtn', 'click', () => initTrainingMode(true));
+  bindEvent('finnhubBtn', 'click', () => refreshNews('finnhub'));
+  bindEvent('alphaBtn', 'click', () => refreshNews('alpha'));
+  bindEvent('sendChat', 'click', sendChat);
+  bindEvent('chatInput', 'keydown', (e) => { if (e.key === 'Enter') sendChat(); });
+  bindEvent('askAiBtn', 'click', askAiAnalysis);
+  bindEvent('marketSearch', 'input', renderMarketTable);
+  bindEvent('buyBtn', 'click',  () => submitOrder('BUY'));
+  bindEvent('sellBtn', 'click', () => submitOrder('SELL'));
+  bindEvent('cancelBtn', 'click', () => {
     $('qtyInput').value       = '0.001';
     $('confirmInput').value   = '';
     $('stopLossInput').value  = '';
@@ -353,23 +359,24 @@ function bindUi() {
     $('sizeCalcInfo').textContent = '';
     const rb = $('orderResultBox'); if (rb) { rb.style.display = 'none'; rb.textContent = ''; }
   });
-  $('calcSizeBtn').addEventListener('click', calcSizeFromRisk);
-  $('orderType').addEventListener('change', () => {
+  bindEvent('calcSizeBtn', 'click', calcSizeFromRisk);
+  bindEvent('orderType', 'change', () => {
     const isLimit = $('orderType').value === 'LIMIT';
     $('limitPriceInput').closest('label').style.opacity = isLimit ? '1' : '0.35';
   });
-  $('enableTradingBtn').addEventListener('click', () => alert('Trading real requiere REAL_TRADING=true, confirmacion exacta, limites de riesgo y una prueba final. No lo voy a activar a ciegas con dinero real.'));
-  $('saveCustomInstructionsBtn').addEventListener('click', saveCustomInstructions);
-  $('apiConfigForm').addEventListener('submit', saveApiConfig);
-  $('runCalibrationBtn').addEventListener('click', manualCalibration);
-  $('newConvBtn').addEventListener('click', startNewConversation);
-  $('ordersRefreshBtn').addEventListener('click', loadOrders);
-  $('positionsRefreshBtn').addEventListener('click', loadPositions);
-  $('backtestSelectBtn').addEventListener('click', backtestSelectFile);
-  $('backtestRunBtn').addEventListener('click', backtestRun);
-  $('alertSaveBtn').addEventListener('click', saveAlertConfig);
-  $('alertTestBtn').addEventListener('click', sendTestEmail);
-  $('alertLogRefreshBtn').addEventListener('click', loadAlertLog);
+  bindEvent('enableTradingBtn', 'click', () => alert('Trading real requiere REAL_TRADING=true, confirmacion exacta, limites de riesgo y una prueba final. No lo voy a activar a ciegas con dinero real.'));
+  bindEvent('saveCustomInstructionsBtn', 'click', saveCustomInstructions);
+  bindEvent('apiConfigForm', 'submit', saveApiConfig);
+  bindEvent('apiConfigSaveBtn', 'click', saveApiConfig);
+  bindEvent('runCalibrationBtn', 'click', manualCalibration);
+  bindEvent('newConvBtn', 'click', startNewConversation);
+  bindEvent('ordersRefreshBtn', 'click', loadOrders);
+  bindEvent('positionsRefreshBtn', 'click', loadPositions);
+  bindEvent('backtestSelectBtn', 'click', backtestSelectFile);
+  bindEvent('backtestRunBtn', 'click', backtestRun);
+  bindEvent('alertSaveBtn', 'click', saveAlertConfig);
+  bindEvent('alertTestBtn', 'click', sendTestEmail);
+  bindEvent('alertLogRefreshBtn', 'click', loadAlertLog);
   document.querySelectorAll('[data-orders-filter]').forEach((b) => {
     b.addEventListener('click', () => {
       _ordersFilter = b.dataset.ordersFilter;
@@ -381,12 +388,12 @@ function bindUi() {
     const btn = $(id);
     if (btn) btn.addEventListener('click', clearPersistentMemory);
   });
-  $('tradeChart').addEventListener('wheel', onChartWheel, { passive: false });
-  ['sslChannelToggle', 'sslHybridToggle', 'atrBandsToggle'].forEach((id) => $(id).addEventListener('change', drawChart));
-  $('assetSearch').addEventListener('input', () => renderSymbolMenu(true));
-  $('assetSearch').addEventListener('focus', () => renderSymbolMenu(true));
-  $('assetDropBtn').addEventListener('click', () => renderSymbolMenu(!$('assetMenu').classList.contains('open')));
-  $('assetSearch').addEventListener('keydown', (e) => {
+  bindEvent('tradeChart', 'wheel', onChartWheel, { passive: false });
+  ['sslChannelToggle', 'sslHybridToggle', 'atrBandsToggle'].forEach((id) => bindEvent(id, 'change', drawChart));
+  bindEvent('assetSearch', 'input', () => renderSymbolMenu(true));
+  bindEvent('assetSearch', 'focus', () => renderSymbolMenu(true));
+  bindEvent('assetDropBtn', 'click', () => renderSymbolMenu(!$('assetMenu').classList.contains('open')));
+  bindEvent('assetSearch', 'keydown', (e) => {
     if (e.key === 'Enter') {
       const first = $('assetMenu').querySelector('.symbol-option');
       if (first) selectSymbolFromSearch(first.dataset.symbol);
@@ -3281,8 +3288,27 @@ const API_FIELD_INPUTS = {
   QUANT_SYNC_KEY: 'apiSyncKey'
 };
 
+const API_FIELD_LABELS = {
+  BINANCE_API_KEY: 'Binance API Key',
+  BINANCE_SECRET: 'Binance Secret',
+  DEEPSEEK_API_KEY: 'DeepSeek',
+  DEEPINFRA_API_KEY: 'DeepInfra',
+  FINNHUB_API_KEY: 'Finnhub',
+  ALPHA_VANTAGE_API_KEY: 'Alpha Vantage',
+  MT5_ACCOUNT1_LOGIN: 'MT5 Real',
+  MT5_ACCOUNT2_LOGIN: 'MT5 Demo',
+  QUANT_SYNC_KEY: 'Sync Key'
+};
+
 function isSensitiveApiField(key) {
   return /KEY|SECRET|PASSWORD|PASS/.test(key);
+}
+
+function summarizeSavedApiConfig(cfg = {}) {
+  return Object.entries(API_FIELD_LABELS)
+    .filter(([key]) => cfg.has?.[key])
+    .map(([, label]) => label)
+    .join(', ');
 }
 
 async function loadApiConfig() {
@@ -3294,12 +3320,13 @@ async function loadApiConfig() {
       if (!el) continue;
       if (isSensitiveApiField(key)) {
         el.value = '';
-        el.placeholder = cfg.has?.[key] ? 'Guardada para esta sesion' : el.getAttribute('placeholder') || '';
+        el.placeholder = cfg.has?.[key] ? 'Guardada y oculta' : el.getAttribute('placeholder') || '';
       } else {
         el.value = cfg.values?.[key] || '';
       }
     }
-    if (st) st.textContent = `Sesion: ${cfg.user?.email || 'local'} - ${cfg.file || 'configuracion en memoria'}`;
+    const saved = summarizeSavedApiConfig(cfg);
+    if (st) st.textContent = `Sesion: ${cfg.user?.email || 'local'} - ${saved ? `Guardadas: ${saved}` : 'Sin APIs guardadas todavia'}`;
   } catch (err) {
     if (st) st.textContent = 'No pude cargar APIs.';
     logEvent('WARN', `loadApiConfig: ${err.message}`);

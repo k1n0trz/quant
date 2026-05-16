@@ -137,3 +137,18 @@ test('frontend defaults and boot path keep training on until backend sync wins',
     'renderer.js should not keep known mojibake in visible dashboard, chat, or manual trading copy'
   );
 });
+
+test('settings api form cannot fall back to native navigation and reports saved keys', () => {
+  const repoRoot = path.resolve(__dirname, '..');
+  const indexHtml = fs.readFileSync(path.join(repoRoot, 'src', 'index.html'), 'utf8');
+  const renderer = fs.readFileSync(path.join(repoRoot, 'src', 'renderer.js'), 'utf8');
+  const main = fs.readFileSync(path.join(repoRoot, 'main.js'), 'utf8');
+
+  assert.match(indexHtml, /<form id="apiConfigForm"[^>]*onsubmit="return false;"/);
+  assert.match(renderer, /const bindEvent = \(id, eventName, handler, options = undefined\) =>/);
+  assert.match(renderer, /bindEvent\('apiConfigForm', 'submit', saveApiConfig\)/);
+  assert.match(renderer, /bindEvent\('apiConfigSaveBtn', 'click', saveApiConfig\)/);
+  assert.match(renderer, /Guardada y oculta/);
+  assert.match(renderer, /Guardadas: \$\{saved\}/);
+  assert.match(main, /Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'/);
+});

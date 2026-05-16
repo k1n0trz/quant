@@ -24,6 +24,7 @@ const crypto = require('node:crypto');
 const { spawn } = require('node:child_process');
 const { createLogger } = require('./backend/logging/logger');
 const { ENV_EXAMPLE } = require('./backend/config/env');
+const { ENV_ALIAS_KEYS, normalizeRuntimeEnv } = require('./backend/config/env-normalization');
 const { resolveListenHost } = require('./backend/config/runtime');
 const { resolveUiEntry } = require('./backend/server/ui-entry');
 const { createJsonStore } = require('./backend/memory/json-store');
@@ -33,6 +34,8 @@ const { createApiRouter } = require('./backend/routes/api-router');
 const { createReadOnlyTrainingStateReader } = require('./backend/training/training-state');
 const { normalizeTrainingStateTraceability } = require('./backend/training/training-traceability');
 const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
+const { executeTrainingDemoLoopTick } = require('./backend/training/training-loop-scheduler');
+const { ensureBootstrapTrainingState } = require('./backend/training/training-bootstrap-service');
 
 const BINANCE_BASE = 'https://api.binance.com';
 let timeOffsetMs = 0;
@@ -50,10 +53,14 @@ const CLOUD_ENV_KEYS = [
   'TRAINING_BACKEND_DEMO_ENTRY_ENABLED',
   'TRAINING_BACKEND_DEMO_ENTRY_ALLOW_DEFENSIVE_SIGNAL',
   'TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED',
+  'TRAINING_TARGET_OPEN_POSITIONS','TRAINING_TARGET_INTRADAY_POSITIONS',
+  'TRAINING_TARGET_SWING_POSITIONS','TRAINING_MIN_OPEN_POSITIONS',
+  'TRAINING_MAX_OPEN_POSITIONS','TRAINING_ASSET_UNIVERSE_SCAN_LIMIT',
   'QUANT_WEB_PORT','QUANT_WEB_HOST','QUANT_DATA_DIR','QUANT_SYNC_URL','QUANT_SYNC_KEY',
   'QUANT_DESKTOP_DOWNLOAD_URL','DEFAULT_PROVIDER','QUANT_PRIMARY_MODEL',
   'DEEPSEEK_MODEL','DEEPSEEK_BASE_URL','DEEPINFRA_MODEL','DEEPINFRA_BASE_URL',
-  'MATEO_WEB_AUTH_PASSWORD'
+  'MATEO_WEB_AUTH_PASSWORD',
+  ...ENV_ALIAS_KEYS
 ];
 
 function uniquePaths(paths) {
@@ -92,7 +99,7 @@ function readEnv() {
   const file = envCandidates().find((candidate) => fs.existsSync(candidate));
   if (!file) {
     for (const k of CLOUD_ENV_KEYS) { if (process.env[k] !== undefined) env[k] = process.env[k]; }
-    return env;
+    return normalizeRuntimeEnv(env);
   }
   for (const line of fs.readFileSync(file, 'utf8').split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -105,7 +112,7 @@ function readEnv() {
   for (const k of CLOUD_ENV_KEYS) {
     if (process.env[k] !== undefined) env[k] = process.env[k];
   }
-  return env;
+  return normalizeRuntimeEnv(env);
 }
 
 const ENV = readEnv();
@@ -1713,6 +1720,7 @@ async function handleApi(req, res, url) {
         readTrainingStateSnapshot,
         writeTrainingState,
         getTicker: (symbol) => ticker(symbol),
+        getBinanceSymbols: () => binanceSymbols(),
         readMt5Snapshot,
         syncBinanceTime: () => syncBinanceTime(),
         mt5AccountInfo: (envArg) => mt5Info(envArg)
@@ -2305,6 +2313,65 @@ function isAuthenticated(req) {
   return Boolean(currentUserFromRequest(req));
 }
 
+function isAutonomousTrainingRuntimeEnabled(env = {}) {
+  return String(env.TRAINING_BACKEND_LOOP_ENABLED || 'false').toLowerCase() === 'true';
+}
+
+function createTrainingRuntimeDeps() {
+  return {
+    readTrainingStateSnapshot: () => trainingStateReader.readSnapshot(),
+    writeTrainingState: (nextState) => writeTrainingState(nextState),
+    getTicker: (symbol) => ticker(symbol),
+    getBinanceSymbols: () => binanceSymbols(),
+    readMt5Snapshot: () => readMt5Snapshot(),
+    readMemory: (limit) => readMemory(limit)
+  };
+}
+
+function startAutonomousTrainingRuntime() {
+  const runtimeEnv = normalizeRuntimeEnv({ ...ENV, ...process.env });
+  const deps = createTrainingRuntimeDeps();
+  if (!isAutonomousTrainingRuntimeEnabled(runtimeEnv)) {
+    logger.info('training.autonomous.skipped', { reason: 'training_backend_loop_disabled' });
+    return;
+  }
+
+  const bootstrap = ensureBootstrapTrainingState({
+    env: runtimeEnv,
+    deps,
+    now: new Date().toISOString()
+  });
+  logger.info('training.autonomous.bootstrap', {
+    ok: bootstrap.ok,
+    bootstrapped: bootstrap.bootstrapped,
+    reason: bootstrap.reason || null
+  });
+
+  autoStartTrainingDemoLoopScheduler({
+    env: runtimeEnv,
+    deps,
+    logger
+  });
+
+  void executeTrainingDemoLoopTick({
+    env: runtimeEnv,
+    deps,
+    nowMs: Date.now()
+  }).then((result) => {
+    logger.info('training.autonomous.first_tick', {
+      ok: result.ok,
+      reason: result.reason || null,
+      openedPositions: result.openedPositions || 0,
+      closedPositions: result.closedPositions || 0,
+      evaluatedPositions: result.evaluatedPositions || 0
+    });
+  }).catch((error) => {
+    logger.error('training.autonomous.first_tick_failed', {
+      message: String(error?.message || error)
+    });
+  });
+}
+
 function startLocalWebServer() {
   if (webServer) return;
   // Cloud Run injects PORT; also accept QUANT_WEB_PORT for self-hosting
@@ -2379,17 +2446,7 @@ function startLocalWebServer() {
       logger.info('server.listen.ready', { host: listenHost, port });
       if (!trainingLoopAutoStartAttempted) {
         trainingLoopAutoStartAttempted = true;
-        autoStartTrainingDemoLoopScheduler({
-          env: { ...ENV, ...process.env },
-          deps: {
-            readTrainingStateSnapshot: () => trainingStateReader.readSnapshot(),
-            writeTrainingState: (nextState) => writeTrainingState(nextState),
-            getTicker: (symbol) => ticker(symbol),
-            readMt5Snapshot: () => readMt5Snapshot(),
-            readMemory: (limit) => readMemory(limit)
-          },
-          logger
-        });
+        startAutonomousTrainingRuntime();
       }
     });
   };

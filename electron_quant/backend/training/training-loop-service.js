@@ -4,6 +4,9 @@ const {
   isTrainingBackendDemoEntryEnabled,
   evaluateTrainingDemoEntries
 } = require('./training-demo-entry-service');
+const {
+  resolveTrainingAssetUniverse
+} = require('./training-asset-universe-service');
 
 function isObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
@@ -34,6 +37,10 @@ function isTrainingBackendLoopEnabled(env = {}) {
   return String(env.TRAINING_BACKEND_LOOP_ENABLED || 'false').toLowerCase() === 'true';
 }
 
+function isTrainingAssetUniverseEnabled(env = {}) {
+  return String(env.TRAINING_ASSET_UNIVERSE_ENABLED || 'true').toLowerCase() !== 'false';
+}
+
 function buildTickId(now = new Date()) {
   return `tick_${now.toISOString().replace(/[-:.TZ]/g, '')}`;
 }
@@ -44,6 +51,23 @@ function resolveTargetOpenPositions(state = {}) {
     || state.targets?.total
     || 20
   );
+}
+
+function positiveNumber(...values) {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number) && number >= 0) return number;
+  }
+  return 0;
+}
+
+function resolveLoopTargets(state = {}, env = {}) {
+  const total = positiveNumber(env.TRAINING_TARGET_OPEN_POSITIONS, state.targetOpenPositions, state.targets?.total, 20);
+  const intraday = positiveNumber(env.TRAINING_TARGET_INTRADAY_POSITIONS, state.targetIntradayPositions, state.targets?.intraday, Math.ceil(total / 2));
+  const swing = positiveNumber(env.TRAINING_TARGET_SWING_POSITIONS, state.targetSwingPositions, state.targets?.swing, Math.max(0, total - intraday));
+  const minTotal = positiveNumber(env.TRAINING_MIN_OPEN_POSITIONS, state.targets?.minTotal, 20);
+  const maxTotal = positiveNumber(env.TRAINING_MAX_OPEN_POSITIONS, state.targets?.maxTotal, 40);
+  return { total, intraday, swing, minTotal, maxTotal };
 }
 
 function findPositionContext(position, contexts = []) {
@@ -123,7 +147,18 @@ async function runTrainingDemoTick(input = {}) {
   const tickId = buildTickId(new Date(nowMs));
   const contexts = Array.isArray(source.positionContexts) ? source.positionContexts.slice() : [];
   const balanceBefore = Number(snapshot.state.balance || 0);
-  let nextState = snapshot.state;
+  const targets = resolveLoopTargets(snapshot.state, source.env || {});
+  let nextState = {
+    ...snapshot.state,
+    targets: {
+      ...(snapshot.state.targets || {}),
+      ...targets
+    },
+    targetOpenPositions: targets.total,
+    targetIntradayPositions: targets.intraday,
+    targetSwingPositions: targets.swing
+  };
+  let assetUniverse = null;
   let evaluatedPositions = 0;
   let closedPositions = 0;
   let openedPositions = 0;
@@ -132,7 +167,32 @@ async function runTrainingDemoTick(input = {}) {
   const skippedEntries = [];
   const entryEnabled = isTrainingBackendDemoEntryEnabled(source.env || {});
 
-  const openPositions = (Array.isArray(snapshot.state.positions) ? snapshot.state.positions : []).filter((position) => !position.exit_price);
+  if (isTrainingAssetUniverseEnabled(source.env || {}) && typeof source.deps?.getTicker === 'function') {
+    const universe = await resolveTrainingAssetUniverse({
+      deps: source.deps || {},
+      env: source.env || {},
+      nowMs,
+      targets
+    });
+    assetUniverse = {
+      ok: universe.ok === true,
+      reason: universe.reason || null,
+      source: universe.source || 'backend.training.asset_universe',
+      generatedAt: universe.generatedAt || new Date(nowMs).toISOString(),
+      pairCount: Array.isArray(universe.pairs) ? universe.pairs.length : 0,
+      skippedCount: Array.isArray(universe.skipped) ? universe.skipped.length : 0,
+      scanLimit: universe.scanLimit || null
+    };
+    if (universe.ok && Array.isArray(universe.pairs) && universe.pairs.length > 0) {
+      nextState = {
+        ...nextState,
+        activePairs: universe.pairs,
+        assetUniverse
+      };
+    }
+  }
+
+  const openPositions = (Array.isArray(nextState.positions) ? nextState.positions : []).filter((position) => !position.exit_price);
   for (const openPosition of openPositions) {
     const context = findPositionContext(openPosition, contexts);
     if (!context) {
@@ -196,11 +256,13 @@ async function runTrainingDemoTick(input = {}) {
     balanceAfter: Number(nextState.balance || balanceBefore),
     lessonPendingCount,
     entryEnabled,
+    assetUniverse,
     nextState
   };
 }
 
 module.exports = {
+  isTrainingAssetUniverseEnabled,
   isTrainingBackendLoopEnabled,
   runTrainingDemoTick
 };

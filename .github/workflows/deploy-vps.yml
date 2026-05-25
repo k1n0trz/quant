@@ -14,7 +14,7 @@ on:
       remote_dir:
         description: "Repository directory on the VPS"
         required: true
-        default: "/opt/quant"
+        default: "/opt/quant/quant"
       service_name:
         description: "systemd service to restart"
         required: true
@@ -106,7 +106,7 @@ jobs:
 
             mkdir -p /var/backups/quant
             if [ -d /var/lib/quant ]; then
-              sudo tar -czf "/var/backups/quant/data-$(date +%Y%m%d-%H%M%S).tar.gz" /var/lib/quant 2>/dev/null || true
+              tar -czf "/var/backups/quant/data-$(date +%Y%m%d-%H%M%S).tar.gz" /var/lib/quant 2>/dev/null || true
             fi
 
             git fetch --tags origin
@@ -129,5 +129,5 @@ jobs:
             done
 
             sudo systemctl status "$SERVICE_NAME" --no-pager || true
-            journalctl -u "$SERVICE_NAME" -n 80 --no-pager || true
+            sudo journalctl -u "$SERVICE_NAME" -n 80 --no-pager || true
             exit 1

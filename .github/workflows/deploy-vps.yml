@@ -1,0 +1,133 @@
+name: Deploy Quant to VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch, tag, or SHA to deploy"
+        required: true
+        default: "main"
+      app_subdir:
+        description: "Path to the headless app inside the repo"
+        required: true
+        default: "electron_quant"
+      remote_dir:
+        description: "Repository directory on the VPS"
+        required: true
+        default: "/opt/quant"
+      service_name:
+        description: "systemd service to restart"
+        required: true
+        default: "quant.service"
+      health_url:
+        description: "Local VPS healthcheck URL"
+        required: true
+        default: "http://127.0.0.1:47829/healthz"
+      ssh_deploy:
+        description: "Set to true to perform the SSH deploy; false validates only"
+        required: true
+        default: "false"
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate deploy candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - name: Checkout selected ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Resolve commit SHA
+        id: sha
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: "${{ inputs.app_subdir }}/package-lock.json"
+
+      - name: Validate app directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "${{ inputs.app_subdir }}/package.json"
+          test -f "${{ inputs.app_subdir }}/package-lock.json"
+          test -f "${{ inputs.app_subdir }}/main.js"
+
+      - name: Install check
+        working-directory: ${{ inputs.app_subdir }}
+        shell: bash
+        run: npm ci --omit=dev --ignore-scripts --no-audit --no-fund --dry-run
+
+      - name: Syntax check
+        working-directory: ${{ inputs.app_subdir }}
+        shell: bash
+        run: node --check main.js
+
+      - name: Smoke tests
+        working-directory: ${{ inputs.app_subdir }}
+        shell: bash
+        run: npm run test:backend
+
+  deploy:
+    name: SSH deploy to VPS
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    if: ${{ inputs.ssh_deploy == 'true' }}
+    steps:
+      - name: Deploy selected SHA
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            set -euo pipefail
+            REMOTE_DIR="${{ inputs.remote_dir }}"
+            APP_SUBDIR="${{ inputs.app_subdir }}"
+            SERVICE_NAME="${{ inputs.service_name }}"
+            HEALTH_URL="${{ inputs.health_url }}"
+            TARGET_SHA="${{ needs.validate.outputs.sha }}"
+
+            cd "$REMOTE_DIR"
+
+            mkdir -p /var/backups/quant
+            if [ -d /var/lib/quant ]; then
+              sudo tar -czf "/var/backups/quant/data-$(date +%Y%m%d-%H%M%S).tar.gz" /var/lib/quant 2>/dev/null || true
+            fi
+
+            git fetch --tags origin
+            git checkout "$TARGET_SHA"
+
+            cd "$APP_SUBDIR"
+            npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+            node --check main.js
+            npm run test:backend
+
+            sudo systemctl restart "$SERVICE_NAME"
+
+            for i in 1 2 3 4 5; do
+              if curl -fsS --max-time 5 "$HEALTH_URL" >/tmp/quant-health.json; then
+                cat /tmp/quant-health.json
+                echo "deploy ok sha=$TARGET_SHA"
+                exit 0
+              fi
+              sleep 3
+            done
+
+            sudo systemctl status "$SERVICE_NAME" --no-pager || true
+            journalctl -u "$SERVICE_NAME" -n 80 --no-pager || true
+            exit 1

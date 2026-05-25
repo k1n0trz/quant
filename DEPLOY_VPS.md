@@ -57,7 +57,7 @@ sudo chown -R quant:quant /opt/quant /var/lib/quant
 Clonar el repo como `quant`:
 
 ```bash
-sudo -u quant git clone https://github.com/k1n0trz/quant.git /opt/quant
+sudo -u quant git clone https://github.com/k1n0trz/quant.git /opt/quant/quant
 ```
 
 Crear `/etc/quant/quant.env` manualmente en el VPS:
@@ -91,7 +91,7 @@ Wants=network-online.target
 Type=simple
 User=quant
 Group=quant
-WorkingDirectory=/opt/quant/electron_quant
+WorkingDirectory=/opt/quant/quant/electron_quant
 EnvironmentFile=/etc/quant/quant.env
 ExecStart=/usr/bin/node main.js
 Restart=on-failure
@@ -103,7 +103,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=true
-ReadWritePaths=/var/lib/quant /opt/quant
+ReadWritePaths=/var/lib/quant /opt/quant/quant
 
 [Install]
 WantedBy=multi-user.target
@@ -149,7 +149,7 @@ Ejecutar el mismo workflow con un SHA anterior en `ref`.
 Rollback manual en el VPS:
 
 ```bash
-cd /opt/quant
+cd /opt/quant/quant
 sudo -u quant git log --oneline -10
 sudo -u quant git checkout <sha-anterior>
 cd electron_quant

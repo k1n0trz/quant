@@ -40,6 +40,8 @@ button { cursor: pointer; }
 .side-title { color: var(--blue); font-family: var(--font-mono); font-size: 10px; font-weight: 800; margin-bottom: 10px; }
 .status-row { display: flex; justify-content: space-between; color: var(--text-secondary); font-size: 12px; margin: 7px 0; }
 .status-row b { color: var(--green); font-size: 11px; }
+.status-row b.status-ok { color: var(--green); }
+.status-row b.status-missing { color: var(--amber); }
 .user-card { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
 .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--bg-elevated); display: grid; place-items: center; font-family: var(--font-mono); font-weight: 800; }
 .user-name { font-weight: 800; }

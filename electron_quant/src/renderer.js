@@ -425,13 +425,20 @@ function bindUi() {
 }
 
 function renderStatus() {
-  $('stInternet').textContent = 'Conectado';
-  $('stBinance').textContent = state.env.binance ? 'Conectado' : 'Sin claves';
-  $('stDeepseek').textContent = state.env.deepseek ? 'Conectado' : 'Sin clave';
-  $('stFinnhub').textContent = state.env.finnhub ? 'Conectado' : 'Sin clave';
-  $('stAlpha').textContent = state.env.alpha ? 'Conectado' : 'Sin clave';
-  $('stMt5').textContent = 'Verificando';
+  const setConnectorStatus = (id, ok, onText = 'Activa', offText = 'Sin clave') => {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = ok ? onText : offText;
+    el.classList.toggle('status-ok', Boolean(ok));
+    el.classList.toggle('status-missing', !ok);
+  };
+  setConnectorStatus('stInternet', true, 'Online', 'Offline');
+  setConnectorStatus('stBinance', state.env.binance, 'Activa', 'Sin claves');
+  setConnectorStatus('stDeepseek', state.env.deepseek, 'Activa', 'Sin clave');
+  setConnectorStatus('stFinnhub', state.env.finnhub, 'Activa', 'Sin clave');
+  setConnectorStatus('stAlpha', state.env.alpha, 'Activa', 'Sin clave');
   state.executionAdapters.mt5 = Boolean(state.env.mt5Connector);
+  setConnectorStatus('stMt5', state.executionAdapters.mt5, 'Conector ON', 'OFF opcional');
   $('modeText').textContent = state.env.realTrading ? 'Modo: Trading Real ACTIVO' : 'Modo: Trading Real (Bloqueado por defecto)';
   $('settingsBox').innerHTML = [
     ['Usuario', state.env.user ? `${state.env.user.displayName || state.env.user.email} (${state.env.user.email})` : 'Sesion local'],

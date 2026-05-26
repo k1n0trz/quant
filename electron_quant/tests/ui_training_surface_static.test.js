@@ -18,7 +18,10 @@ assert.ok(renderer.includes('refreshTrainingRuntimeStatus'), 'Renderer debe refr
 assert.ok(renderer.includes("event.target.id === 'apiConfigForm'"), 'El submit de APIs debe estar delegado y prevenir navegacion nativa.');
 assert.ok(renderer.includes("conversationLoad:      (id)                        => apiPost('conversation-load', { id })"), 'Web debe restaurar conversaciones via POST para no perder el chat al refrescar.');
 assert.ok(renderer.includes('APIs activas:'), 'Configuracion debe mostrar estado visible de APIs guardadas.');
+assert.ok(renderer.includes("setConnectorStatus('stBinance', state.env.binance, 'Activa', 'Sin claves')"), 'Sidebar debe confirmar Binance activa o sin claves sin puntos suspensivos.');
+assert.equal(/id="stBinance">\.\.\./.test(html), false, 'Sidebar no debe mostrar puntos suspensivos ambiguos para Binance.');
 assert.ok(css.includes('#view-lab') && css.includes('.nav-item[data-view="lab"]'), 'CSS debe bloquear cualquier resto accidental de Lab.');
+assert.ok(css.includes('status-missing'), 'CSS debe diferenciar conectores sin clave.');
 assert.ok(css.includes('overflow-x: hidden'), 'La vista activa debe cortar overflow horizontal.');
 assert.ok(main.includes("'TRAINING_BACKEND_LOOP_ENABLED'"), 'Cloud/VPS deben leer flags de loop desde process.env.');
 assert.ok(main.includes('trainingStateReader.readSnapshot()'), 'Autostart debe usar el lector correcto del training state.');

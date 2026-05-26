@@ -121,6 +121,91 @@ function collectTrainingEntryPairs(state = {}) {
   return sources.map(normalizeEntryPair).filter(Boolean);
 }
 
+async function buildBackendBootstrapPairs(input = {}) {
+  const deps = input.deps || {};
+  const nowMs = Number.isFinite(Number(input.nowMs)) ? Number(input.nowMs) : Date.now();
+  const preferred = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'LINKUSDT', 'LTCUSDT', 'AVAXUSDT'];
+  let symbols = [];
+  if (typeof deps.getBinanceSymbols === 'function') {
+    try {
+      const result = await deps.getBinanceSymbols();
+      symbols = Array.isArray(result) ? result : Array.isArray(result?.symbols) ? result.symbols : [];
+    } catch {
+      symbols = [];
+    }
+  }
+  const universe = [
+    ...preferred.filter((symbol) => symbols.includes(symbol)),
+    ...symbols.filter((symbol) => typeof symbol === 'string' && symbol.endsWith('USDT') && !preferred.includes(symbol))
+  ];
+  const candidates = (universe.length ? universe : preferred).slice(0, 24);
+  const pairs = [];
+
+  for (const symbol of candidates) {
+    let ticker = null;
+    if (typeof deps.getTicker === 'function') {
+      try {
+        ticker = await deps.getTicker(symbol);
+      } catch {
+        ticker = null;
+      }
+    }
+    const price = finiteNumber(ticker?.price, ticker?.lastPrice);
+    if (!price || price <= 0) continue;
+
+    const changePct = finiteNumber(ticker?.changePct, ticker?.priceChangePercent, 0) || 0;
+    const quoteVolume = finiteNumber(ticker?.quoteVolume, 0) || 0;
+    const spreadPct = price ? Math.max(0, finiteNumber(ticker?.spread, 0) || 0) / price : 0;
+    const direction = changePct >= 0 ? 'LONG' : 'SHORT';
+    const momentumScore = Math.min(1, Math.abs(changePct) / 2.5);
+    const volumeScore = Math.min(1, quoteVolume / 50000000);
+    const signalQuality = Math.max(0.62, Math.min(1, 0.62 + momentumScore * 0.22 + volumeScore * 0.16));
+    const confidence = Math.round(Math.max(76, Math.min(92, 76 + signalQuality * 12 + volumeScore * 4)));
+    const score = Math.round(Math.max(64, Math.min(94, 64 + signalQuality * 20 + volumeScore * 10 - spreadPct * 5000)));
+    const primaryStrategy = {
+      id: 'trendMomentum',
+      name: 'Trend Momentum / Backend Bootstrap',
+      score: Math.round(Math.max(78, Math.min(96, confidence + 6))),
+      reason: `Backend bootstrap ${direction}; 24h ${changePct.toFixed(2)}%; quoteVol ${Math.round(quoteVolume)}`
+    };
+    const indicators = {
+      bias: direction,
+      confidence,
+      setup: `Backend perpetual bootstrap: ${direction} ${symbol} con cambio 24h ${changePct.toFixed(2)}%`,
+      momentum: changePct,
+      volatilityPct: Math.max(0.003, Math.min(0.04, Math.abs(changePct) / 100)),
+      volumeRatio: Math.max(1.05, Math.min(2.4, quoteVolume / 30000000)),
+      baseline: price,
+      rsi: direction === 'LONG' ? 58 : 42,
+      macd: { hist: direction === 'LONG' ? 1 : -1 },
+      atrPct: Math.max(0.004, Math.min(0.035, Math.abs(changePct) / 100)),
+      m15: { bias: direction },
+      h1: { bias: direction },
+      h4: { bias: direction },
+      d1: { bias: direction },
+      htfAlignmentScore: 0.78,
+      patternScore: 0.66,
+      ictCrt: { score: 62 },
+      strategyScores: [primaryStrategy],
+      primaryStrategy,
+      horizon: 'intraday',
+      signalQuality,
+      signal_id: trainingSignalId({ venue: 'BINANCE', symbol }, { ...primaryStrategy, bias: direction, horizon: 'intraday' }, new Date(nowMs).toISOString())
+    };
+    pairs.push({
+      venue: 'BINANCE',
+      symbol,
+      score,
+      price,
+      spreadPct,
+      indicators,
+      backendBootstrap: true
+    });
+  }
+
+  return pairs;
+}
+
 function mergeSignalForEntry(pair, signalContext, forcedHorizon = null) {
   const signal = {
     ...(isObject(pair?.indicators) ? pair.indicators : {}),
@@ -331,11 +416,15 @@ async function evaluateTrainingDemoEntries(input = {}) {
   const deps = input.deps || {};
   const env = input.env || {};
   const nowMs = Number.isFinite(Number(input.nowMs)) ? Number(input.nowMs) : Date.now();
-  const pairs = collectTrainingEntryPairs(state);
+  let pairs = collectTrainingEntryPairs(state);
   const openPositions = (Array.isArray(state.positions) ? state.positions : []).filter((position) => !position.exit_price);
   const intradayNeeded = Math.max(0, resolveTargetCount(state, 'intraday') - openPositions.filter((position) => position.horizon !== 'swing').length);
   const swingNeeded = Math.max(0, resolveTargetCount(state, 'swing') - openPositions.filter((position) => position.horizon === 'swing').length);
   const mt5Open = openPositions.filter((position) => position.venue === 'MT5').length;
+  const bootstrappedPairs = !pairs.length && (intradayNeeded > 0 || swingNeeded > 0)
+    ? await buildBackendBootstrapPairs({ deps, env, nowMs })
+    : [];
+  if (!pairs.length && bootstrappedPairs.length) pairs = bootstrappedPairs;
   const ranked = pairs
     .filter((pair) => textValue(pair.symbol))
     .sort((left, right) => {
@@ -346,6 +435,7 @@ async function evaluateTrainingDemoEntries(input = {}) {
 
   let nextState = {
     ...state,
+    activePairs: Array.isArray(state.activePairs) && state.activePairs.length ? state.activePairs.slice() : bootstrappedPairs,
     positions: Array.isArray(state.positions) ? state.positions.slice() : []
   };
   const skippedEntries = [];
@@ -423,6 +513,7 @@ async function evaluateTrainingDemoEntries(input = {}) {
 module.exports = {
   isTrainingBackendDemoEntryEnabled,
   isTrainingBackendDemoEntryAllowDefensiveSignalEnabled,
+  buildBackendBootstrapPairs,
   evaluateTrainingDemoEntry,
   openTrainingDemoPosition,
   evaluateTrainingDemoEntries

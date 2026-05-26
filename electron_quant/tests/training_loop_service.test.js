@@ -299,3 +299,45 @@ test('tick can open a valid backend demo position when entry flag is enabled', a
   assert.equal(result.nextState.positions[0].signal_id, 'sig-entry-open');
   assert.equal(result.nextState.positions[0].strategy_id, 'trendMomentum');
 });
+
+test('tick bootstraps a Binance universe when perpetual training starts empty', async () => {
+  const state = createState({
+    targets: { total: 2, intraday: 2, swing: 0 },
+    targetIntradayPositions: 2,
+    targetSwingPositions: 0,
+    activePairs: [],
+    positions: []
+  });
+
+  const result = await runTrainingDemoTick({
+    state,
+    positionContexts: [],
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z'),
+    deps: {
+      getBinanceSymbols: async () => ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'],
+      getTicker: async (symbol) => ({
+        ok: true,
+        symbol,
+        price: symbol === 'BTCUSDT' ? 100000 : symbol === 'ETHUSDT' ? 4000 : 180,
+        spread: 1,
+        changePct: symbol === 'ETHUSDT' ? -1.7 : 2.3,
+        quoteVolume: 90000000
+      }),
+      readMemory: () => []
+    },
+    env: {
+      TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true',
+      TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED: 'true'
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.entryEnabled, true);
+  assert.equal(result.openedPositions, 2);
+  assert.equal(result.nextState.activePairs.length >= 2, true);
+  assert.equal(result.nextState.positions.length, 2);
+  assert.equal(result.nextState.positions.every((position) => position.venue === 'BINANCE'), true);
+  assert.equal(result.nextState.positions.every((position) => position.simulated === true), true);
+  assert.equal(state.activePairs.length, 0);
+  assert.equal(state.positions.length, 0);
+});

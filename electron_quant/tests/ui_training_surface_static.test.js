@@ -16,9 +16,12 @@ assert.ok(html.includes('trainingRuntimeStrip') && html.includes('trainingRuntim
 assert.ok(renderer.includes('trainingLoopStatus'), 'Renderer debe leer /api/training/demo/loop/status.');
 assert.ok(renderer.includes('refreshTrainingRuntimeStatus'), 'Renderer debe refrescar el estado runtime de training.');
 assert.ok(renderer.includes("event.target.id === 'apiConfigForm'"), 'El submit de APIs debe estar delegado y prevenir navegacion nativa.');
+assert.ok(renderer.includes("conversationLoad:      (id)                        => apiPost('conversation-load', { id })"), 'Web debe restaurar conversaciones via POST para no perder el chat al refrescar.');
+assert.ok(renderer.includes('APIs activas:'), 'Configuracion debe mostrar estado visible de APIs guardadas.');
 assert.ok(css.includes('#view-lab') && css.includes('.nav-item[data-view="lab"]'), 'CSS debe bloquear cualquier resto accidental de Lab.');
 assert.ok(css.includes('overflow-x: hidden'), 'La vista activa debe cortar overflow horizontal.');
 assert.ok(main.includes("'TRAINING_BACKEND_LOOP_ENABLED'"), 'Cloud/VPS deben leer flags de loop desde process.env.');
 assert.ok(main.includes('trainingStateReader.readSnapshot()'), 'Autostart debe usar el lector correcto del training state.');
+assert.ok(main.includes('getBinanceSymbols: () => binanceSymbols()'), 'Loop backend debe poder sembrar universo Binance persistente.');
 
 console.log('ui_training_surface_static.test.js OK');

@@ -1681,6 +1681,7 @@ async function handleApi(req, res, url) {
         readTrainingState,
         readTrainingStateSnapshot,
         writeTrainingState,
+        getBinanceSymbols: () => binanceSymbols(),
         getTicker: (symbol) => ticker(symbol),
         readMt5Snapshot,
         syncBinanceTime: () => syncBinanceTime(),
@@ -1760,8 +1761,8 @@ async function handleApi(req, res, url) {
 
     // ── Conversation endpoints (web) ──────────────────────────────────────────
     if (url.pathname === '/api/conversations-list')  return sendJson(res, listConversations());
-    if (url.pathname === '/api/conversation-load' && req.method === 'POST')
-      return sendJson(res, loadConversation(body.id));
+    if (url.pathname === '/api/conversation-load' && (req.method === 'POST' || req.method === 'GET'))
+      return sendJson(res, loadConversation(body.id || q.id));
     if (url.pathname === '/api/conversation-save' && req.method === 'POST')
       return sendJson(res, saveConversation(body.id, body.name, body.messages));
     if (url.pathname === '/api/conversation-rename' && req.method === 'POST')
@@ -2346,6 +2347,7 @@ function startLocalWebServer() {
           deps: {
             readTrainingStateSnapshot: () => trainingStateReader.readSnapshot(),
             writeTrainingState: (nextState) => writeTrainingState(nextState),
+            getBinanceSymbols: () => binanceSymbols(),
             getTicker: (symbol) => ticker(symbol),
             readMt5Snapshot: () => readMt5Snapshot(),
             readMemory: (limit) => readMemory(limit)

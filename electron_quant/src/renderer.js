@@ -38,7 +38,7 @@ if (!window.quant) {
     calibrationRead:       ()                          => apiGet('calibration-read'),
     calibrationCompute:    ()                          => apiPost('calibration-compute', {}),
     conversationsList:     ()                          => apiGet('conversations-list'),
-    conversationLoad:      (id)                        => apiGet(`conversation-load?id=${encodeURIComponent(id)}`),
+    conversationLoad:      (id)                        => apiPost('conversation-load', { id }),
     conversationSave:      (id, name, messages)        => apiPost('conversation-save', { id, name, messages }),
     conversationRename:    (id, name)                  => apiPost('conversation-rename', { id, name }),
     conversationDelete:    (id)                        => apiPost('conversation-delete', { id }),
@@ -3179,17 +3179,23 @@ async function loadApiConfig() {
   const st = $('apiConfigStatus');
   try {
     const cfg = await window.quant.apiConfigRead();
+    const activeKeys = Object.entries(cfg.has || {})
+      .filter(([, value]) => value)
+      .map(([key]) => key.replace(/_API_KEY|_SECRET|_PASSWORD|_ENABLED/g, ''))
+      .slice(0, 8);
     for (const [key, id] of Object.entries(API_FIELD_INPUTS)) {
       const el = $(id);
       if (!el) continue;
       if (isSensitiveApiField(key)) {
         el.value = '';
-        el.placeholder = cfg.has?.[key] ? 'Guardada para esta sesion' : el.getAttribute('placeholder') || '';
+        el.placeholder = cfg.has?.[key]
+          ? `Guardada (${cfg.sources?.[key] || 'config'})`
+          : el.getAttribute('placeholder') || '';
       } else {
         el.value = cfg.values?.[key] || '';
       }
     }
-    if (st) st.textContent = `Sesion: ${cfg.user?.email || 'local'} - ${cfg.file || 'configuracion en memoria'}`;
+    if (st) st.textContent = `Sesion: ${cfg.user?.email || 'local'} - APIs activas: ${activeKeys.join(', ') || 'ninguna'} - fuente: ${cfg.file || 'configuracion en memoria'}`;
   } catch (err) {
     if (st) st.textContent = 'No pude cargar APIs.';
     logEvent('WARN', `loadApiConfig: ${err.message}`);

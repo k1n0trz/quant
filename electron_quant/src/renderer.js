@@ -18,6 +18,8 @@ if (!window.quant) {
     memoryClear:           ()                          => apiPost('memory-clear'),
     trainingStateRead:     ()                          => apiGet('training-state-read'),
     trainingStateWrite:    (payload)                   => apiPost('training-state-write', payload),
+    trainingLoopStatus:    ()                          => apiGet('training/demo/loop/status'),
+    trainingLoopStart:     ()                          => apiPost('training/demo/loop/start', {}),
     finnhub:               ()                          => apiGet('news-finnhub'),
     finnhubEconomic:       ()                          => apiGet('calendar-finnhub-economic'),
     alpha:                 ()                          => apiGet('news-alpha'),
@@ -224,6 +226,7 @@ function setView(name) {
   const view = $(`view-${name}`);
   if (view) view.classList.add('active');
   if (name === 'settings')       { loadCustomInstructions(); loadCalibrationStatus(); loadApiConfig(); }
+  if (name === 'training')       refreshTrainingRuntimeStatus();
   if (name === 'conversations')  loadConversationsList();
   if (name === 'orders') loadOrders();
   if (name === 'positions') loadPositions();
@@ -272,6 +275,7 @@ async function boot() {
   try {
     state.env = await window.quant.envStatus();
     renderStatus();
+    refreshTrainingRuntimeStatus();
     logEvent('OK', `Configuración cargada desde ${state.env.envFile || '.env'}`);
   } catch (err) {
     logEvent('ERR', `No pude leer configuración: ${err.message}`);
@@ -305,6 +309,7 @@ async function boot() {
   setInterval(() => refreshMacroContext(true), 60000);
   setInterval(() => refreshWallet(), 120000);
   setInterval(() => refreshTrainingMode(), 15000);
+  setInterval(() => refreshTrainingRuntimeStatus(), 15000);
   setInterval(() => renderChatContextPanel(), 5000);
   setInterval(() => runSelfAudit(), 300000);
   // PHASE 1: Update hero section every 3 seconds
@@ -357,7 +362,6 @@ function bindUi() {
   });
   $('enableTradingBtn').addEventListener('click', () => alert('Trading real requiere REAL_TRADING=true, confirmación exacta, límites de riesgo y una prueba final. No lo voy a activar a ciegas con dinero real.'));
   $('saveCustomInstructionsBtn').addEventListener('click', saveCustomInstructions);
-  $('apiConfigForm').addEventListener('submit', saveApiConfig);
   $('runCalibrationBtn').addEventListener('click', manualCalibration);
   $('newConvBtn').addEventListener('click', startNewConversation);
   $('ordersRefreshBtn').addEventListener('click', loadOrders);
@@ -451,6 +455,47 @@ function renderStatus() {
     dlBtn.href = state.env.desktopDownloadUrl;
     dlBtn.style.display = 'inline-block';
     dlBtn.download = 'Quant-desktop.exe';
+  }
+}
+
+async function refreshTrainingRuntimeStatus() {
+  const pill = $('trainingRuntimePill');
+  const strip = $('trainingRuntimeStrip');
+  try {
+    const status = await window.quant.trainingLoopStatus();
+    const scheduler = status?.scheduler || {};
+    const active = scheduler.active === true;
+    const loopEnabled = scheduler.loopEnabled === true;
+    const schedulerEnabled = scheduler.enabled === true;
+    const ticks = Number(scheduler.ticksRun || 0);
+    const skipped = Number(scheduler.ticksSkipped || 0);
+    const lastTick = scheduler.lastTickAt ? new Date(scheduler.lastTickAt).toLocaleTimeString('es-CO', { hour12: false }) : 'sin tick aun';
+    const lastError = scheduler.lastError?.message || scheduler.lastTickResult?.reason || '';
+    if (pill) {
+      pill.classList.toggle('runtime-on', active);
+      pill.classList.toggle('runtime-warn', !active);
+      pill.innerHTML = `<span class="dot"></span> ${active ? 'Training activo' : 'Training pendiente'}`;
+    }
+    if (strip) {
+      strip.className = `training-runtime-strip ${active ? 'runtime-on' : 'runtime-warn'}`;
+      strip.textContent = active
+        ? `Scheduler backend activo · loop ${loopEnabled ? 'ON' : 'OFF'} · ticks ${ticks} · omitidos ${skipped} · ultimo ${lastTick}`
+        : `Scheduler no activo · loop ${loopEnabled ? 'ON' : 'OFF'} · scheduler ${schedulerEnabled ? 'ON' : 'OFF'}${lastError ? ` · ${lastError}` : ''}`;
+    }
+    setText('trainingStatus', active || state.env.trainingEnabled ? 'ON' : 'OFF');
+    const dot = $('trainingDot');
+    if (dot) dot.classList.toggle('off', !(active || state.env.trainingEnabled));
+    return status;
+  } catch (err) {
+    if (pill) {
+      pill.classList.add('runtime-warn');
+      pill.innerHTML = '<span class="dot"></span> Training sin lectura';
+    }
+    if (strip) {
+      strip.className = 'training-runtime-strip runtime-warn';
+      strip.textContent = `No pude leer el scheduler de training: ${err.message}`;
+    }
+    return null;
   }
 }
 
@@ -3167,6 +3212,7 @@ async function saveApiConfig(event) {
     await window.quant.apiConfigWrite(payload);
     state.env = await window.quant.envStatus();
     renderStatus();
+    refreshTrainingRuntimeStatus();
     await loadApiConfig();
     logEvent('OK', 'APIs guardadas para el usuario autenticado');
   } catch (err) {
@@ -3791,6 +3837,10 @@ function drawPerf() {
   ctx.strokeStyle = '#2e4268'; ctx.beginPath(); ctx.moveTo(14, rect.height / 2); ctx.lineTo(rect.width - 14, rect.height / 2); ctx.stroke();
   ctx.strokeStyle = '#2979ff'; ctx.beginPath(); ctx.moveTo(14, rect.height / 2 - 2); ctx.lineTo(rect.width - 14, rect.height / 2 - 2); ctx.stroke();
 }
+
+document.addEventListener('submit', (event) => {
+  if (event.target && event.target.id === 'apiConfigForm') saveApiConfig(event);
+});
 
 window.addEventListener('resize', () => { drawChart(); drawGauge(64); drawPerf(); });
 window.addEventListener('beforeunload', () => { saveTrainingState(); });

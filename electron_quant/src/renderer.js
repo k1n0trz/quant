@@ -77,6 +77,9 @@ const state = {
   pipeline: [],
   _ordersCache: null,
   env: {},
+  connectorHealth: {
+    mt5: { checked: false, ok: null, count: 0, error: '' }
+  },
   sessionTrades: 0,
   newsSource: 'finnhub',
   lastNewsAutoLog: 0,
@@ -424,21 +427,45 @@ function bindUi() {
   });
 }
 
+function connectorSourceLabel(keys = []) {
+  const sources = keys
+    .map((key) => state.env.apiConfigStatus?.sources?.[key])
+    .filter(Boolean);
+  if (!sources.length) return 'sin fuente';
+  if (sources.every((source) => source === 'session')) return 'usuario';
+  if (sources.every((source) => source === 'env')) return '.env';
+  if (sources.every((source) => source === 'missing')) return 'sin clave';
+  return 'mixta';
+}
+
+function setConnectorStatus(id, ok, onText = 'Activa', offText = 'Sin clave', options = {}) {
+  const el = $(id);
+  if (!el) return;
+  const hasError = Boolean(options.error);
+  el.textContent = ok ? onText : offText;
+  el.title = options.title || '';
+  el.classList.toggle('status-ok', Boolean(ok) && !hasError);
+  el.classList.toggle('status-missing', !ok && !hasError);
+  el.classList.toggle('status-error', hasError);
+}
+
 function renderStatus() {
-  const setConnectorStatus = (id, ok, onText = 'Activa', offText = 'Sin clave') => {
-    const el = $(id);
-    if (!el) return;
-    el.textContent = ok ? onText : offText;
-    el.classList.toggle('status-ok', Boolean(ok));
-    el.classList.toggle('status-missing', !ok);
-  };
   setConnectorStatus('stInternet', true, 'Online', 'Offline');
-  setConnectorStatus('stBinance', state.env.binance, 'Activa', 'Sin claves');
-  setConnectorStatus('stDeepseek', state.env.deepseek, 'Activa', 'Sin clave');
-  setConnectorStatus('stFinnhub', state.env.finnhub, 'Activa', 'Sin clave');
-  setConnectorStatus('stAlpha', state.env.alpha, 'Activa', 'Sin clave');
+  setConnectorStatus('stBinance', state.env.binance, `Activa (${connectorSourceLabel(['BINANCE_API_KEY', 'BINANCE_SECRET'])})`, 'Sin claves');
+  setConnectorStatus('stDeepseek', state.env.deepseek, `Activa (${connectorSourceLabel(['DEEPSEEK_API_KEY'])})`, 'Sin clave');
+  setConnectorStatus('stFinnhub', state.env.finnhub, `Activa (${connectorSourceLabel(['FINNHUB_API_KEY'])})`, 'Sin clave');
+  setConnectorStatus('stAlpha', state.env.alpha, `Activa (${connectorSourceLabel(['ALPHA_VANTAGE_API_KEY'])})`, 'Sin clave');
   state.executionAdapters.mt5 = Boolean(state.env.mt5Connector);
-  setConnectorStatus('stMt5', state.executionAdapters.mt5, 'Conector ON', 'OFF opcional');
+  const mt5Health = state.connectorHealth.mt5 || {};
+  if (!state.executionAdapters.mt5) {
+    setConnectorStatus('stMt5', false, 'Runtime activo', 'OFF opcional');
+  } else if (mt5Health.checked && mt5Health.ok) {
+    setConnectorStatus('stMt5', true, `Runtime activo (${mt5Health.count || 0})`, 'Sin terminal');
+  } else if (mt5Health.checked) {
+    setConnectorStatus('stMt5', false, 'Runtime activo', 'Sin terminal', { error: true, title: mt5Health.error || 'MT5 no respondio' });
+  } else {
+    setConnectorStatus('stMt5', false, 'Runtime activo', 'Config ON, verificando');
+  }
   $('modeText').textContent = state.env.realTrading ? 'Modo: Trading Real ACTIVO' : 'Modo: Trading Real (Bloqueado por defecto)';
   $('settingsBox').innerHTML = [
     ['Usuario', state.env.user ? `${state.env.user.displayName || state.env.user.email} (${state.env.user.email})` : 'Sesion local'],
@@ -514,16 +541,21 @@ async function loadSymbols() {
     renderMarketTable();
     logEvent('OK', `${state.symbols.length} símbolos cargados desde Binance`);
     if (!state.executionAdapters.mt5) {
+      state.connectorHealth.mt5 = { checked: true, ok: false, count: 0, error: 'MT5_CONNECTOR_ENABLED=false' };
+      renderStatus();
       logEvent('OK', 'MT5 adapter aislado; Quant Core opera sin depender de MT5');
       return;
     }
     window.quant.mt5Symbols().then((res) => {
       if (res.ok && res.symbols?.length) {
         state.mt5Symbols = res.symbols;
+        state.connectorHealth.mt5 = { checked: true, ok: true, count: res.symbols.length, error: '' };
         logEvent('OK', `${res.symbols.length} símbolos cargados desde MT5`);
       } else {
         logEvent('WARN', `MT5 símbolos: ${res.error || 'sin símbolos visibles'}`);
       }
+      if (!(res.ok && res.symbols?.length)) state.connectorHealth.mt5 = { checked: true, ok: false, count: 0, error: res.error || 'sin simbolos visibles' };
+      renderStatus();
     });
   } catch (err) {
     logEvent('ERR', `Binance symbols: ${err.message}`);

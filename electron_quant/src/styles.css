@@ -42,6 +42,7 @@ button { cursor: pointer; }
 .status-row b { color: var(--green); font-size: 11px; }
 .status-row b.status-ok { color: var(--green); }
 .status-row b.status-missing { color: var(--amber); }
+.status-row b.status-error { color: var(--red); }
 .user-card { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
 .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--bg-elevated); display: grid; place-items: center; font-family: var(--font-mono); font-weight: 800; }
 .user-name { font-weight: 800; }

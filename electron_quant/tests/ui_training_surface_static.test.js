@@ -18,8 +18,17 @@ assert.ok(renderer.includes('refreshTrainingRuntimeStatus'), 'Renderer debe refr
 assert.ok(renderer.includes("event.target.id === 'apiConfigForm'"), 'El submit de APIs debe estar delegado y prevenir navegacion nativa.');
 assert.ok(renderer.includes("conversationLoad:      (id)                        => apiPost('conversation-load', { id })"), 'Web debe restaurar conversaciones via POST para no perder el chat al refrescar.');
 assert.ok(renderer.includes('APIs activas:'), 'Configuracion debe mostrar estado visible de APIs guardadas.');
-assert.ok(renderer.includes("setConnectorStatus('stBinance', state.env.binance, 'Activa', 'Sin claves')"), 'Sidebar debe confirmar Binance activa o sin claves sin puntos suspensivos.');
+assert.ok(renderer.includes("setConnectorStatus('stBinance', state.env.binance"), 'Sidebar debe confirmar Binance activa o sin claves sin puntos suspensivos.');
 assert.equal(/id="stBinance">\.\.\./.test(html), false, 'Sidebar no debe mostrar puntos suspensivos ambiguos para Binance.');
+assert.ok(renderer.includes('connectorSourceLabel'), 'Sidebar debe indicar si una API activa viene de usuario, .env o fuente mixta.');
+assert.ok(renderer.includes("Activa (${connectorSourceLabel(['BINANCE_API_KEY', 'BINANCE_SECRET'])})"), 'Binance debe mostrar fuente real de las claves, no solo un estado generico.');
+assert.ok(renderer.includes('state.connectorHealth.mt5'), 'MT5 debe reflejar salud runtime verificada, no solo el flag MT5_CONNECTOR_ENABLED.');
+assert.ok(renderer.includes('Sin terminal'), 'MT5 debe mostrar explicitamente cuando el conector esta configurado pero no responde.');
+assert.ok(css.includes('status-error'), 'CSS debe diferenciar errores reales de conectores.');
+for (const id of ['platformSelect', 'assetSearch', 'assetDropBtn', 'assetMenu', 'priceNow', 'tradeChart']) {
+  const count = (html.match(new RegExp(`id="${id}"`, 'g')) || []).length;
+  assert.equal(count, 1, `El dashboard no debe duplicar el id ${id}.`);
+}
 assert.ok(css.includes('#view-lab') && css.includes('.nav-item[data-view="lab"]'), 'CSS debe bloquear cualquier resto accidental de Lab.');
 assert.ok(css.includes('status-missing'), 'CSS debe diferenciar conectores sin clave.');
 assert.ok(css.includes('overflow-x: hidden'), 'La vista activa debe cortar overflow horizontal.');

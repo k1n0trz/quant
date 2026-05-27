@@ -880,7 +880,13 @@ async function signedBinance(pathname, params = {}, method = 'GET', env = ENV) {
 }
 
 async function binanceSymbols() {
-  const fallback = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'LINKUSDT', 'LTCUSDT', 'AVAXUSDT'];
+  const fallback = [
+    'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'LINKUSDT',
+    'LTCUSDT', 'AVAXUSDT', 'TRXUSDT', 'DOTUSDT', 'MATICUSDT', 'ATOMUSDT', 'NEARUSDT', 'ARBUSDT',
+    'OPUSDT', 'APTUSDT', 'SUIUSDT', 'INJUSDT', 'AAVEUSDT', 'UNIUSDT', 'FILUSDT', 'ETCUSDT',
+    'BCHUSDT', 'ALGOUSDT', 'XLMUSDT', 'HBARUSDT', 'ICPUSDT', 'RNDRUSDT', 'RUNEUSDT', 'FTMUSDT',
+    'GRTUSDT', 'MKRUSDT', 'SNXUSDT', 'LDOUSDT', 'SEIUSDT', 'TIAUSDT', 'ARUSDT', 'JUPUSDT'
+  ];
   const info = await withMarketFallback(
     'binance-symbols',
     () => requestJson('GET', `${BINANCE_BASE}/api/v3/exchangeInfo`),

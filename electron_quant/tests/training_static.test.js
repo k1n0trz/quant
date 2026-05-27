@@ -8,11 +8,11 @@ const html = fs.readFileSync(path.join(root, 'src', 'index.html'), 'utf8');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const preload = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
 
-assert(renderer.includes('maxPairs: 20'), 'Training debe permitir hasta 20 modelos/pares activos.');
+assert(renderer.includes('maxPairs: 40'), 'Training debe permitir hasta 40 modelos/pares activos.');
 assert(renderer.includes("minMt5Pairs: 6"), 'Training debe priorizar candidatos MT5 cuando existan.');
-assert(renderer.includes('targetOpenPositions: 20'), 'Training debe mantener 20 posiciones demo continuas.');
-assert(renderer.includes('targetIntradayPositions: 10'), 'Training debe mantener 10 modelos intradia.');
-assert(renderer.includes('targetSwingPositions: 10'), 'Training debe mantener 10 modelos de mediano plazo.');
+assert(renderer.includes('targetOpenPositions: 40'), 'Training debe mantener hasta 40 posiciones demo continuas.');
+assert(renderer.includes('targetIntradayPositions: 20'), 'Training debe mantener 20 modelos intradia.');
+assert(renderer.includes('targetSwingPositions: 20'), 'Training debe mantener 20 modelos de mediano/largo plazo.');
 assert(renderer.includes('maintainTrainingExposure'), 'Training debe abrir operaciones demo de aprendizaje continuo.');
 assert(renderer.includes('exploration_paper'), 'Training debe tener exploracion paper cuando no haya setup perfecto.');
 assert(renderer.includes("executeRealTrade()"), 'Debe existir separacion explicita de ejecucion real.');

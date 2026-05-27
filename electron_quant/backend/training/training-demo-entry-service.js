@@ -138,7 +138,7 @@ async function buildBackendBootstrapPairs(input = {}) {
     ...preferred.filter((symbol) => symbols.includes(symbol)),
     ...symbols.filter((symbol) => typeof symbol === 'string' && symbol.endsWith('USDT') && !preferred.includes(symbol))
   ];
-  const candidates = (universe.length ? universe : preferred).slice(0, 24);
+  const candidates = (universe.length ? universe : preferred).slice(0, 40);
   const pairs = [];
 
   for (const symbol of candidates) {

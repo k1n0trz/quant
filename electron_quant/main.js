@@ -38,6 +38,7 @@ const BINANCE_BASE = 'https://api.binance.com';
 let timeOffsetMs = 0;
 let trainingLoopAutoStartAttempted = false;
 const logger = createLogger(IS_ELECTRON ? 'quant-desktop' : 'quant-backend');
+const DEFAULT_VPS_PUBLIC_IP = '37.60.227.190';
 const CLOUD_ENV_KEYS = [
   'BINANCE_API_KEY','BINANCE_SECRET','DEEPSEEK_API_KEY','DEEPINFRA_API_KEY',
   'FINNHUB_API_KEY','ALPHA_VANTAGE_API_KEY','REAL_TRADING','MT5_CONNECTOR_ENABLED',
@@ -49,6 +50,7 @@ const CLOUD_ENV_KEYS = [
   'TRAINING_BACKEND_LOOP_SCHEDULER_ENABLED','TRAINING_BACKEND_LOOP_INTERVAL_MS',
   'TRAINING_BACKEND_DEMO_ENTRY_ENABLED','TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED',
   'QUANT_WEB_PORT','QUANT_WEB_HOST','QUANT_DATA_DIR','QUANT_SYNC_URL','QUANT_SYNC_KEY',
+  'QUANT_VPS_PUBLIC_IP',
   'QUANT_DESKTOP_DOWNLOAD_URL','DEFAULT_PROVIDER','QUANT_PRIMARY_MODEL',
   'DEEPSEEK_MODEL','DEEPSEEK_BASE_URL','DEEPINFRA_MODEL','DEEPINFRA_BASE_URL',
   'MATEO_WEB_AUTH_PASSWORD'
@@ -1717,6 +1719,7 @@ async function handleApi(req, res, url) {
       alpha: Boolean(userEnv.ALPHA_VANTAGE_API_KEY),
       mt5Connector: String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true',
       webUrl: `http://127.0.0.1:${activeWebPort}`,
+      binanceWhitelistIp: userEnv.QUANT_VPS_PUBLIC_IP || DEFAULT_VPS_PUBLIC_IP,
       realTrading: runtimePolicy.state.tradingRealEnabled,
       realTradingArmedByEnv: runtimePolicy.envRealTradingArmed,
       trainingEnabled: runtimePolicy.state.trainingEnabled,
@@ -2406,6 +2409,7 @@ ipcMain.handle('env-status', () => {
     alpha: Boolean(ENV.ALPHA_VANTAGE_API_KEY),
     mt5Connector: String(ENV.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true',
     webUrl: `http://127.0.0.1:${activeWebPort}`,
+    binanceWhitelistIp: ENV.QUANT_VPS_PUBLIC_IP || DEFAULT_VPS_PUBLIC_IP,
     realTrading: runtimePolicy.state.tradingRealEnabled,
     realTradingArmedByEnv: runtimePolicy.envRealTradingArmed,
     trainingEnabled: runtimePolicy.state.trainingEnabled,

@@ -28,7 +28,17 @@ test('default training state is safe and renderer-compatible', () => {
   assert.deepEqual(state.positions, []);
   assert.deepEqual(state.closedTrades, []);
   assert.deepEqual(state.lessons, []);
-  assert.deepEqual(state.targets, { total: 20, intraday: 10, swing: 10 });
+  assert.deepEqual(state.targets, { total: 40, intraday: 20, swing: 20 });
+});
+
+test('upgrades legacy 20 slot training targets to perpetual 40 slot profile', () => {
+  const state = normalizeTrainingState({
+    version: 2,
+    mode: 'training',
+    targets: { total: 20, intraday: 10, swing: 10 }
+  });
+
+  assert.deepEqual(state.targets, { total: 40, intraday: 20, swing: 20 });
 });
 
 test('normalizes current renderer training payload without losing fields', () => {

@@ -18,9 +18,9 @@ function createDefaultTrainingState(now = new Date().toISOString()) {
     pairCooldowns: {},
     xp: 0,
     targets: {
-      total: 20,
-      intraday: 10,
-      swing: 10
+      total: 40,
+      intraday: 20,
+      swing: 20
     },
     persistedAt: now
   };
@@ -51,10 +51,17 @@ function hasCompatibleTrainingShape(source) {
 function normalizeTrainingState(raw = {}, now = new Date().toISOString()) {
   const defaults = createDefaultTrainingState(now);
   const source = objectOrEmpty(raw);
-  const targets = {
+  let targets = {
     ...defaults.targets,
     ...objectOrEmpty(source.targets)
   };
+  if (
+    Number(targets.total) === 20
+    && Number(targets.intraday) === 10
+    && Number(targets.swing) === 10
+  ) {
+    targets = { total: 40, intraday: 20, swing: 20 };
+  }
 
   return {
     ...defaults,

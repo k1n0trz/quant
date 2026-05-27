@@ -111,11 +111,11 @@ const state = {
     initialized: false,
     refreshing: false,
     blockRealExecution: true,
-    maxPairs: 20,
+    maxPairs: 40,
     minMt5Pairs: 6,
-    targetOpenPositions: 20,
-    targetIntradayPositions: 10,
-    targetSwingPositions: 10,
+    targetOpenPositions: 40,
+    targetIntradayPositions: 20,
+    targetSwingPositions: 20,
     minMt5OpenPositions: 6,
     lastPersistedAt: null
   },
@@ -261,6 +261,14 @@ async function boot() {
   bindUi();
   drawPerf();
   drawGauge(50);
+  try {
+    state.env = await window.quant.envStatus();
+    renderStatus();
+    refreshTrainingRuntimeStatus();
+    logEvent('OK', `ConfiguraciÃ³n cargada desde ${state.env.envFile || '.env'}`);
+  } catch (err) {
+    logEvent('ERR', `No pude leer configuraciÃ³n: ${err.message}`);
+  }
   // Boot cognitivo: restaura última conversación si existe; si no, silencio honesto.
   // Sin mensajes teatrales. Los insights reales llegarán por el canal de Quant-Core
   // cuando los endpoints cognitivos estén consumidos (F2+).
@@ -477,6 +485,7 @@ function renderStatus() {
     ['DeepSeek', state.env.deepseek ? 'Clave detectada' : 'Falta clave'],
     ['Modelo IA', `${state.env.modelProvider || 'local'} / ${state.env.model || 'sin modelo remoto'}`],
     ['Web local', state.env.webUrl || 'No iniciado'],
+    ['IP Binance whitelist', state.env.binanceWhitelistIp || 'Configura QUANT_VPS_PUBLIC_IP'],
     ['Trading real', state.env.realTrading ? 'ACTIVO' : 'Bloqueado'],
     ['Seguridad', 'BUY/SELL reales siguen requiriendo risk gate'],
     ['MT5 Adapter', state.executionAdapters.mt5 ? 'Habilitado por conector' : 'Opcional / aislado'],
@@ -1295,11 +1304,11 @@ async function runSelfAudit() {
     state.training.blockRealExecution = true;
     add('HIGH', 'training', 'Training tenia blockRealExecution desactivado.', 'Auto-fix: blockRealExecution=true.');
   }
-  if (state.training.targetOpenPositions !== 20) {
-    state.training.targetOpenPositions = 20;
-    state.training.targetIntradayPositions = 10;
-    state.training.targetSwingPositions = 10;
-    add('MEDIUM', 'training', 'Training no mantenia 20 posiciones objetivo.', 'Auto-fix: 10 intradia + 10 swing.');
+  if (state.training.targetOpenPositions !== 40) {
+    state.training.targetOpenPositions = 40;
+    state.training.targetIntradayPositions = 20;
+    state.training.targetSwingPositions = 20;
+    add('MEDIUM', 'training', 'Training no mantenia 40 posiciones objetivo.', 'Auto-fix: 20 intradia + 20 swing.');
   }
   if (!state.executionAdapters.paper) {
     state.executionAdapters.paper = true;
@@ -3214,14 +3223,38 @@ function isSensitiveApiField(key) {
   return /KEY|SECRET|PASSWORD|PASS/.test(key);
 }
 
+function apiConfigActiveLabels(cfg = {}) {
+  const has = cfg.has || {};
+  const values = cfg.values || {};
+  const labels = [];
+  if (has.BINANCE_API_KEY && has.BINANCE_SECRET) labels.push('Binance Spot');
+  if (has.DEEPSEEK_API_KEY) labels.push('DeepSeek');
+  if (has.DEEPINFRA_API_KEY) labels.push('DeepInfra');
+  if (has.FINNHUB_API_KEY) labels.push('Finnhub');
+  if (has.ALPHA_VANTAGE_API_KEY) labels.push('Alpha Vantage');
+  if (String(values.MT5_CONNECTOR_ENABLED || '').toLowerCase() === 'true' || has.MT5_CONNECTOR_ENABLED) labels.push('MT5 configurado');
+  if (has.QUANT_SYNC_URL && has.QUANT_SYNC_KEY) labels.push('Sync Quant');
+  return labels;
+}
+
+function applyApiConfigStatusToSidebar(cfg = {}) {
+  state.env.apiConfigStatus = cfg;
+  state.env.binance = Boolean(cfg.has?.BINANCE_API_KEY && cfg.has?.BINANCE_SECRET);
+  state.env.deepseek = Boolean(cfg.has?.DEEPSEEK_API_KEY);
+  state.env.deepinfra = Boolean(cfg.has?.DEEPINFRA_API_KEY);
+  state.env.finnhub = Boolean(cfg.has?.FINNHUB_API_KEY);
+  state.env.alpha = Boolean(cfg.has?.ALPHA_VANTAGE_API_KEY);
+  const mt5Value = cfg.values?.MT5_CONNECTOR_ENABLED;
+  state.env.mt5Connector = String(mt5Value || '').toLowerCase() === 'true' || Boolean(cfg.has?.MT5_CONNECTOR_ENABLED);
+  renderStatus();
+}
+
 async function loadApiConfig() {
   const st = $('apiConfigStatus');
   try {
     const cfg = await window.quant.apiConfigRead();
-    const activeKeys = Object.entries(cfg.has || {})
-      .filter(([, value]) => value)
-      .map(([key]) => key.replace(/_API_KEY|_SECRET|_PASSWORD|_ENABLED/g, ''))
-      .slice(0, 8);
+    applyApiConfigStatusToSidebar(cfg);
+    const activeLabels = apiConfigActiveLabels(cfg);
     for (const [key, id] of Object.entries(API_FIELD_INPUTS)) {
       const el = $(id);
       if (!el) continue;
@@ -3234,7 +3267,7 @@ async function loadApiConfig() {
         el.value = cfg.values?.[key] || '';
       }
     }
-    if (st) st.textContent = `Sesion: ${cfg.user?.email || 'local'} - APIs activas: ${activeKeys.join(', ') || 'ninguna'} - fuente: ${cfg.file || 'configuracion en memoria'}`;
+    if (st) st.textContent = `Sesion: ${cfg.user?.email || 'local'} - APIs activas: ${activeLabels.join(', ') || 'ninguna'} - fuente: ${cfg.file || 'configuracion en memoria'}`;
   } catch (err) {
     if (st) st.textContent = 'No pude cargar APIs.';
     logEvent('WARN', `loadApiConfig: ${err.message}`);

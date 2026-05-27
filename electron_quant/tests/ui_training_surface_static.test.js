@@ -15,11 +15,19 @@ assert.ok(html.includes('ENTRENAMIENTO DE QUANT'), 'Training debe ser la superfi
 assert.ok(html.includes('trainingRuntimeStrip') && html.includes('trainingRuntimePill'), 'Training debe exponer estado real del scheduler.');
 assert.ok(renderer.includes('trainingLoopStatus'), 'Renderer debe leer /api/training/demo/loop/status.');
 assert.ok(renderer.includes('refreshTrainingRuntimeStatus'), 'Renderer debe refrescar el estado runtime de training.');
+assert.ok(renderer.indexOf('state.env = await window.quant.envStatus();') < renderer.indexOf('await loadLastConversationIfAny();'), 'El estado de APIs/training debe cargar antes que conversaciones u otros modulos no criticos.');
+assert.ok(renderer.indexOf('renderStatus();') < renderer.indexOf('await loadLastConversationIfAny();'), 'El sidebar de APIs no debe depender de que cargue el chat.');
 assert.ok(renderer.includes("event.target.id === 'apiConfigForm'"), 'El submit de APIs debe estar delegado y prevenir navegacion nativa.');
 assert.ok(renderer.includes("conversationLoad:      (id)                        => apiPost('conversation-load', { id })"), 'Web debe restaurar conversaciones via POST para no perder el chat al refrescar.');
 assert.ok(renderer.includes('APIs activas:'), 'Configuracion debe mostrar estado visible de APIs guardadas.');
+assert.ok(renderer.includes('apiConfigActiveLabels'), 'Configuracion debe resumir APIs activas por integracion, no por clave cruda duplicada.');
+assert.ok(renderer.includes("'Binance Spot'"), 'Resumen de APIs debe mostrar Binance una sola vez cuando key y secret existen.');
+assert.ok(renderer.includes('state.env.apiConfigStatus = cfg'), 'Leer configuracion de APIs debe refrescar el estado lateral aunque el boot haya quedado atrasado.');
+assert.ok(renderer.includes("'IP Binance whitelist'"), 'Ajustes debe mostrar la IP que se debe autorizar en Binance.');
+assert.ok(main.includes('binanceWhitelistIp'), 'env-status debe exponer la IP de whitelist Binance para Cloud/VPS.');
 assert.ok(renderer.includes("setConnectorStatus('stBinance', state.env.binance"), 'Sidebar debe confirmar Binance activa o sin claves sin puntos suspensivos.');
 assert.equal(/id="stBinance">\.\.\./.test(html), false, 'Sidebar no debe mostrar puntos suspensivos ambiguos para Binance.');
+assert.equal(/id="stBinance">Cargando/.test(html), false, 'Sidebar no debe quedar visualmente en Cargando como estado por defecto.');
 assert.ok(renderer.includes('connectorSourceLabel'), 'Sidebar debe indicar si una API activa viene de usuario, .env o fuente mixta.');
 assert.ok(renderer.includes("Activa (${connectorSourceLabel(['BINANCE_API_KEY', 'BINANCE_SECRET'])})"), 'Binance debe mostrar fuente real de las claves, no solo un estado generico.');
 assert.ok(renderer.includes('state.connectorHealth.mt5'), 'MT5 debe reflejar salud runtime verificada, no solo el flag MT5_CONNECTOR_ENABLED.');
@@ -35,5 +43,6 @@ assert.ok(css.includes('overflow-x: hidden'), 'La vista activa debe cortar overf
 assert.ok(main.includes("'TRAINING_BACKEND_LOOP_ENABLED'"), 'Cloud/VPS deben leer flags de loop desde process.env.');
 assert.ok(main.includes('trainingStateReader.readSnapshot()'), 'Autostart debe usar el lector correcto del training state.');
 assert.ok(main.includes('getBinanceSymbols: () => binanceSymbols()'), 'Loop backend debe poder sembrar universo Binance persistente.');
+assert.ok(renderer.includes('targetOpenPositions: 40'), 'Training perpetuo debe apuntar a 40 posiciones maximas: 20 rapidas + 20 swing.');
 
 console.log('ui_training_surface_static.test.js OK');

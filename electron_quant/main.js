@@ -30,7 +30,7 @@ const { createJsonStore } = require('./backend/memory/json-store');
 const { createDefaultBotState, mergeBotState } = require('./backend/services/bot-state-service');
 const { createDefaultRiskConfig, assertTradingRealCanBeEnabled, validateRiskConfig } = require('./backend/risk/risk-policy');
 const { createApiRouter } = require('./backend/routes/api-router');
-const { createReadOnlyTrainingStateReader } = require('./backend/training/training-state');
+const { createReadOnlyTrainingStateReader, normalizeTrainingState } = require('./backend/training/training-state');
 const { normalizeTrainingStateTraceability } = require('./backend/training/training-traceability');
 const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
 
@@ -424,7 +424,7 @@ function readTrainingState() {
   ensureMemoryDir();
   if (!fs.existsSync(trainingStateFile)) return null;
   try {
-    return JSON.parse(fs.readFileSync(trainingStateFile, 'utf8'));
+    return normalizeTrainingState(JSON.parse(fs.readFileSync(trainingStateFile, 'utf8')));
   } catch {
     return null;
   }
@@ -436,8 +436,9 @@ function readTrainingStateSnapshot() {
 
 function writeTrainingState(payload) {
   ensureMemoryDir();
+  const normalized = normalizeTrainingState(normalizeTrainingStateTraceability(payload));
   const state = {
-    ...normalizeTrainingStateTraceability(payload),
+    ...normalized,
     persistedAt: new Date().toISOString(),
     file: trainingStateFile
   };

@@ -341,3 +341,54 @@ test('tick bootstraps a Binance universe when perpetual training starts empty', 
   assert.equal(state.activePairs.length, 0);
   assert.equal(state.positions.length, 0);
 });
+
+test('tick expands a stale small universe toward the 40 slot perpetual profile', async () => {
+  const symbols = Array.from({ length: 40 }, (_, index) => `Q${index + 1}USDT`);
+  const state = createState({
+    targets: { total: 40, intraday: 20, swing: 20 },
+    activePairs: symbols.slice(0, 10).map((symbol) => ({
+      symbol,
+      venue: 'BINANCE',
+      score: 72,
+      price: 100,
+      spreadPct: 0.001,
+      indicators: {
+        bias: 'LONG',
+        confidence: 84,
+        htfAlignmentScore: 0.75,
+        patternScore: 0.55,
+        volumeRatio: 1.4,
+        horizon: 'intraday',
+        primaryStrategy: { id: 'trendMomentum', name: 'Trend Momentum', score: 86 }
+      }
+    })),
+    positions: []
+  });
+
+  const result = await runTrainingDemoTick({
+    state,
+    positionContexts: [],
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z'),
+    deps: {
+      getBinanceSymbols: async () => symbols,
+      getTicker: async (symbol) => ({
+        ok: true,
+        symbol,
+        price: 100 + Number(symbol.match(/\d+/)?.[0] || 0),
+        spread: 0.05,
+        changePct: 1.8,
+        quoteVolume: 120000000
+      }),
+      readMemory: () => []
+    },
+    env: {
+      TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true',
+      TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED: 'true'
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.nextState.activePairs.length >= 40, true);
+  assert.equal(result.nextState.positions.length > 20, true);
+  assert.equal(result.nextState.positions.length <= 40, true);
+});

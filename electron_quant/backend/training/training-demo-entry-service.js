@@ -121,6 +121,20 @@ function collectTrainingEntryPairs(state = {}) {
   return sources.map(normalizeEntryPair).filter(Boolean);
 }
 
+function mergeEntryPairs(primary = [], fallback = []) {
+  const seen = new Set();
+  const out = [];
+  for (const pair of primary.concat(fallback)) {
+    const normalized = normalizeEntryPair(pair);
+    if (!normalized?.symbol) continue;
+    const key = `${String(normalized.venue || 'BINANCE').toUpperCase()}:${String(normalized.symbol).toUpperCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(normalized);
+  }
+  return out;
+}
+
 async function buildBackendBootstrapPairs(input = {}) {
   const deps = input.deps || {};
   const nowMs = Number.isFinite(Number(input.nowMs)) ? Number(input.nowMs) : Date.now();
@@ -421,10 +435,15 @@ async function evaluateTrainingDemoEntries(input = {}) {
   const intradayNeeded = Math.max(0, resolveTargetCount(state, 'intraday') - openPositions.filter((position) => position.horizon !== 'swing').length);
   const swingNeeded = Math.max(0, resolveTargetCount(state, 'swing') - openPositions.filter((position) => position.horizon === 'swing').length);
   const mt5Open = openPositions.filter((position) => position.venue === 'MT5').length;
-  const bootstrappedPairs = !pairs.length && (intradayNeeded > 0 || swingNeeded > 0)
+  const targetUniverseSize = Math.min(40, Math.max(
+    resolveTargetCount(state, 'intraday'),
+    resolveTargetCount(state, 'swing'),
+    finiteNumber(state.targetOpenPositions, state.targets?.total, 40) || 40
+  ));
+  const bootstrappedPairs = pairs.length < targetUniverseSize && (intradayNeeded > 0 || swingNeeded > 0)
     ? await buildBackendBootstrapPairs({ deps, env, nowMs })
     : [];
-  if (!pairs.length && bootstrappedPairs.length) pairs = bootstrappedPairs;
+  if (bootstrappedPairs.length) pairs = mergeEntryPairs(pairs, bootstrappedPairs).slice(0, targetUniverseSize);
   const ranked = pairs
     .filter((pair) => textValue(pair.symbol))
     .sort((left, right) => {
@@ -435,7 +454,7 @@ async function evaluateTrainingDemoEntries(input = {}) {
 
   let nextState = {
     ...state,
-    activePairs: Array.isArray(state.activePairs) && state.activePairs.length ? state.activePairs.slice() : bootstrappedPairs,
+    activePairs: pairs.length ? pairs.slice() : bootstrappedPairs,
     positions: Array.isArray(state.positions) ? state.positions.slice() : []
   };
   const skippedEntries = [];

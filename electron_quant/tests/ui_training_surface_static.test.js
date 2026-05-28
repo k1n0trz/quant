@@ -44,6 +44,10 @@ assert.ok(main.includes("'TRAINING_BACKEND_LOOP_ENABLED'"), 'Cloud/VPS deben lee
 assert.ok(main.includes('trainingStateReader.readSnapshot()'), 'Autostart debe usar el lector correcto del training state.');
 assert.ok(main.includes('getBinanceSymbols: () => binanceSymbols()'), 'Loop backend debe poder sembrar universo Binance persistente.');
 assert.ok(renderer.includes('targetOpenPositions: 40'), 'Training perpetuo debe apuntar a 40 posiciones maximas: 20 rapidas + 20 swing.');
+assert.equal(/id="trainingToggle"|data-toggle="training"/.test(html), false, 'Training perpetuo no debe tener boton para apagar/encender.');
+assert.ok(html.includes('trainingPerpetualBadge') && html.includes('PERPETUO'), 'Training debe mostrarse como perpetuo, no como toggle opcional.');
+assert.ok(renderer.includes('Training perpetuo: no se puede desactivar desde la UI'), 'Renderer debe bloquear intentos heredados de apagar training.');
+assert.ok(renderer.includes("'Sin lectura'"), 'Si env-status falla, el sidebar debe mostrar un estado explicito y no quedarse ambiguo.');
 const binanceFallback = main.match(/const fallback = \[([\s\S]*?)\];\s*const info = await withMarketFallback/);
 assert.ok(binanceFallback, 'binanceSymbols debe tener fallback local cuando exchangeInfo no responde.');
 assert.ok((binanceFallback[1].match(/USDT/g) || []).length >= 40, 'Fallback Binance debe tener al menos 40 pares USDT para training perpetuo en Cloud/VPS.');

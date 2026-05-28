@@ -20,8 +20,8 @@ if (!window.quantStateManager) {
 
     // Estado de Training
     training: {
-      enabled: false,
-      lastUpdated: null,
+      enabled: true,
+      lastUpdated: new Date(),
     },
 
     // Estado del Bot (derivado de trading + training)
@@ -64,20 +64,21 @@ if (!window.quantStateManager) {
 
     // Toggle Training
     toggleTraining: async (enable) => {
-      // Aquí se llamaría al backend real
-      // await window.quant.botSetTraining(enable);
+      // Training is a perpetual learning loop. Real trading can be disabled,
+      // but the learning engine should not be turned off from the UI.
+      const nextEnabled = true;
 
-      window.quantStateManager.training.enabled = enable;
+      window.quantStateManager.training.enabled = nextEnabled;
       window.quantStateManager.training.lastUpdated = new Date();
 
       // Despachar evento
       window.dispatchEvent(
         new CustomEvent('training-toggled', {
-          detail: { enabled: enable },
+          detail: { enabled: nextEnabled },
         })
       );
 
-      console.log('[StateManager] Training toggled:', enable ? 'ON' : 'OFF');
+      console.log('[StateManager] Training perpetual:', nextEnabled ? 'ON' : 'OFF');
     },
 
     setKillSwitch: async (enable) => {
@@ -123,7 +124,7 @@ if (!window.quantStateManager) {
     // Reset para testing
     reset: () => {
       window.quantStateManager.tradingReal.enabled = false;
-      window.quantStateManager.training.enabled = false;
+      window.quantStateManager.training.enabled = true;
       window.quantStateManager.killSwitch.enabled = false;
       console.log('[StateManager] State reset');
     },

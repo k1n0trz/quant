@@ -78,14 +78,8 @@ if (!window.heroController) {
         });
       }
 
-      // Training toggle
-      if (el.trainingToggle) {
-        el.trainingToggle.addEventListener('click', async () => {
-          const current = window.quantStateManager.training.enabled;
-          await window.quantStateManager.toggleTraining(!current);
-          window.heroController.updateUI();
-        });
-      }
+      // Training is perpetual. There is intentionally no UI listener that can
+      // disable the learning loop.
 
       // Pause Trading button
       if (el.pauseTradingBtn) {
@@ -143,7 +137,7 @@ if (!window.heroController) {
 
       // Update Training display
       if (el.trainingStatus) {
-        el.trainingStatus.textContent = state.training ? 'ON' : 'OFF';
+        el.trainingStatus.textContent = state.training ? 'ON' : 'PENDIENTE';
         el.trainingStatus.className =
           'control-status training ' + (state.training ? '' : 'off');
       }
@@ -152,13 +146,7 @@ if (!window.heroController) {
         el.trainingDot.classList.toggle('off', !state.training);
       }
 
-      if (el.trainingToggle) {
-        el.trainingToggle.classList.toggle('active', state.training);
-        el.trainingToggle.classList.toggle('training', state.training);
-        el.trainingToggle.querySelector('.toggle-state').textContent = state.training
-          ? 'DISABLE'
-          : 'ENABLE';
-      }
+      if (el.trainingToggle) el.trainingToggle.remove();
 
       // Update pause button visibility
       if (el.pauseTradingBtn) {

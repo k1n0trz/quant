@@ -267,6 +267,9 @@ async function boot() {
     refreshTrainingRuntimeStatus();
     logEvent('OK', `ConfiguraciÃ³n cargada desde ${state.env.envFile || '.env'}`);
   } catch (err) {
+    ['stBinance', 'stDeepseek', 'stFinnhub', 'stAlpha', 'stMt5'].forEach((id) => {
+      setConnectorStatus(id, false, 'Activa', 'Sin lectura', { error: true, title: err.message });
+    });
     logEvent('ERR', `No pude leer configuraciÃ³n: ${err.message}`);
   }
   // Boot cognitivo: restaura última conversación si existe; si no, silencio honesto.
@@ -289,6 +292,9 @@ async function boot() {
     refreshTrainingRuntimeStatus();
     logEvent('OK', `Configuración cargada desde ${state.env.envFile || '.env'}`);
   } catch (err) {
+    ['stBinance', 'stDeepseek', 'stFinnhub', 'stAlpha', 'stMt5'].forEach((id) => {
+      setConnectorStatus(id, false, 'Activa', 'Sin lectura', { error: true, title: err.message });
+    });
     logEvent('ERR', `No pude leer configuración: ${err.message}`);
   }
   await loadSymbols();
@@ -525,7 +531,7 @@ async function refreshTrainingRuntimeStatus() {
         ? `Scheduler backend activo · loop ${loopEnabled ? 'ON' : 'OFF'} · ticks ${ticks} · omitidos ${skipped} · ultimo ${lastTick}`
         : `Scheduler no activo · loop ${loopEnabled ? 'ON' : 'OFF'} · scheduler ${schedulerEnabled ? 'ON' : 'OFF'}${lastError ? ` · ${lastError}` : ''}`;
     }
-    setText('trainingStatus', active || state.env.trainingEnabled ? 'ON' : 'OFF');
+    setText('trainingStatus', active || state.env.trainingEnabled ? 'ON' : 'PENDIENTE');
     const dot = $('trainingDot');
     if (dot) dot.classList.toggle('off', !(active || state.env.trainingEnabled));
     return status;
@@ -3888,9 +3894,15 @@ if (window.quantStateManager) {
 
   const originalToggleTraining = window.quantStateManager.toggleTraining;
   window.quantStateManager.toggleTraining = async function(enable) {
-    const success = await setTrainingBackend(enable);
+    if (!enable) {
+      logEvent('WARN', 'Training perpetuo: no se puede desactivar desde la UI');
+      originalToggleTraining.call(this, true);
+      updateHeroSection();
+      return;
+    }
+    const success = await setTrainingBackend(true);
     if (success) {
-      originalToggleTraining.call(this, enable);
+      originalToggleTraining.call(this, true);
     }
   };
 

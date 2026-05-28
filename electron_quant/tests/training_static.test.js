@@ -50,6 +50,8 @@ assert(renderer.includes('runSelfAudit'), 'Quant debe tener auditoria interna de
 assert(main.includes('startLocalWebServer'), 'Quant debe exponer localhost web.');
 assert(main.includes('activeWebPort'), 'Localhost debe reportar el puerto activo/fallback.');
 assert(main.includes('MT5 adapter disabled'), 'MT5 debe quedar aislado como adapter opcional.');
+assert(main.includes("process.platform === 'win32' ? 'python' : 'python3'"), 'MT5 debe usar python3 por defecto en VPS Linux.');
+assert.equal(/spawn\('python'/.test(main), false, 'MT5 no debe depender del alias python en Linux.');
 assert(main.includes("'TRAINING_BACKEND_WRITER_ENABLED'"), 'El backend debe permitir activar el writer demo por variable de entorno controlada.');
 assert(main.includes('deepseek-reasoner') || main.includes('Qwen/Qwen2.5-72B-Instruct'), 'Debe existir ruta a modelo fuerte.');
 assert(renderer.includes("trainingStateWrite"), 'El renderer debe persistir estado de training.');

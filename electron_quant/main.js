@@ -1045,6 +1045,10 @@ const _mt5AccountsCache = { ts: 0, data: null, inFlight: null };
 // passive=true → only reads the currently active account, NO mt5.login() switching.
 // Use passive=true for all background/auto operations.
 // Use passive=false only on explicit user action ("Actualizar datos").
+function pythonCommand(env = ENV) {
+  return env.PYTHON_BIN || process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
+}
+
 async function mt5MultiAccounts(usdCop = 0, env = ENV, passive = false) {
   const now = Date.now();
   // Non-passive = manual user action → always get fresh data, bypass cache
@@ -1173,7 +1177,7 @@ except Exception as e:
     print(json.dumps({"ok": False, "accounts": [], "error": str(e)}))
 `;
   return new Promise((resolve) => {
-    const child = spawn('python', ['-c', code], { windowsHide: true });
+    const child = spawn(pythonCommand(env), ['-c', code], { windowsHide: true });
     let out = '';
     child.stdout.on('data', (chunk) => { out += chunk.toString(); });
     child.on('close', () => {
@@ -1209,7 +1213,7 @@ except Exception as e:
     print(json.dumps({"available": False, "message": "MT5 no disponible para Python", "error": str(e)}))
 `;
   return new Promise((resolve) => {
-    const child = spawn('python', ['-c', code], { windowsHide: true });
+    const child = spawn(pythonCommand(), ['-c', code], { windowsHide: true });
     let out = '';
     child.stdout.on('data', (chunk) => { out += chunk.toString(); });
     child.on('close', () => {
@@ -1270,7 +1274,7 @@ except Exception as e:
     print(json.dumps({"ok": False, "positions": [], "account": None, "error": str(e)}))
 `;
   return new Promise((resolve) => {
-    const child = spawn('python', ['-c', code], { windowsHide: true });
+    const child = spawn(pythonCommand(), ['-c', code], { windowsHide: true });
     let out = '';
     child.stdout.on('data', (chunk) => { out += chunk.toString(); });
     child.on('close', () => {
@@ -1469,7 +1473,7 @@ except Exception as e:
     print(json.dumps({"ok": False, "symbols": [], "error": str(e)}))
 `;
   return new Promise((resolve) => {
-    const child = spawn('python', ['-c', code], { windowsHide: true });
+    const child = spawn(pythonCommand(), ['-c', code], { windowsHide: true });
     let out = '';
     child.stdout.on('data', (chunk) => { out += chunk.toString(); });
     child.on('close', () => {
@@ -1508,7 +1512,7 @@ except Exception as e:
     print(json.dumps({"ok": False, "error": str(e), "candles": []}))
 `;
   return new Promise((resolve) => {
-    const child = spawn('python', ['-c', code], { windowsHide: true });
+    const child = spawn(pythonCommand(), ['-c', code], { windowsHide: true });
     let out = '';
     child.stdout.on('data', (chunk) => { out += chunk.toString(); });
     child.on('close', () => {

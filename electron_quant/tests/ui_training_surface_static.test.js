@@ -28,6 +28,8 @@ assert.ok(main.includes('binanceWhitelistIp'), 'env-status debe exponer la IP de
 assert.ok(renderer.includes("setConnectorStatus('stBinance', state.env.binance"), 'Sidebar debe confirmar Binance activa o sin claves sin puntos suspensivos.');
 assert.equal(/id="stBinance">\.\.\./.test(html), false, 'Sidebar no debe mostrar puntos suspensivos ambiguos para Binance.');
 assert.equal(/id="stBinance">Cargando/.test(html), false, 'Sidebar no debe quedar visualmente en Cargando como estado por defecto.');
+assert.equal(/>Verificando</.test(html), false, 'Sidebar no debe iniciar en Verificando; debe mostrar Sin lectura hasta cargar la configuracion real.');
+assert.ok(renderer.indexOf('await loadApiConfig();') < renderer.indexOf('await loadLastConversationIfAny();'), 'El boot debe aplicar la configuracion de APIs persistida antes de cargar chat u otros modulos.');
 assert.ok(renderer.includes('connectorSourceLabel'), 'Sidebar debe indicar si una API activa viene de usuario, .env o fuente mixta.');
 assert.ok(renderer.includes("Activa (${connectorSourceLabel(['BINANCE_API_KEY', 'BINANCE_SECRET'])})"), 'Binance debe mostrar fuente real de las claves, no solo un estado generico.');
 assert.ok(renderer.includes('state.connectorHealth.mt5'), 'MT5 debe reflejar salud runtime verificada, no solo el flag MT5_CONNECTOR_ENABLED.');

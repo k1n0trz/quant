@@ -272,6 +272,7 @@ async function boot() {
     });
     logEvent('ERR', `No pude leer configuraciÃ³n: ${err.message}`);
   }
+  await loadApiConfig();
   // Boot cognitivo: restaura última conversación si existe; si no, silencio honesto.
   // Sin mensajes teatrales. Los insights reales llegarán por el canal de Quant-Core
   // cuando los endpoints cognitivos estén consumidos (F2+).
@@ -479,7 +480,7 @@ function renderStatus() {
   } else if (mt5Health.checked) {
     setConnectorStatus('stMt5', false, 'Runtime activo', 'Sin terminal', { error: true, title: mt5Health.error || 'MT5 no respondio' });
   } else {
-    setConnectorStatus('stMt5', false, 'Runtime activo', 'Config ON, verificando');
+    setConnectorStatus('stMt5', true, 'Config ON', 'Sin terminal');
   }
   $('modeText').textContent = state.env.realTrading ? 'Modo: Trading Real ACTIVO' : 'Modo: Trading Real (Bloqueado por defecto)';
   $('settingsBox').innerHTML = [

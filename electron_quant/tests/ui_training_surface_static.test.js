@@ -48,6 +48,8 @@ assert.equal(/id="trainingToggle"|data-toggle="training"/.test(html), false, 'Tr
 assert.ok(html.includes('trainingPerpetualBadge') && html.includes('PERPETUO'), 'Training debe mostrarse como perpetuo, no como toggle opcional.');
 assert.ok(renderer.includes('Training perpetuo: no se puede desactivar desde la UI'), 'Renderer debe bloquear intentos heredados de apagar training.');
 assert.ok(renderer.includes("'Sin lectura'"), 'Si env-status falla, el sidebar debe mostrar un estado explicito y no quedarse ambiguo.');
+assert.ok(renderer.includes("const marketSearch = $('marketSearch')"), 'Boot debe tolerar la ausencia de marketSearch para no bloquear env-status.');
+assert.ok(renderer.includes('if (!search || !table) return;'), 'renderMarketTable debe ser defensivo si el dashboard no tiene tabla legacy.');
 const binanceFallback = main.match(/const fallback = \[([\s\S]*?)\];\s*const info = await withMarketFallback/);
 assert.ok(binanceFallback, 'binanceSymbols debe tener fallback local cuando exchangeInfo no responde.');
 assert.ok((binanceFallback[1].match(/USDT/g) || []).length >= 40, 'Fallback Binance debe tener al menos 40 pares USDT para training perpetuo en Cloud/VPS.');

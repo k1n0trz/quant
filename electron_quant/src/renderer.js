@@ -361,7 +361,8 @@ function bindUi() {
   $('sendChat').addEventListener('click', sendChat);
   $('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });
   $('askAiBtn').addEventListener('click', askAiAnalysis);
-  $('marketSearch').addEventListener('input', renderMarketTable);
+  const marketSearch = $('marketSearch');
+  if (marketSearch) marketSearch.addEventListener('input', renderMarketTable);
   $('buyBtn').addEventListener('click',  () => submitOrder('BUY'));
   $('sellBtn').addEventListener('click', () => submitOrder('SELL'));
   $('cancelBtn').addEventListener('click', () => {
@@ -1444,9 +1445,12 @@ async function refreshNews(source, automatic = false) {
 }
 
 function renderMarketTable() {
-  const q = $('marketSearch').value?.toUpperCase() || '';
+  const search = $('marketSearch');
+  const table = $('marketTable');
+  if (!search || !table) return;
+  const q = search.value?.toUpperCase() || '';
   const rows = state.symbols.filter((s) => s.includes(q)).slice(0, 250).map((s) => `<div class="market-row" data-symbol="${s}"><b>${s}</b><span>${state.platform}</span><span>${state.platform === 'BINANCE' ? (s.endsWith('USDT') ? 'USDT' : 'Multi quote') : 'MT5 symbol'}</span><button class="tiny-btn">Seleccionar</button></div>`).join('');
-  $('marketTable').innerHTML = rows;
+  table.innerHTML = rows;
   document.querySelectorAll('.market-row').forEach((r) => r.addEventListener('click', () => { setSymbol(r.dataset.symbol); setView('dashboard'); }));
 }
 

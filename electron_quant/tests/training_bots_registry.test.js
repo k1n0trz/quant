@@ -86,3 +86,20 @@ test('buildTrainingBotsStatus derives bot queue from open positions when activeP
   assert.equal(status.trainingBots.some((bot) => bot.symbol === 'ETHUSDT' && bot.status === 'queued_for_generation'), true);
   assert.equal(status.trainingBots.filter((bot) => bot.symbol === 'ETHUSDT').length, 1);
 });
+
+test('buildTrainingBotsStatus merges activePairs with open positions instead of hiding live bots', () => {
+  const root = makeRoot();
+  const status = buildTrainingBotsStatus({
+    templatesRoot: path.join(root, 'templates'),
+    state: {
+      activePairs: [{ venue: 'BINANCE', symbol: 'BTCUSDT' }],
+      positions: [
+        { venue: 'BINANCE', symbol: 'ETHUSDT', exit_price: null },
+        { venue: 'BINANCE', symbol: 'BTCUSDT', exit_price: null }
+      ]
+    }
+  });
+  assert.equal(status.trainingBots.some((bot) => bot.symbol === 'BTCUSDT'), true);
+  assert.equal(status.trainingBots.some((bot) => bot.symbol === 'ETHUSDT'), true);
+  assert.equal(status.trainingBots.filter((bot) => bot.symbol === 'BTCUSDT').length, 1);
+});

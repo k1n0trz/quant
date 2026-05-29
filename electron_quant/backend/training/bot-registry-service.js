@@ -101,17 +101,22 @@ function buildQueuedBot(pair, template = null, state = {}) {
 
 function activePairsFromState(state = {}) {
   const explicit = Array.isArray(state.activePairs) ? state.activePairs.filter((pair) => pair?.venue && pair?.symbol) : [];
-  if (explicit.length) return explicit;
   const seen = new Set();
-  return (Array.isArray(state.positions) ? state.positions : [])
+  const out = explicit.filter((pair) => {
+    const key = `${pair.venue}:${pair.symbol}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  for (const position of (Array.isArray(state.positions) ? state.positions : [])
     .filter((position) => position?.venue && position?.symbol && !position.exit_price)
-    .filter((position) => {
-      const key = `${position.venue}:${position.symbol}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .map((position) => ({ venue: position.venue, symbol: position.symbol }));
+  ) {
+    const key = `${position.venue}:${position.symbol}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ venue: position.venue, symbol: position.symbol });
+  }
+  return out;
 }
 
 function buildTrainingBotsStatus(options = {}) {

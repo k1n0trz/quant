@@ -1547,9 +1547,9 @@ function applyBackendTrainingStateRefresh(refreshedState) {
   state.training.balance = Number(refreshedState.balance || state.training.balance);
   state.training.activePairs = Array.isArray(refreshedState.activePairs) ? refreshedState.activePairs : state.training.activePairs;
   state.training.positions = Array.isArray(refreshedState.positions) ? refreshedState.positions : state.training.positions;
-  if (!state.training.activePairs.length && state.training.positions.length) {
-    const seen = new Set();
-    state.training.activePairs = state.training.positions
+  if (state.training.positions.length) {
+    const seen = new Set(state.training.activePairs.map((pair) => `${pair.venue}:${pair.symbol}`));
+    const derivedPairs = state.training.positions
       .filter((position) => position && position.venue && position.symbol && !position.exit_price)
       .filter((position) => {
         const key = `${position.venue}:${position.symbol}`;
@@ -1574,6 +1574,7 @@ function applyBackendTrainingStateRefresh(refreshedState) {
         }
       }))
       .slice(0, state.training.maxPairs || 40);
+    state.training.activePairs = [...state.training.activePairs, ...derivedPairs].slice(0, state.training.maxPairs || 40);
   }
   state.training.closedTrades = Array.isArray(refreshedState.closedTrades) ? refreshedState.closedTrades : state.training.closedTrades;
   state.training.lessons = Array.isArray(refreshedState.lessons) ? refreshedState.lessons : state.training.lessons;

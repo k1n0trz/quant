@@ -1,0 +1,19 @@
+{
+  "id": "EdiLearningBot_XAUUSD",
+  "name": "EdiLearningBot XAUUSD",
+  "symbol": "XAUUSD",
+  "venue": "MT5",
+  "mode": "training",
+  "templateRole": "seed",
+  "description": "Plantilla base importada desde el bot XAUUSD validado localmente para que Quant genere bots derivados por par y horizonte.",
+  "sourceFiles": [
+    "EdiTrainingBot_XAUUSD.mq5",
+    "EdiTrainingBot_XAUUSD.ex5",
+    "EdiTrainingBot_XAUUSD_compile.log"
+  ],
+  "importedAt": "2026-05-29T00:00:00.000Z",
+  "notes": [
+    "No incluye apis.txt ni claves externas.",
+    "Separar derivados de training y real antes de cualquier ejecucion real."
+  ]
+}

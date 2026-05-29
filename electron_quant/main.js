@@ -1698,7 +1698,8 @@ async function handleApi(req, res, url) {
         getTicker: (symbol) => ticker(symbol),
         readMt5Snapshot,
         syncBinanceTime: () => syncBinanceTime(),
-        mt5AccountInfo: (envArg) => mt5Info(envArg)
+        mt5AccountInfo: (envArg) => mt5Info(envArg),
+        botTemplatesRoot: path.join(__dirname, 'bots', 'templates')
       },
       getBotState: () => readBotState(),
       setBotState: (next) => writeBotState(next),

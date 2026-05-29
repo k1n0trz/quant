@@ -58,6 +58,199 @@ button { cursor: pointer; }
   text-transform: uppercase;
   white-space: nowrap;
 }
+
+/* Training live cockpit */
+.training-live-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.training-live-card {
+  min-height: 82px;
+  padding: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: rgba(16, 25, 39, .84);
+}
+
+.training-live-card small {
+  display: block;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.training-live-card b {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 20px;
+  line-height: 1.15;
+}
+
+.training-live-card span {
+  display: block;
+  margin-top: 7px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.training-evolution-bar {
+  height: 10px;
+  margin-top: 10px;
+  border-radius: 999px;
+  background: rgba(143, 163, 192, .16);
+  overflow: hidden;
+}
+
+.training-evolution-bar span {
+  display: block;
+  height: 100%;
+  margin: 0;
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+  border-radius: inherit;
+  transition: width .3s ease;
+}
+
+.training-insight-panel {
+  margin-bottom: 12px;
+  padding: 14px;
+}
+
+.training-insight-feed {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.training-insight-card {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 52px 92px;
+  gap: 8px;
+  align-items: start;
+  padding: 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: rgba(26, 37, 64, .45);
+}
+
+.training-insight-card.buy {
+  border-color: rgba(0, 230, 118, .28);
+}
+
+.training-insight-card.sell {
+  border-color: rgba(255, 82, 82, .28);
+}
+
+.training-insight-card p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.training-insight-card small,
+.training-bot-row small {
+  display: block;
+  color: var(--text-secondary);
+  margin-top: 3px;
+}
+
+.training-bots-table {
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+}
+
+.training-bots-table h3 {
+  margin: 12px 0 2px;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.training-bot-summary {
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+  background: rgba(16, 25, 39, .78);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.training-bot-head,
+.training-bot-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) .58fr .9fr .58fr .58fr .65fr;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.training-bot-head {
+  background: rgba(26, 37, 64, .5);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.training-bot-row {
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+@media (max-width: 1180px) {
+  .training-live-grid,
+  .training-insight-feed {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .training-bot-head,
+  .training-bot-row {
+    grid-template-columns: minmax(170px, 1fr) .65fr .9fr .6fr .6fr;
+  }
+
+  .training-bot-head span:nth-child(5),
+  .training-bot-row span:nth-child(5) {
+    display: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .training-live-grid,
+  .training-insight-feed {
+    grid-template-columns: 1fr;
+  }
+
+  .training-insight-card {
+    grid-template-columns: minmax(0, 1fr) 52px;
+  }
+
+  .training-insight-card span:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .training-bot-head {
+    display: none;
+  }
+
+  .training-bot-row {
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--border-subtle);
+    border-radius: 7px;
+    margin-bottom: 8px;
+  }
+}
 .user-card { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
 .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--bg-elevated); display: grid; place-items: center; font-family: var(--font-mono); font-weight: 800; }
 .user-name { font-weight: 800; }

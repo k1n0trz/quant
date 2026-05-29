@@ -324,6 +324,32 @@
           <strong>sin senal</strong>
           <small>esperando estado real del loop</small>
         </div>
+        <div class="training-live-grid">
+          <div class="training-live-card">
+            <small>Posiciones abiertas</small>
+            <b id="trainingOpenGauge">0 / 40</b>
+            <span id="trainingOpenGaugeSub">objetivo minimo 20</span>
+          </div>
+          <div class="training-live-card">
+            <small>Horizontes</small>
+            <b id="trainingHorizonSplit">0 intradia / 0 swing</b>
+            <span>meta 20 rapidas + 20 largas</span>
+          </div>
+          <div class="training-live-card training-evolution">
+            <small>Evolucion Quant</small>
+            <b id="trainingEvolutionLabel">0% Noob</b>
+            <div class="training-evolution-bar"><span id="trainingEvolutionBar" style="width:0%"></span></div>
+          </div>
+          <div class="training-live-card">
+            <small>Tiempo real</small>
+            <b id="trainingRealtimeStamp">--:--:--</b>
+            <span>polling cada 5s</span>
+          </div>
+        </div>
+        <div class="panel training-insight-panel">
+          <div class="panel-head"><h2>INSIGHTS EN VIVO DE QUANT</h2><span>expiran en 10 min</span></div>
+          <div class="training-insight-feed" id="trainingInsightFeed"></div>
+        </div>
 
         <!-- Quant-Core observatorio: estado del laboratorio backend (shadow). -->
         <div id="quantCorePanel"></div>
@@ -364,6 +390,9 @@
             </button>
             <button class="training-tab" data-tab="trades">
               <span class="tab-icon">◷</span> OPERACIONES
+            </button>
+            <button class="training-tab" data-tab="bots">
+              <span class="tab-icon">BOT</span> BOTS
             </button>
           </div>
 
@@ -422,6 +451,13 @@
             <div class="panel">
               <div class="panel-head"><h2>ÚLTIMAS OPERACIONES (DEMO)</h2></div>
               <div class="training-table" id="trainingTradesTable"></div>
+            </div>
+          </div>
+          <div class="training-tab-content" id="tab-bots">
+            <div class="panel">
+              <div class="panel-head"><h2>BOTS QUANT - TRAINING / REAL</h2><span>plantilla XAUUSD importada</span></div>
+              <div class="training-disclaimer">Bots de training y bots reales viven separados. Ningun bot real se despliega sin validacion.</div>
+              <div class="training-bots-table" id="trainingBotsTable"></div>
             </div>
           </div>
         </div>

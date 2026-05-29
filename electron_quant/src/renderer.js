@@ -20,6 +20,7 @@ if (!window.quant) {
     trainingStateWrite:    (payload)                   => apiPost('training-state-write', payload),
     trainingLoopStatus:    ()                          => apiGet('training/demo/loop/status'),
     trainingLoopStart:     ()                          => apiPost('training/demo/loop/start', {}),
+    trainingBotsStatus:    ()                          => apiGet('training/bots/status'),
     finnhub:               ()                          => apiGet('news-finnhub'),
     finnhubEconomic:       ()                          => apiGet('calendar-finnhub-economic'),
     alpha:                 ()                          => apiGet('news-alpha'),
@@ -104,6 +105,9 @@ const state = {
     closedTrades: [],
     lessons: [],
     advice: [],
+    insights: [],
+    botsStatus: null,
+    liveSnapshotLoading: false,
     strategyStats: {},
     systemSkills: ['market_feed', 'ohlcv_history', 'multi_timeframe', 'ssl_hybrid', 'rsi', 'macd', 'atr', 'news_context', 'memory_lessons', 'risk_gate', 'ict_liquidity', 'crt_weekly_bias', 'fvg_order_block', 'session_timing'],
     pairCooldowns: {},
@@ -306,6 +310,7 @@ async function boot() {
   await Promise.allSettled([refreshMarket(true), refreshWallet(), refreshMacroContext(false)]);
   await loadTrainingState();
   await initTrainingMode(false);
+  await loadTrainingLiveSnapshot(true);
   await runSelfAudit();
 
   // ── Al arrancar: si training local está vacío, intenta traer datos del cloud ──
@@ -327,6 +332,7 @@ async function boot() {
   setInterval(() => refreshMacroContext(true), 60000);
   setInterval(() => refreshWallet(), 120000);
   setInterval(() => refreshTrainingMode(), 15000);
+  setInterval(() => loadTrainingLiveSnapshot(false), 5000);
   setInterval(() => refreshTrainingRuntimeStatus(), 15000);
   setInterval(() => renderChatContextPanel(), 5000);
   setInterval(() => runSelfAudit(), 300000);
@@ -1537,14 +1543,51 @@ async function acceptBackendAtomicTrainingClose(openPosition, pair, backendResul
 
 function applyBackendTrainingStateRefresh(refreshedState) {
   if (!refreshedState || typeof refreshedState !== 'object') return false;
+  state.training.balanceStart = Number(refreshedState.balanceStart || state.training.balanceStart || 100000);
   state.training.balance = Number(refreshedState.balance || state.training.balance);
+  state.training.activePairs = Array.isArray(refreshedState.activePairs) ? refreshedState.activePairs : state.training.activePairs;
   state.training.positions = Array.isArray(refreshedState.positions) ? refreshedState.positions : state.training.positions;
+  if (!state.training.activePairs.length && state.training.positions.length) {
+    const seen = new Set();
+    state.training.activePairs = state.training.positions
+      .filter((position) => position && position.venue && position.symbol && !position.exit_price)
+      .filter((position) => {
+        const key = `${position.venue}:${position.symbol}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map((position) => ({
+        venue: position.venue,
+        symbol: position.symbol,
+        price: Number(position.entry_price || position.mark_price || 0),
+        score: Number(position.strategy_score || position.confidence || 0),
+        indicators: {
+          bias: position.bias || position.direction || 'NEUTRAL',
+          confidence: Number(position.confidence || 0),
+          horizon: position.horizon || 'intraday',
+          primaryStrategy: position.strategy_id ? {
+            id: position.strategy_id,
+            name: position.strategy_name || position.strategy_id,
+            score: Number(position.strategy_score || 0)
+          } : null
+        }
+      }))
+      .slice(0, state.training.maxPairs || 40);
+  }
   state.training.closedTrades = Array.isArray(refreshedState.closedTrades) ? refreshedState.closedTrades : state.training.closedTrades;
   state.training.lessons = Array.isArray(refreshedState.lessons) ? refreshedState.lessons : state.training.lessons;
   state.training.strategyStats = refreshedState.strategyStats || state.training.strategyStats;
   state.training.pairCooldowns = refreshedState.pairCooldowns || state.training.pairCooldowns;
   state.training.xp = Number(refreshedState.xp || state.training.xp || 0);
+  if (refreshedState.targets && typeof refreshedState.targets === 'object') {
+    state.training.targetOpenPositions = Number(refreshedState.targets.total || state.training.targetOpenPositions || 40);
+    state.training.targetIntradayPositions = Number(refreshedState.targets.intraday || state.training.targetIntradayPositions || 20);
+    state.training.targetSwingPositions = Number(refreshedState.targets.swing || state.training.targetSwingPositions || 20);
+    state.training.maxPairs = Math.max(state.training.targetOpenPositions, Number(state.training.maxPairs || 40));
+  }
   state.training.lastPersistedAt = refreshedState.persistedAt || state.training.lastPersistedAt;
+  state.training.initialized = state.training.initialized || state.training.activePairs.length > 0;
   computeWfCalibration();
   if (refreshedState.persistedAt) {
     setText('trainPersistence', `Persistencia backend refrescada - ${new Date(refreshedState.persistedAt).toLocaleTimeString('es-CO')}`);
@@ -1570,16 +1613,8 @@ async function loadTrainingState() {
   try {
     const saved = await window.quant.trainingStateRead();
     if (!saved) return;
-    state.training.balance = Number(saved.balance || state.training.balanceStart);
-    state.training.positions = Array.isArray(saved.positions) ? saved.positions : [];
-    state.training.closedTrades = Array.isArray(saved.closedTrades) ? saved.closedTrades : [];
-    state.training.lessons = Array.isArray(saved.lessons) ? saved.lessons : [];
-    state.training.strategyStats = saved.strategyStats || state.training.strategyStats || {};
-    state.training.pairCooldowns = saved.pairCooldowns || {};
-    state.training.xp = Number(saved.xp || 0);
-    state.training.lastPersistedAt = saved.persistedAt || null;
+    applyBackendTrainingStateRefresh(saved);
     setText('trainPersistence', `Persistencia local activa${saved.persistedAt ? ` - restaurado ${new Date(saved.persistedAt).toLocaleString('es-CO')}` : ''}`);
-    computeWfCalibration();  // recompute OOS walk-forward after loading trades
     logEvent('OK', 'Training: estado persistente restaurado');
   } catch (err) {
     logEvent('WARN', `Training persistencia: ${err.message}`);
@@ -2487,6 +2522,133 @@ function buildTrainingAdvice() {
       horizon: signal.horizon || 'observacion'
     };
   });
+  updateTrainingInsightsFromAdvice(state.training.advice);
+}
+
+function trainingEvolutionScore(totalPnl = 0) {
+  const level = trainingLevel();
+  const xpPct = Math.min(72, level.xp / 5200 * 72);
+  const roiPct = Math.max(0, Math.min(100, totalPnl / Math.max(1, state.training.balanceStart) * 100));
+  const disciplineBonus = Math.min(18, state.training.lessons.length * 0.8 + state.training.closedTrades.length * 0.35);
+  const pct = Math.max(0, Math.min(100, Math.round(xpPct + roiPct * 0.1 + disciplineBonus)));
+  return { pct, label: pct >= 100 ? 'Elite' : level.name };
+}
+
+function renderTrainingLiveOverview({ equity = state.training.balance, totalPnl = 0 } = {}) {
+  const open = state.training.positions.filter((p) => !p.exit_price);
+  const intraday = open.filter((p) => p.horizon !== 'swing').length;
+  const swing = open.filter((p) => p.horizon === 'swing').length;
+  const target = state.training.targetOpenPositions || 40;
+  const minTarget = Math.min(20, target);
+  const status = open.length < minTarget
+    ? `faltan ${minTarget - open.length} para minimo operativo`
+    : open.length > target
+      ? `sobre maximo por ${open.length - target}`
+      : 'rango de aprendizaje activo';
+  const evolution = trainingEvolutionScore(totalPnl);
+  setText('trainingOpenGauge', `${open.length} / ${target}`);
+  setText('trainingOpenGaugeSub', status);
+  setText('trainingHorizonSplit', `${intraday} intradia / ${swing} swing`);
+  setText('trainingEvolutionLabel', `${evolution.pct}% ${evolution.label}`);
+  setText('trainingRealtimeStamp', nowTime());
+  const bar = $('trainingEvolutionBar');
+  if (bar) bar.style.width = `${evolution.pct}%`;
+}
+
+function updateTrainingInsightsFromAdvice(advice = []) {
+  const ttlMs = 10 * 60 * 1000;
+  const now = Date.now();
+  const active = new Map(
+    state.training.insights
+      .filter((item) => item?.createdAt && Date.now() - Date.parse(item.createdAt) < ttlMs)
+      .map((item) => [item.key, item])
+  );
+  for (const row of advice) {
+    const confidence = Number(row.confidence || 0);
+    const action = row.bias === 'LONG' ? 'BUY' : row.bias === 'SHORT' ? 'SELL' : null;
+    if (!action || confidence < 60) continue;
+    if (String(row.recommendation || '').includes('evitar')) continue;
+    const key = `${row.venue}:${row.symbol}:${action}:${row.horizon}`;
+    const existing = active.get(key);
+    active.set(key, {
+      key,
+      venue: row.venue,
+      symbol: row.symbol,
+      action,
+      horizon: row.horizon || 'observacion',
+      confidence,
+      reason: row.reason || row.recommendation || 'setup detectado',
+      recommendation: row.recommendation || '',
+      createdAt: existing?.createdAt || new Date(now).toISOString(),
+      expiresAt: new Date((existing?.createdAt ? Date.parse(existing.createdAt) : now) + ttlMs).toISOString()
+    });
+  }
+  state.training.insights = [...active.values()]
+    .filter((item) => Date.now() - Date.parse(item.createdAt) < ttlMs)
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 12);
+}
+
+function renderTrainingInsights() {
+  const box = $('trainingInsightFeed');
+  if (!box) return;
+  const ttlMs = 10 * 60 * 1000;
+  const live = state.training.insights
+    .filter((item) => item?.createdAt && Date.now() - Date.parse(item.createdAt) < ttlMs)
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  state.training.insights = live;
+  if (!live.length) {
+    box.innerHTML = '<div class="empty-state">Quant mostrara insights BUY/SELL cuando detecte setups con confianza real. Cada insight expira en 10 minutos.</div>';
+    return;
+  }
+  box.innerHTML = live.map((item) => {
+    const remaining = Math.max(0, Math.ceil((ttlMs - (Date.now() - Date.parse(item.createdAt))) / 60000));
+    const cls = item.action === 'BUY' ? 'train-status' : 'train-bad';
+    return `<div class="training-insight-card ${item.action.toLowerCase()}"><b>${item.symbol}<small>${item.venue} - ${item.horizon}</small></b><span class="${cls}">${item.action}</span><span>${item.confidence}% confianza</span><p>${escapeHtml(item.reason)}<small>${escapeHtml(item.recommendation)} - expira en ${remaining}m</small></p></div>`;
+  }).join('');
+}
+
+function renderTrainingBots() {
+  const box = $('trainingBotsTable');
+  if (!box) return;
+  const status = state.training.botsStatus;
+  if (!status?.ok) {
+    box.innerHTML = '<div class="empty-state">Cargando bots de training y real...</div>';
+    return;
+  }
+  const renderGroup = (label, bots = []) => {
+    const rows = bots.map((bot) => {
+      const pnl = Number(bot.realizedPnl || 0);
+      const pnlClass = pnl >= 0 ? 'train-status' : 'train-bad';
+      return `<div class="training-bot-row"><b>${escapeHtml(bot.name || bot.id)}<small>${bot.venue}:${bot.symbol}</small></b><span>${escapeHtml(bot.mode || '')}</span><span>${escapeHtml(bot.status || '')}</span><span>${bot.openPositions || 0} open</span><span>${bot.closedTrades || 0} trades</span><span class="${pnlClass}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</span></div>`;
+    }).join('');
+    return `<h3>${label}</h3><div class="training-bot-head"><span>BOT</span><span>MODO</span><span>ESTADO</span><span>OPEN</span><span>OPS</span><span>P&L</span></div>${rows || '<div class="empty-state">Sin bots en esta categoria.</div>'}`;
+  };
+  box.innerHTML = [
+    `<div class="training-bot-summary">Plantillas: ${status.templatesCount || 0} - training: ${status.totals?.training || 0} - real: ${status.totals?.real || 0}</div>`,
+    renderGroup('Training / Demo', status.trainingBots || []),
+    renderGroup('Real separado', status.realBots || [])
+  ].join('');
+}
+
+async function loadTrainingLiveSnapshot(manual = false) {
+  if (state.training.liveSnapshotLoading) return;
+  state.training.liveSnapshotLoading = true;
+  try {
+    const saved = await window.quant.trainingStateRead();
+    if (saved) applyBackendTrainingStateRefresh(saved);
+    if (window.quant.trainingBotsStatus) {
+      const bots = await window.quant.trainingBotsStatus().catch((err) => ({ ok: false, error: err.message }));
+      state.training.botsStatus = bots;
+    }
+    buildTrainingAdvice();
+    renderTraining();
+    if (manual) logEvent('OK', 'Training live snapshot refrescado');
+  } catch (err) {
+    if (manual) logEvent('WARN', `Training live snapshot: ${err.message}`);
+  } finally {
+    state.training.liveSnapshotLoading = false;
+  }
 }
 
 function updateTrainingStrategyStats() {
@@ -2554,12 +2716,15 @@ function renderTraining() {
   setText('trainPairCount', `${tr.activePairs.length} / ${tr.maxPairs}`);
   setText('trainLessons', String(tr.lessons.length));
   setText('trainLastLesson', tr.lessons[0]?.lesson || 'Aun no hay trades cerrados.');
+  renderTrainingLiveOverview({ equity, totalPnl });
   renderTrainingStrategyLab();
   const level = trainingLevel();
   setText('trainLevel', level.name);
   setText('trainXp', `${tr.xp} XP - ${level.progress}%`);
   renderTrainingPairs();
   renderTrainingPositions();
+  renderTrainingInsights();
+  renderTrainingBots();
   renderTrainingAdvice();
   renderTrainingTrades();
   renderTrainingLevelTable();

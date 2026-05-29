@@ -23,6 +23,7 @@ const { buildTrainingPositionContexts } = require('../training/training-position
 const { resolveTrainingMarketContext } = require('../training/training-market-context-service');
 const { resolveTrainingSignalContext } = require('../training/training-signal-context-service');
 const { generateTrainingSignalCandidates } = require('../training/training-signal-candidate-engine');
+const { buildTrainingBotsStatus } = require('../training/bot-registry-service');
 const {
   startTrainingDemoLoopScheduler,
   stopTrainingDemoLoopScheduler,
@@ -343,6 +344,16 @@ function createApiRouter(context) {
             realTradingTouched: false
           }
         });
+      }
+
+      if (method === 'GET' && pathname === '/api/training/bots/status') {
+        const snapshot = typeof deps.readTrainingStateSnapshot === 'function'
+          ? deps.readTrainingStateSnapshot()
+          : null;
+        return response(200, buildTrainingBotsStatus({
+          templatesRoot: deps.botTemplatesRoot,
+          state: snapshot?.state || snapshot?.raw || {}
+        }));
       }
 
       if (method === 'GET' && pathname === '/api/training/demo/loop/status') {

@@ -434,11 +434,80 @@ function readTrainingStateSnapshot() {
   return trainingStateReader.readSnapshot();
 }
 
+function trainingTradeMergeKey(trade = {}) {
+  return [
+    trade.id,
+    trade.signal_id || trade.signalId,
+    trade.venue,
+    trade.symbol,
+    trade.direction,
+    trade.timestamp,
+    trade.closed_timestamp || trade.closed_at,
+    trade.entry_price,
+    trade.exit_price,
+    trade.pnl_demo
+  ].map((value) => String(value ?? '')).join('|');
+}
+
+function trainingLessonMergeKey(lesson = {}) {
+  if (typeof lesson === 'string') return lesson;
+  return [
+    lesson.id,
+    lesson.venue,
+    lesson.symbol,
+    lesson.timestamp,
+    lesson.lesson,
+    lesson.future_rule
+  ].map((value) => String(value ?? '')).join('|');
+}
+
+function mergeTrainingArray(existing = [], incoming = [], keyFn, limit = 400) {
+  const out = [];
+  const seen = new Set();
+  for (const item of [...incoming, ...existing]) {
+    const key = keyFn(item || {});
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out.slice(0, limit);
+}
+
+function mergeTrainingStateForWrite(incomingState) {
+  const existingState = readTrainingState();
+  if (!existingState) return incomingState;
+  const incomingClosed = Array.isArray(incomingState.closedTrades) ? incomingState.closedTrades : [];
+  const existingClosed = Array.isArray(existingState.closedTrades) ? existingState.closedTrades : [];
+  const incomingLessons = Array.isArray(incomingState.lessons) ? incomingState.lessons : [];
+  const existingLessons = Array.isArray(existingState.lessons) ? existingState.lessons : [];
+  const incomingPositions = Array.isArray(incomingState.positions) ? incomingState.positions : [];
+  const existingPositions = Array.isArray(existingState.positions) ? existingState.positions : [];
+  const incomingPairs = Array.isArray(incomingState.activePairs) ? incomingState.activePairs : [];
+  const existingPairs = Array.isArray(existingState.activePairs) ? existingState.activePairs : [];
+  const staleHistoryWrite = existingClosed.length > incomingClosed.length || existingLessons.length > incomingLessons.length;
+
+  return {
+    ...existingState,
+    ...incomingState,
+    positions: incomingPositions.length ? incomingPositions : existingPositions,
+    activePairs: incomingPairs.length ? incomingPairs : existingPairs,
+    closedTrades: mergeTrainingArray(existingClosed, incomingClosed, trainingTradeMergeKey, 400),
+    lessons: mergeTrainingArray(existingLessons, incomingLessons, trainingLessonMergeKey, 500),
+    strategyStats: {
+      ...(existingState.strategyStats || {}),
+      ...(incomingState.strategyStats || {})
+    },
+    xp: Math.max(Number(existingState.xp || 0), Number(incomingState.xp || 0)),
+    balance: staleHistoryWrite ? existingState.balance : incomingState.balance
+  };
+}
+
 function writeTrainingState(payload) {
   ensureMemoryDir();
   const normalized = normalizeTrainingState(normalizeTrainingStateTraceability(payload));
+  const merged = mergeTrainingStateForWrite(normalized);
   const state = {
-    ...normalized,
+    ...merged,
     persistedAt: new Date().toISOString(),
     file: trainingStateFile
   };

@@ -1351,18 +1351,41 @@ function walletContext() {
   ].join('\n');
 }
 
+function trainingMt5DemoExecutionStatus() {
+  const mt5Health = state.connectorHealth?.mt5 || {};
+  if (state.executionAdapters.mt5 && mt5Health.ok) {
+    return {
+      state: 'Paper interno',
+      detail: 'MT5 aporta velas/snapshot; training no envia order_send a la cuenta demo todavia.'
+    };
+  }
+  if (state.executionAdapters.mt5) {
+    return {
+      state: 'MT5 sin ejecucion',
+      detail: `Conector MT5 ${mt5Health.checked ? 'sin runtime valido' : 'validando'}; training sigue en paper interno.`
+    };
+  }
+  return {
+    state: 'Paper interno',
+    detail: 'MT5 demo no esta conectado a order_send; training usa feeds disponibles y contabilidad interna.'
+  };
+}
+
 function trainingContext() {
   const tr = state.training;
   const open = tr.positions.filter((p) => !p.exit_price);
   const mt5Open = open.filter((p) => p.venue === 'MT5').length;
   const realized = tr.balance - tr.balanceStart;
+  const mt5DemoExecution = trainingMt5DemoExecutionStatus();
   updateTrainingStrategyStats();
   const strategyLines = Object.values(tr.strategyStats || {})
     .sort((a, b) => (b.open + b.liveCandidates) - (a.open + a.liveCandidates))
     .map((s) => `${s.name}: live=${s.liveCandidates}, open=${s.open}, closed=${s.closed}, WR=${s.closed ? Math.round(s.winrate * 100) + '%' : 'n/a'}, PnL=${s.pnl.toFixed(2)}, score=${s.avgScore ? s.avgScore.toFixed(0) : 'n/a'}`)
     .join(' | ');
   return [
-    'Training Mode: ACTIVO. Mercado real observado + operaciones demo internas. Nunca ejecuta BUY/SELL reales.',
+    'Training Mode: ACTIVO. Mercado real observado + operaciones demo internas. Nunca ejecuta BUY/SELL reales ni mt5.order_send desde el training.',
+    `Ejecucion demo MT5: ${mt5DemoExecution.state}. ${mt5DemoExecution.detail}`,
+    'Ejecucion por orden del usuario: Binance real solo desde el panel manual con REAL_TRADING=true, confirmacion exacta y gates; MT5 demo/real desde chat o training aun no tiene puente de ejecucion.',
     `Guard: mode=training, simulated=true, blockRealExecution=${tr.blockRealExecution}, targetOpenPositions=${tr.targetOpenPositions} (${tr.targetIntradayPositions} intradia + ${tr.targetSwingPositions} swing), maxPairs=${tr.maxPairs}.`,
     `Execution adapters: Core=${state.executionAdapters.core}, Paper=${state.executionAdapters.paper}, Binance=${state.executionAdapters.binance}, MT5=${state.executionAdapters.mt5}, TradingViewWebhook=${state.executionAdapters.tradingViewWebhook}, BrokerAPI=${state.executionAdapters.brokerApi}.`,
     `Self-audit: lastRun=${state.selfAudit.lastRun || 'pendiente'}, findings=${state.selfAudit.findings.length}.`,
@@ -2796,6 +2819,7 @@ function renderTraining() {
     .reduce((s, t) => s + Number(t.pnl_demo || 0), 0);
   const today = todayClosed + unrealized;
   const wins = tr.closedTrades.filter((t) => Number(t.pnl_demo || 0) >= 0).length;
+  const mt5DemoExecution = trainingMt5DemoExecutionStatus();
   setText('trainBalance', `$${equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   setText('trainTotalPnl', `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}`);
   setText('trainTotalPct', `${(totalPnl / tr.balanceStart * 100).toFixed(2)}% · realizado ${realized >= 0 ? '+' : ''}$${realized.toFixed(2)}`);
@@ -2805,6 +2829,8 @@ function renderTraining() {
   setText('trainPairCount', `${tr.activePairs.length} / ${tr.maxPairs}`);
   setText('trainLessons', String(tr.lessons.length));
   setText('trainLastLesson', tr.lessons[0]?.lesson || 'Aun no hay trades cerrados.');
+  setText('trainDemoExecutionState', mt5DemoExecution.state);
+  setText('trainDemoExecutionDetail', mt5DemoExecution.detail);
   renderTrainingLiveOverview({ equity, totalPnl });
   renderTrainingStrategyLab();
   const level = trainingLevel();
@@ -3031,6 +3057,7 @@ function renderChatContextPanel() {
   const el = $('chatContextPanel');
   if (!el) return;
   updateTrainingStrategyStats();
+  const mt5DemoExecution = trainingMt5DemoExecutionStatus();
   const topStrategies = Object.values(state.training.strategyStats || {})
     .sort((a, b) => (b.open + b.liveCandidates) - (a.open + a.liveCandidates))
     .slice(0, 4)
@@ -3039,6 +3066,7 @@ function renderChatContextPanel() {
   el.innerHTML =
     `<div class="pipe-item"><span>Modo</span><b class="pipe-ok">${state.training.mode}</b><span>${state.env.realTrading ? 'REAL' : 'SAFE'}</span><small>${state.symbol}</small></div>` +
     `<div class="pipe-item"><span>Train</span><b class="pipe-ok">${state.training.positions.filter((p) => !p.exit_price).length}</b><span>${state.training.closedTrades.length}</span><small>${state.training.lessons.length} lessons</small></div>` +
+    `<div class="pipe-item"><span>MT5 demo</span><b class="pipe-warn">${escapeHtml(mt5DemoExecution.state).slice(0, 12)}</b><span>paper</span><small>sin order_send</small></div>` +
     `<div class="pipe-item"><span>Macro</span><b class="${state.macroNews.risk === 'high' ? 'pipe-error' : state.macroNews.risk === 'medium' ? 'pipe-warn' : 'pipe-ok'}">${state.macroNews.risk}</b><span>${state.macroNews.finnhub.length}</span><small>news</small></div>` +
     topStrategies;
 }

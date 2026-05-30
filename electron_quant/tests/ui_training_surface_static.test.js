@@ -58,6 +58,11 @@ assert.ok(renderer.includes('Training perpetuo: no se puede desactivar desde la 
 assert.ok(renderer.includes("'Sin lectura'"), 'Si env-status falla, el sidebar debe mostrar un estado explicito y no quedarse ambiguo.');
 assert.ok(renderer.includes("const marketSearch = $('marketSearch')"), 'Boot debe tolerar la ausencia de marketSearch para no bloquear env-status.');
 assert.ok(renderer.includes('if (!search || !table) return;'), 'renderMarketTable debe ser defensivo si el dashboard no tiene tabla legacy.');
+assert.ok(html.includes('trainDemoExecutionState') && html.includes('trainDemoExecutionDetail'), 'Lecciones debe mostrar si MT5 demo es paper interno o ejecucion real.');
+assert.ok(renderer.includes("setText('trainDemoExecutionState'") && renderer.includes("setText('trainDemoExecutionDetail'"), 'Training debe refrescar el estado de ejecucion demo MT5 en vivo.');
+assert.ok(renderer.includes('sin order_send'), 'El panel de contexto del chat debe recordar que MT5 demo aun no envia ordenes.');
+assert.ok(css.includes('#trainDemoExecutionDetail'), 'CSS debe proteger el texto largo de ejecucion demo MT5.');
+assert.ok(/\.training-memory-grid\s*\{[\s\S]*grid-template-columns:[\s\S]*minmax\(118px/.test(css), 'La memoria de aprendizaje debe tener una grilla legible de cinco paneles.');
 const binanceFallback = main.match(/const fallback = \[([\s\S]*?)\];\s*const info = await withMarketFallback/);
 assert.ok(binanceFallback, 'binanceSymbols debe tener fallback local cuando exchangeInfo no responde.');
 assert.ok((binanceFallback[1].match(/USDT/g) || []).length >= 40, 'Fallback Binance debe tener al menos 40 pares USDT para training perpetuo en Cloud/VPS.');

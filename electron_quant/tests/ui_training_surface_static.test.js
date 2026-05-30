@@ -42,6 +42,8 @@ for (const id of ['platformSelect', 'assetSearch', 'assetDropBtn', 'assetMenu', 
 assert.ok(css.includes('#view-lab') && css.includes('.nav-item[data-view="lab"]'), 'CSS debe bloquear cualquier resto accidental de Lab.');
 assert.ok(css.includes('status-missing'), 'CSS debe diferenciar conectores sin clave.');
 assert.ok(css.includes('overflow-x: hidden'), 'La vista activa debe cortar overflow horizontal.');
+assert.ok(/#view-training\s*\{[\s\S]*overflow-y:\s*auto/.test(css), 'Training debe permitir scroll vertical dentro de la vista activa.');
+assert.ok(/#view-training\s*\{[\s\S]*padding-bottom:\s*28px/.test(css), 'Training debe dejar margen inferior para ver el final del panel.');
 assert.ok(main.includes("'TRAINING_BACKEND_LOOP_ENABLED'"), 'Cloud/VPS deben leer flags de loop desde process.env.');
 assert.ok(main.includes('trainingStateReader.readSnapshot()'), 'Autostart debe usar el lector correcto del training state.');
 assert.ok(main.includes('getBinanceSymbols: () => binanceSymbols()'), 'Loop backend debe poder sembrar universo Binance persistente.');

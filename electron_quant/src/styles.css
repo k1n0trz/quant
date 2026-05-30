@@ -1914,8 +1914,12 @@ html, body,
 }
 
 #view-training {
-  height: calc(100vh - 82px);
-  overflow: hidden;
+  height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-bottom: 28px;
+  scrollbar-gutter: stable;
 }
 
 #view-training .panel {

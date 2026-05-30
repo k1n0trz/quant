@@ -1480,9 +1480,23 @@ function normalizeEconomicEvents(payload) {
   })).filter((e) => e.event);
 }
 
+function formatAlphaNewsTime(value) {
+  const text = String(value || '');
+  const match = text.match(/^\d{8}T(\d{2})(\d{2})/);
+  if (match) return `${match[1]}:${match[2]}`;
+  return '--:--';
+}
+
 function renderNewsFromState(source) {
   const buttons = { finnhub: $('finnhubBtn'), alpha: $('alphaBtn'), crypto: $('cryptoNewsBtn') };
   Object.entries(buttons).forEach(([key, btn]) => { if (btn) btn.classList.toggle('active', source === key); });
+  const alphaHtml = state.macroNews.alphaFeed.slice(0, 12).map((n) => `<div class="news-item"><span class="news-time">${formatAlphaNewsTime(n.time_published)}</span><span>${escapeHtml(n.title || '')}</span><span class="impact">${escapeHtml(n.overall_sentiment_label || 'Info')}</span></div>`).join('');
+  const alphaReason = state.macroNews.alphaSentiment?.Note || state.macroNews.alphaSentiment?.Information || state.macroNews.alphaSentiment?.['Error Message'] || '';
+  const alphaEmpty = alphaReason
+    ? `<div class="empty-state">Alpha Vantage no entrego feed ahora: ${escapeHtml(alphaReason).slice(0, 180)}</div>`
+    : '<div class="empty-state">Sin noticias Alpha.</div>';
+  if ($('newsAlphaPage')) $('newsAlphaPage').innerHTML = alphaHtml || alphaEmpty;
+
   const cryptoItems = [
     ...state.macroNews.finnhubCrypto.map((n) => ({
       time: n.datetime ? new Date(n.datetime * 1000).toTimeString().slice(0, 5) : '--:--',
@@ -1499,13 +1513,7 @@ function renderNewsFromState(source) {
   if ($('newsCryptoPage')) $('newsCryptoPage').innerHTML = cryptoHtml || '<div class="empty-state">Sin noticias crypto.</div>';
 
   if (source === 'alpha') {
-    const html = state.macroNews.alphaFeed.slice(0, 10).map((n) => `<div class="news-item"><span class="news-time">${(n.time_published || '').slice(9, 13) || '--:--'}</span><span>${escapeHtml(n.title || '')}</span><span class="impact">${n.overall_sentiment_label || 'Info'}</span></div>`).join('');
-    const alphaReason = state.macroNews.alphaSentiment?.Note || state.macroNews.alphaSentiment?.Information || state.macroNews.alphaSentiment?.['Error Message'] || '';
-    const empty = alphaReason
-      ? `<div class="empty-state">Alpha Vantage no entrego feed ahora: ${escapeHtml(alphaReason).slice(0, 180)}</div>`
-      : '<div class="empty-state">Sin noticias Alpha.</div>';
-    $('newsList').innerHTML = html || empty;
-    $('newsAlphaPage').innerHTML = html || empty;
+    $('newsList').innerHTML = alphaHtml || alphaEmpty;
   } else if (source === 'crypto') {
     $('newsList').innerHTML = cryptoHtml || '<div class="empty-state">Sin noticias crypto.</div>';
   } else {

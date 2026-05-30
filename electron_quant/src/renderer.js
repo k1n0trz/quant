@@ -1341,15 +1341,55 @@ function walletContext() {
     const rewards = b.cumulativeTotalRewards || b.cumulativeRealTimeRewards || 0;
     return `${b.asset}: total ${total}, APR ${apr.toFixed(4)}%, rewards ${rewards}, product ${b.productId || ''}`;
   }).join('; ');
+  const margin = (bw.margin?.userAssets || [])
+    .filter((b) => Number(b.free || 0) || Number(b.locked || 0) || Number(b.borrowed || 0) || Number(b.netAsset || 0))
+    .map((b) => `${b.asset}: free ${b.free || 0}, locked ${b.locked || 0}, borrowed ${b.borrowed || 0}, net ${b.netAsset || 0}`)
+    .join('; ');
+  const usdFutures = bw.usdFutures ? `wallet ${bw.usdFutures.totalWalletBalance || 0} USDT, unrealized ${bw.usdFutures.totalUnrealizedProfit || 0}, margin ${bw.usdFutures.totalMarginBalance || 0}` : '';
+  const coinFutures = bw.coinFutures ? `wallet ${bw.coinFutures.totalWalletBalance || 0} USD, unrealized ${bw.coinFutures.totalUnrealizedProfit || 0}, margin ${bw.coinFutures.totalMarginBalance || 0}` : '';
   return [
+    'Autonomia Binance: Quant puede leer y razonar sobre Spot, Funding, Earn, Margin, USD-M Futures y COIN-M Futures cuando la API tenga permisos; no debe asumir saldo cero si un sub-wallet devuelve error.',
     `Valoración Binance total aproximada: ${bw.totalUsd || 0} USD; ${bw.totalCop || 0} COP; USD/COP ${bw.usdCop || 'n/a'}`,
     `Valoración por activo: ${(bw.valuation || []).map((v) => `${v.source} ${v.asset}: ${v.amount} ≈ ${v.valueUsd} USD / ${v.valueCop} COP${v.apr ? ` APR ${v.apr * 100}%` : ''}`).join('; ')}`,
     `Binance accountType: ${bw.accountType || 'SPOT'}, canTrade: ${bw.canTrade}, canDeposit: ${bw.canDeposit}, canWithdraw: ${bw.canWithdraw}`,
     `Binance Spot: ${spot || 'sin saldos Spot visibles'}`,
     `Binance Funding: ${funding || 'sin saldos Funding visibles'}`,
     `Binance Earn: ${earn || 'sin posiciones Earn visibles'}`,
+    `Binance Margin: ${margin || (bw.marginError ? `error ${bw.marginError}` : 'sin saldos Margin visibles')}`,
+    `Binance USD-M Futures: ${usdFutures || (bw.usdFuturesError ? `error ${bw.usdFuturesError}` : 'sin saldos USD-M visibles')}`,
+    `Binance COIN-M Futures: ${coinFutures || (bw.coinFuturesError ? `error ${bw.coinFuturesError}` : 'sin saldos COIN-M visibles')}`,
     `MT5 cuentas: ${(state.wallet?.mt5Accounts || []).map((a) => a.available ? `[${a.is_demo ? 'DEMO' : 'REAL'} ${a.login} ${a.server}: balance ${a.balance} ${a.currency}, equity ${a.equity}, P&L ${a.profit}, posiciones ${(a.positions || []).length}]` : `[${a.login} ERROR: ${a.error}]`).join(' | ') || (state.wallet?.mt5?.available ? `login ${state.wallet.mt5.login}, balance ${state.wallet.mt5.balance} ${state.wallet.mt5.currency}` : 'no disponible')}`
   ].join('\n');
+}
+
+function bogotaClockNow(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Bogota',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).formatToParts(date).reduce((acc, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+  const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return {
+    day: dayMap[parts.weekday] ?? 0,
+    hour: Number(parts.hour || 0),
+    minute: Number(parts.minute || 0),
+    label: `${parts.weekday || '---'} ${parts.hour || '--'}:${parts.minute || '--'}:${parts.second || '--'} America/Bogota`
+  };
+}
+
+function mt5MarketScheduleContext(date = new Date()) {
+  const clock = bogotaClockNow(date);
+  const minutes = clock.hour * 60 + clock.minute;
+  const weekendCut = (clock.day === 5 && minutes >= 900) || clock.day === 6 || (clock.day === 0 && minutes < 960);
+  const dailyCut = !weekendCut && minutes >= 960 && minutes < 1020;
+  const stateText = weekendCut ? 'cerrado por fin de semana' : dailyCut ? 'cerrado por mantenimiento diario' : 'operativo si el adapter responde';
+  return `Horario MT5 Colombia: ${clock.label}; estado esperado=${stateText}. Regla: viernes 15:00 a domingo 16:00 cerrado; todos los dias 16:00-17:00 mantenimiento.`;
 }
 
 function trainingMt5DemoExecutionStatus() {
@@ -1392,9 +1432,10 @@ function trainingContext() {
     .map((s) => `${s.name}: live=${s.liveCandidates}, open=${s.open}, closed=${s.closed}, WR=${s.closed ? Math.round(s.winrate * 100) + '%' : 'n/a'}, PnL=${s.pnl.toFixed(2)}, score=${s.avgScore ? s.avgScore.toFixed(0) : 'n/a'}`)
     .join(' | ');
   return [
-    'Training Mode: ACTIVO. Mercado real observado + operaciones demo internas. Nunca ejecuta BUY/SELL reales ni mt5.order_send desde el training.',
+    'Training Mode: ACTIVO. Mercado real observado + operaciones demo internas. blockRealExecution solo protege el training: no bloquea ordenes manuales reales cuando los gates de trading real estan activos.',
     `Ejecucion demo MT5: ${mt5DemoExecution.state}. ${mt5DemoExecution.detail}`,
     'Ejecucion por orden del usuario: Binance real solo desde el panel manual con REAL_TRADING=true, confirmacion exacta y gates; MT5 demo usa puente demo-only si ambos flags estan armados; MT5 real sigue sin puente de ejecucion.',
+    'ICT/CRT no es requisito global para operar real; es una estrategia dentro del laboratorio, comparable con Trend Momentum, Breakout Retest, Mean Reversion y Volume Pullback.',
     `Guard: mode=training, simulated=true, blockRealExecution=${tr.blockRealExecution}, targetOpenPositions=${tr.targetOpenPositions} (${tr.targetIntradayPositions} intradia + ${tr.targetSwingPositions} swing), maxPairs=${tr.maxPairs}.`,
     `Execution adapters: Core=${state.executionAdapters.core}, Paper=${state.executionAdapters.paper}, Binance=${state.executionAdapters.binance}, MT5=${state.executionAdapters.mt5}, TradingViewWebhook=${state.executionAdapters.tradingViewWebhook}, BrokerAPI=${state.executionAdapters.brokerApi}.`,
     `Self-audit: lastRun=${state.selfAudit.lastRun || 'pendiente'}, findings=${state.selfAudit.findings.length}.`,
@@ -3058,7 +3099,14 @@ async function askQuant(text, writeToAi) {
     logEvent('OK', 'PRIMARY_REASONING · consultando DeepSeek');
     const context = `Símbolo: ${state.symbol}\nTicker: ${JSON.stringify(state.ticker)}\nVelas: ${state.candles.length}\nSeñal: ${$('signalMessage').textContent}\nTrading real: ${state.env.realTrading ? 'activo' : 'bloqueado'}`;
     const fullContext = context + '\n\nWallet actual:\n' + walletContext() + '\n\nMacro/news actual:\n' + macroContext() + '\n\nTraining actual:\n' + trainingContext();
-    const answer = await window.quant.chat(state.messages.slice(-14), fullContext || text);
+    const recentWarnings = state.pipeline.filter((e) => e.status === 'WARN' || e.status === 'ERR').slice(0, 8).map((e) => `${e.time} ${e.status}: ${e.message}`).join('\n') || 'sin warnings recientes';
+    const operationalContext = [
+      fullContext,
+      'Trading real runtime: usar estado real actual; blockRealExecution solo protege el training paper.',
+      mt5MarketScheduleContext(),
+      `Rendimiento/warnings recientes:\n${recentWarnings}`
+    ].join('\n\n');
+    const answer = await window.quant.chat(state.messages.slice(-14), operationalContext || text);
     state.messages.push({ role: 'assistant', content: answer });
     addChat('Quant', answer);
     if (writeToAi) $('aiOutput').textContent = answer;

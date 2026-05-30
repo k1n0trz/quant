@@ -36,6 +36,8 @@ const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/train
 const { placeMt5DemoOrder } = require('./backend/adapters/mt5/mt5-demo-order-service');
 
 const BINANCE_BASE = 'https://api.binance.com';
+const BINANCE_FAPI_BASE = 'https://fapi.binance.com';
+const BINANCE_DAPI_BASE = 'https://dapi.binance.com';
 let timeOffsetMs = 0;
 let trainingLoopAutoStartAttempted = false;
 const logger = createLogger(IS_ELECTRON ? 'quant-desktop' : 'quant-backend');
@@ -939,7 +941,7 @@ async function syncBinanceTime() {
   timeOffsetMs = Number(data.serverTime) - Date.now();
 }
 
-async function signedBinance(pathname, params = {}, method = 'GET', env = ENV) {
+async function signedBinance(pathname, params = {}, method = 'GET', env = ENV, baseUrl = BINANCE_BASE) {
   if (!env.BINANCE_API_KEY || !env.BINANCE_SECRET) throw new Error('Binance API keys no configuradas');
   if (!timeOffsetMs) await syncBinanceTime();
   const signed = {
@@ -949,7 +951,7 @@ async function signedBinance(pathname, params = {}, method = 'GET', env = ENV) {
   };
   const qs = query(signed);
   const signature = crypto.createHmac('sha256', env.BINANCE_SECRET).update(qs).digest('hex');
-  return requestJson(method, `${BINANCE_BASE}${pathname}?${qs}&signature=${signature}`, { 'X-MBX-APIKEY': env.BINANCE_API_KEY });
+  return requestJson(method, `${baseUrl}${pathname}?${qs}&signature=${signature}`, { 'X-MBX-APIKEY': env.BINANCE_API_KEY });
 }
 
 async function binanceSymbols() {
@@ -1053,7 +1055,13 @@ async function binanceWallet(env = ENV) {
     funding: [],
     fundingError: '',
     earn: [],
-    earnError: ''
+    earnError: '',
+    margin: null,
+    marginError: '',
+    usdFutures: null,
+    usdFuturesError: '',
+    coinFutures: null,
+    coinFuturesError: ''
   };
   try {
     out.funding = await signedBinance('/sapi/v1/asset/get-funding-asset', {}, 'POST', env);
@@ -1065,6 +1073,21 @@ async function binanceWallet(env = ENV) {
     out.earn = earn.rows || [];
   } catch (err) {
     out.earnError = err.message;
+  }
+  try {
+    out.margin = await signedBinance('/sapi/v1/margin/account', {}, 'GET', env);
+  } catch (err) {
+    out.marginError = err.message;
+  }
+  try {
+    out.usdFutures = await signedBinance('/fapi/v2/account', {}, 'GET', env, BINANCE_FAPI_BASE);
+  } catch (err) {
+    out.usdFuturesError = err.message;
+  }
+  try {
+    out.coinFutures = await signedBinance('/dapi/v1/account', {}, 'GET', env, BINANCE_DAPI_BASE);
+  } catch (err) {
+    out.coinFuturesError = err.message;
   }
   const usdCop = await usdCopRate();
   out.usdCop = usdCop;
@@ -1084,6 +1107,11 @@ async function binanceWallet(env = ENV) {
       productId: b.productId || ''
     });
   }
+  for (const b of out.margin?.userAssets || []) {
+    await addValue('Margin', b.asset, Number(b.free || 0) + Number(b.locked || 0) + Number(b.netAsset || 0), { borrowed: Number(b.borrowed || 0) });
+  }
+  if (out.usdFutures?.totalWalletBalance) await addValue('USD-M Futures', 'USDT', out.usdFutures.totalWalletBalance);
+  if (out.coinFutures?.totalWalletBalance) await addValue('COIN-M Futures', 'USD', out.coinFutures.totalWalletBalance);
   out.totalUsd = out.valuation.reduce((sum, item) => sum + item.valueUsd, 0);
   out.totalCop = out.valuation.reduce((sum, item) => sum + item.valueCop, 0);
   return out;
@@ -1103,6 +1131,12 @@ function binanceWalletUnavailable(error, usdCop = 0) {
     fundingError: '',
     earn: [],
     earnError: '',
+    margin: null,
+    marginError: '',
+    usdFutures: null,
+    usdFuturesError: '',
+    coinFutures: null,
+    coinFuturesError: '',
     valuation: [],
     totalUsd: 0,
     totalCop: 0,
@@ -1606,6 +1640,10 @@ async function chat(messages, context = '', env = ENV) {
 
 Conciencia de sistema obligatoria:
 Tienes contexto de feeds de mercado, wallet, Training Mode, Finnhub, Alpha Vantage, calendario macro si esta disponible, senales, posiciones demo y memoria. Si el contexto incluye Macro/news, nunca digas que no tienes acceso a noticias o macro; explica que datos recibiste y sus limites.
+Tienes autonomia de diagnostico sobre Binance cuando las claves estan configuradas: Spot, Funding, Earn, Margin, USD-M Futures y COIN-M Futures se tratan como wallet observable. No inventes saldos; usa el contexto recibido y si un sub-wallet falla, nombra el sub-wallet y la razon.
+Trading real no depende de que ICT/CRT tenga muestra suficiente. ICT/CRT es una estrategia, no un bloqueo global. Las restricciones suaves para operar real son: estado runtime real activo, kill switch apagado, risk config valida, API Binance con permisos y confirmacion humana/panel cuando aplique. Si esos gates estan activos, no digas que real esta bloqueado por Training o por una estrategia con poca muestra.
+Conoces el horario MT5 Colombia: MT5 suele cortar viernes 15:00 a domingo 16:00 hora Colombia y todos los dias 16:00 a 17:00 por mantenimiento. Fuera de esas ventanas puedes considerar MT5 operativo si el adapter responde; dentro de ellas explica que el mercado/terminal puede no aceptar operaciones.
+puedes proponer correcciones concretas para warnings de Rendimiento y defectos que observes. Si el warning es de sistema o UI, explica la accion tecnica concreta; si puede mitigarse con configuracion o refresh, dilo.
 
 Motor de estrategias activo:
 Training compara varias hipotesis, no una sola. Usa ICT + CRT institucional, Trend Momentum/EMA-MACD, Breakout + Retest, Mean Reversion/RSI-ATR y Volume Pullback Continuation. Debes hablar de estrategia dominante, score, sesgo, razon, riesgo, aprendizaje observado y condiciones invalidantes. ICT/CRT sigue siendo importante, pero no debe bloquear el aprendizaje de otros modelos. Si una estrategia tiene poco historial, dilo como muestra insuficiente.

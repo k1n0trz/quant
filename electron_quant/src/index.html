@@ -641,6 +641,9 @@
             <label>MT5 Demo Password<input id="apiMt5DemoPassword" type="password" autocomplete="off" placeholder="Password demo MT5" /></label>
             <label>MT5 Demo Server<input id="apiMt5DemoServer" type="text" placeholder="FBS-Demo" /></label>
             <label>MT5 Adapter<select id="apiMt5Enabled"><option value="false">Bloqueado</option><option value="true">Habilitado</option></select></label>
+            <label>MT5 Demo Trading<select id="apiMt5DemoTradingEnabled"><option value="false">Solo lectura</option><option value="true">Demo order_send</option></select></label>
+            <label>Training envia MT5 Demo<select id="apiTrainingMt5DemoOrderSend"><option value="false">Paper interno</option><option value="true">Enviar demo MT5</option></select></label>
+            <label>MT5 Demo Max Lots<input id="apiMt5DemoMaxLots" type="number" min="0.01" step="0.01" placeholder="0.05" /></label>
             <label>Trading real<select id="apiRealTrading"><option value="false">Bloqueado</option><option value="true">Activo</option></select></label>
             <label>Sync URL<input id="apiSyncUrl" type="url" placeholder="https://..." /></label>
             <label>Sync Key<input id="apiSyncKey" type="password" autocomplete="off" placeholder="Clave sync opcional" /></label>

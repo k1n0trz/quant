@@ -22,7 +22,7 @@ assert(renderer.includes("horizon === 'swing'"), 'Debe existir horizonte swing/m
 assert(renderer.includes('trainingContext()'), 'El chat debe conocer el estado real del Training.');
 assert(renderer.includes('trainingMt5DemoExecutionStatus'), 'El chat debe distinguir paper interno de ejecucion demo MT5 real.');
 assert(renderer.includes('Nunca ejecuta BUY/SELL reales ni mt5.order_send desde el training'), 'Training debe declarar que no envia order_send a MT5 desde el loop.');
-assert(renderer.includes('MT5 demo/real desde chat o training aun no tiene puente de ejecucion'), 'Quant no debe prometer ejecucion MT5 demo/real desde chat o training sin bridge.');
+assert(renderer.includes('MT5 demo usa puente demo-only si ambos flags estan armados'), 'Quant debe distinguir el puente demo-only de cualquier ejecucion MT5 real.');
 assert(renderer.includes('macroContext()'), 'El chat debe recibir contexto macro/news.');
 assert(renderer.includes('macroRiskLevel'), 'Training y senales deben calcular riesgo macro/news.');
 assert(renderer.includes('currentNewsContext(pair.symbol)'), 'Cada trade/leccion debe registrar contexto de noticias/macro.');

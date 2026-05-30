@@ -33,6 +33,7 @@ const { createApiRouter } = require('./backend/routes/api-router');
 const { createReadOnlyTrainingStateReader, normalizeTrainingState } = require('./backend/training/training-state');
 const { normalizeTrainingStateTraceability } = require('./backend/training/training-traceability');
 const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
+const { placeMt5DemoOrder } = require('./backend/adapters/mt5/mt5-demo-order-service');
 
 const BINANCE_BASE = 'https://api.binance.com';
 let timeOffsetMs = 0;
@@ -44,11 +45,13 @@ const CLOUD_ENV_KEYS = [
   'FINNHUB_API_KEY','ALPHA_VANTAGE_API_KEY','REAL_TRADING','MT5_CONNECTOR_ENABLED',
   'MT5_ACCOUNT1_LOGIN','MT5_ACCOUNT1_PASSWORD','MT5_ACCOUNT1_SERVER',
   'MT5_ACCOUNT2_LOGIN','MT5_ACCOUNT2_PASSWORD','MT5_ACCOUNT2_SERVER',
+  'MT5_DEMO_TRADING_ENABLED','MT5_DEMO_MAX_LOTS','MT5_DEMO_DEVIATION','MT5_DEMO_MAGIC',
   'WEB_AUTH_ENABLED','WEB_AUTH_EMAIL','WEB_AUTH_PASSWORD',
   'TRAINING_BACKEND_WRITER_ENABLED',
   'TRAINING_BACKEND_ENABLED','TRAINING_BACKEND_LOOP_ENABLED',
   'TRAINING_BACKEND_LOOP_SCHEDULER_ENABLED','TRAINING_BACKEND_LOOP_INTERVAL_MS',
   'TRAINING_BACKEND_DEMO_ENTRY_ENABLED','TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED',
+  'TRAINING_MT5_DEMO_ORDER_SEND_ENABLED','TRAINING_MT5_DEMO_LOT_SIZE',
   'QUANT_WEB_PORT','QUANT_WEB_HOST','QUANT_DATA_DIR','QUANT_SYNC_URL','QUANT_SYNC_KEY',
   'QUANT_VPS_PUBLIC_IP',
   'QUANT_DESKTOP_DOWNLOAD_URL','DEFAULT_PROVIDER','QUANT_PRIMARY_MODEL',
@@ -160,6 +163,7 @@ const USER_API_FIELDS = [
   'DEEPINFRA_MODEL','DEEPINFRA_BASE_URL','FINNHUB_API_KEY','ALPHA_VANTAGE_API_KEY',
   'REAL_TRADING','MT5_CONNECTOR_ENABLED','MT5_ACCOUNT1_LOGIN','MT5_ACCOUNT1_PASSWORD',
   'MT5_ACCOUNT1_SERVER','MT5_ACCOUNT2_LOGIN','MT5_ACCOUNT2_PASSWORD','MT5_ACCOUNT2_SERVER',
+  'MT5_DEMO_TRADING_ENABLED','MT5_DEMO_MAX_LOTS','TRAINING_MT5_DEMO_ORDER_SEND_ENABLED','TRAINING_MT5_DEMO_LOT_SIZE',
   'QUANT_SYNC_URL','QUANT_SYNC_KEY'
 ];
 const SENSITIVE_API_FIELDS = USER_API_FIELDS.filter((key) => /KEY|SECRET|PASSWORD|PASS/.test(key));
@@ -1766,6 +1770,7 @@ async function handleApi(req, res, url) {
         getBinanceSymbols: () => binanceSymbols(),
         getTicker: (symbol) => ticker(symbol),
         readMt5Snapshot,
+        placeMt5DemoOrder: (input) => placeMt5DemoOrder(input, { env: userEnv }),
         syncBinanceTime: () => syncBinanceTime(),
         mt5AccountInfo: (envArg) => mt5Info(envArg),
         botTemplatesRoot: path.join(__dirname, 'bots', 'templates')
@@ -1799,6 +1804,8 @@ async function handleApi(req, res, url) {
       finnhub: Boolean(userEnv.FINNHUB_API_KEY),
       alpha: Boolean(userEnv.ALPHA_VANTAGE_API_KEY),
       mt5Connector: String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true',
+      mt5DemoTrading: String(userEnv.MT5_DEMO_TRADING_ENABLED || 'false').toLowerCase() === 'true',
+      trainingMt5DemoOrderSend: String(userEnv.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED || 'false').toLowerCase() === 'true',
       webUrl: `http://127.0.0.1:${activeWebPort}`,
       binanceWhitelistIp: userEnv.QUANT_VPS_PUBLIC_IP || DEFAULT_VPS_PUBLIC_IP,
       realTrading: runtimePolicy.state.tradingRealEnabled,
@@ -1813,6 +1820,7 @@ async function handleApi(req, res, url) {
     if (url.pathname === '/api/binance-symbols') return sendJson(res, await binanceSymbols());
     if (url.pathname === '/api/mt5-symbols') return sendJson(res, String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? await mt5Symbols() : { ok: false, symbols: [], error: 'MT5 adapter disabled' });
     if (url.pathname === '/api/mt5-rates') return sendJson(res, String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? await mt5Rates(q.symbol, q.timeframe, Number(q.count || 180)) : { ok: false, candles: [], error: 'MT5 adapter disabled' });
+    if (url.pathname === '/api/mt5-demo-order' && req.method === 'POST') return sendJson(res, await placeMt5DemoOrder(body, { env: userEnv }));
     if (url.pathname === '/api/ticker') return sendJson(res, await ticker(q.symbol));
     if (url.pathname === '/api/klines') return sendJson(res, await klines(q.symbol, q.interval, Number(q.limit || 180)));
     if (url.pathname === '/api/wallet') return sendJson(res, await fullWallet(userEnv));
@@ -2489,6 +2497,8 @@ ipcMain.handle('env-status', () => {
     finnhub: Boolean(ENV.FINNHUB_API_KEY),
     alpha: Boolean(ENV.ALPHA_VANTAGE_API_KEY),
     mt5Connector: String(ENV.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true',
+    mt5DemoTrading: String(ENV.MT5_DEMO_TRADING_ENABLED || 'false').toLowerCase() === 'true',
+    trainingMt5DemoOrderSend: String(ENV.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED || 'false').toLowerCase() === 'true',
     webUrl: `http://127.0.0.1:${activeWebPort}`,
     binanceWhitelistIp: ENV.QUANT_VPS_PUBLIC_IP || DEFAULT_VPS_PUBLIC_IP,
     realTrading: runtimePolicy.state.tradingRealEnabled,
@@ -2526,6 +2536,7 @@ ipcMain.handle('sync-mt5',            (_e, manual = false) => syncMt5Snapshot(EN
 ipcMain.handle('push-cloud-data',     () => pushAllDataToCloud(ENV));
 ipcMain.handle('pull-cloud-data',     () => pullDataFromCloud(ENV));
 ipcMain.handle('mt5-snapshot',        () => readMt5Snapshot());
+ipcMain.handle('mt5-demo-order',      (_e, payload) => placeMt5DemoOrder(payload, { env: ENV }));
 ipcMain.handle('conversations-list',              () => listConversations());
 ipcMain.handle('conversation-load',   (_e, id)   => loadConversation(id));
 ipcMain.handle('conversation-save',   (_e, id, name, messages) => saveConversation(id, name, messages));

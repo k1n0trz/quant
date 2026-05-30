@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('quant', {
   pushCloudData:      () => ipcRenderer.invoke('push-cloud-data'),
   pullCloudData:      () => ipcRenderer.invoke('pull-cloud-data'),
   mt5Snapshot:        () => ipcRenderer.invoke('mt5-snapshot'),
+  mt5DemoOrder:       (payload) => ipcRenderer.invoke('mt5-demo-order', payload),
   conversationsList:   ()                     => ipcRenderer.invoke('conversations-list'),
   conversationLoad:    (id)                   => ipcRenderer.invoke('conversation-load', id),
   conversationSave:    (id, name, messages)   => ipcRenderer.invoke('conversation-save', id, name, messages),

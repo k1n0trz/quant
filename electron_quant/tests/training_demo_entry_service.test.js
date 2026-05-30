@@ -210,3 +210,39 @@ test('entry evaluator opens valid position without touching real trading and pre
   assert.equal(result.nextState.positions[0].simulated, true);
   assert.equal(result.nextState.positions[0].blockRealExecution, undefined);
 });
+
+test('entry evaluator can send MT5 demo order only when demo flags are armed', async () => {
+  let calls = 0;
+  const state = createState({
+    activePairs: [createPair({ symbol: 'XAUUSD', venue: 'MT5' })]
+  });
+
+  const result = await evaluateTrainingDemoEntries({
+    state,
+    env: {
+      TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true',
+      TRAINING_MT5_DEMO_ORDER_SEND_ENABLED: 'true',
+      TRAINING_MT5_DEMO_LOT_SIZE: '0.02'
+    },
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z'),
+    deps: {
+      getTicker: async () => ({ ok: true, price: 2300 }),
+      placeMt5DemoOrder: async (payload) => {
+        calls += 1;
+        assert.equal(payload.symbol, 'XAUUSD');
+        assert.equal(payload.side, 'BUY');
+        assert.equal(payload.volume, 0.02);
+        return { ok: true, ticket: 777, retcode: 10009, demoOnly: true };
+      },
+      readMemory: () => [
+        { kind: 'training_signal', payload: createSignalContext({ signal_id: 'sig-live-1', symbol: 'XAUUSD', venue: 'MT5' }) }
+      ]
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(calls, 1);
+  assert.equal(result.nextState.positions[0].mt5_demo_execution.ok, true);
+  assert.equal(result.nextState.positions[0].mt5_demo_execution.ticket, 777);
+  assert.equal(result.nextState.positions[0].mt5_demo_execution.realTradingTouched, false);
+});

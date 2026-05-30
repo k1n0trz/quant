@@ -46,6 +46,7 @@ if (!window.quant) {
     calcPositionSize:      (sym, riskPct, entry, stop) => apiPost('calc-position-size', { symbol: sym, riskPct, entryPrice: entry, stopPrice: stop }),
     placeOrder:            (side, sym, qty, type, price) => apiPost('place-order', { side, symbol: sym, qty, type, price }),
     cancelOrder:           (sym, orderId)              => apiPost('cancel-order', { symbol: sym, orderId }),
+    mt5DemoOrder:          (payload)                   => apiPost('mt5-demo/order', payload),
     syncMt5:               (manual = false)            => apiPost('sync-mt5', { manual }),
     mt5Snapshot:           ()                          => apiGet('mt5-snapshot'),
     pushCloudData:         ()                          => apiPost('push-cloud-data', {}),
@@ -1353,10 +1354,18 @@ function walletContext() {
 
 function trainingMt5DemoExecutionStatus() {
   const mt5Health = state.connectorHealth?.mt5 || {};
+  const demoTrading = Boolean(state.env.mt5DemoTrading);
+  const trainingOrderSend = Boolean(state.env.trainingMt5DemoOrderSend);
+  if (state.executionAdapters.mt5 && mt5Health.ok && demoTrading && trainingOrderSend) {
+    return {
+      state: 'MT5 demo armado',
+      detail: 'MT5 demo order_send habilitado por MT5_DEMO_TRADING_ENABLED y TRAINING_MT5_DEMO_ORDER_SEND_ENABLED; solo cuenta demo MT5_ACCOUNT2.'
+    };
+  }
   if (state.executionAdapters.mt5 && mt5Health.ok) {
     return {
       state: 'Paper interno',
-      detail: 'MT5 aporta velas/snapshot; training no envia order_send a la cuenta demo todavia.'
+      detail: 'MT5 aporta velas/snapshot; training no envia order_send a la cuenta demo todavia. Activa MT5_DEMO_TRADING_ENABLED + TRAINING_MT5_DEMO_ORDER_SEND_ENABLED para demo real.'
     };
   }
   if (state.executionAdapters.mt5) {
@@ -1385,7 +1394,7 @@ function trainingContext() {
   return [
     'Training Mode: ACTIVO. Mercado real observado + operaciones demo internas. Nunca ejecuta BUY/SELL reales ni mt5.order_send desde el training.',
     `Ejecucion demo MT5: ${mt5DemoExecution.state}. ${mt5DemoExecution.detail}`,
-    'Ejecucion por orden del usuario: Binance real solo desde el panel manual con REAL_TRADING=true, confirmacion exacta y gates; MT5 demo/real desde chat o training aun no tiene puente de ejecucion.',
+    'Ejecucion por orden del usuario: Binance real solo desde el panel manual con REAL_TRADING=true, confirmacion exacta y gates; MT5 demo usa puente demo-only si ambos flags estan armados; MT5 real sigue sin puente de ejecucion.',
     `Guard: mode=training, simulated=true, blockRealExecution=${tr.blockRealExecution}, targetOpenPositions=${tr.targetOpenPositions} (${tr.targetIntradayPositions} intradia + ${tr.targetSwingPositions} swing), maxPairs=${tr.maxPairs}.`,
     `Execution adapters: Core=${state.executionAdapters.core}, Paper=${state.executionAdapters.paper}, Binance=${state.executionAdapters.binance}, MT5=${state.executionAdapters.mt5}, TradingViewWebhook=${state.executionAdapters.tradingViewWebhook}, BrokerAPI=${state.executionAdapters.brokerApi}.`,
     `Self-audit: lastRun=${state.selfAudit.lastRun || 'pendiente'}, findings=${state.selfAudit.findings.length}.`,
@@ -3599,6 +3608,9 @@ const API_FIELD_INPUTS = {
   MT5_ACCOUNT2_PASSWORD: 'apiMt5DemoPassword',
   MT5_ACCOUNT2_SERVER: 'apiMt5DemoServer',
   MT5_CONNECTOR_ENABLED: 'apiMt5Enabled',
+  MT5_DEMO_TRADING_ENABLED: 'apiMt5DemoTradingEnabled',
+  MT5_DEMO_MAX_LOTS: 'apiMt5DemoMaxLots',
+  TRAINING_MT5_DEMO_ORDER_SEND_ENABLED: 'apiTrainingMt5DemoOrderSend',
   REAL_TRADING: 'apiRealTrading',
   QUANT_SYNC_URL: 'apiSyncUrl',
   QUANT_SYNC_KEY: 'apiSyncKey'
@@ -3618,6 +3630,8 @@ function apiConfigActiveLabels(cfg = {}) {
   if (has.FINNHUB_API_KEY) labels.push('Finnhub');
   if (has.ALPHA_VANTAGE_API_KEY) labels.push('Alpha Vantage');
   if (String(values.MT5_CONNECTOR_ENABLED || '').toLowerCase() === 'true' || has.MT5_CONNECTOR_ENABLED) labels.push('MT5 configurado');
+  if (String(values.MT5_DEMO_TRADING_ENABLED || '').toLowerCase() === 'true' || has.MT5_DEMO_TRADING_ENABLED) labels.push('MT5 Demo trading');
+  if (String(values.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED || '').toLowerCase() === 'true' || has.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED) labels.push('Training -> MT5 demo');
   if (has.QUANT_SYNC_URL && has.QUANT_SYNC_KEY) labels.push('Sync Quant');
   return labels;
 }
@@ -3631,6 +3645,8 @@ function applyApiConfigStatusToSidebar(cfg = {}) {
   state.env.alpha = Boolean(cfg.has?.ALPHA_VANTAGE_API_KEY);
   const mt5Value = cfg.values?.MT5_CONNECTOR_ENABLED;
   state.env.mt5Connector = String(mt5Value || '').toLowerCase() === 'true' || Boolean(cfg.has?.MT5_CONNECTOR_ENABLED);
+  state.env.mt5DemoTrading = String(cfg.values?.MT5_DEMO_TRADING_ENABLED || '').toLowerCase() === 'true' || Boolean(cfg.has?.MT5_DEMO_TRADING_ENABLED);
+  state.env.trainingMt5DemoOrderSend = String(cfg.values?.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED || '').toLowerCase() === 'true' || Boolean(cfg.has?.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED);
   renderStatus();
 }
 

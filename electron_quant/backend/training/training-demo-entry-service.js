@@ -34,6 +34,10 @@ function isTrainingBackendDemoEntryAllowDefensiveSignalEnabled(env = {}) {
   return String(env.TRAINING_BACKEND_DEMO_ENTRY_ALLOW_DEFENSIVE_SIGNAL || 'false').toLowerCase() === 'true';
 }
 
+function isTrainingMt5DemoOrderSendEnabled(env = {}) {
+  return String(env.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED || 'false').toLowerCase() === 'true';
+}
+
 function stableTraceHash(input) {
   const text = String(input || '');
   let hash = 2166136261;
@@ -509,6 +513,54 @@ async function evaluateTrainingDemoEntries(input = {}) {
         marketContext,
         openedAt
       });
+      if (
+        pair.venue === 'MT5'
+        && isTrainingMt5DemoOrderSendEnabled(env)
+        && typeof deps.placeMt5DemoOrder === 'function'
+      ) {
+        const demoSide = position.direction === 'LONG' ? 'BUY' : position.direction === 'SHORT' ? 'SELL' : null;
+        const demoLots = finiteNumber(env.TRAINING_MT5_DEMO_LOT_SIZE, 0.01) || 0.01;
+        try {
+          const demoResult = demoSide
+            ? await deps.placeMt5DemoOrder({
+              symbol: position.symbol,
+              side: demoSide,
+              volume: demoLots,
+              type: 'MARKET',
+              reason: 'training-demo-entry',
+              trainingPositionId: position.id
+            })
+            : { ok: false, reason: 'unsupported_training_direction' };
+          position.mt5_demo_execution = {
+            attempted: true,
+            ok: Boolean(demoResult?.ok),
+            reason: demoResult?.reason || null,
+            ticket: demoResult?.ticket || null,
+            retcode: demoResult?.retcode || null,
+            volume: demoLots,
+            demoOnly: demoResult?.demoOnly !== false,
+            realTradingTouched: false
+          };
+        } catch (error) {
+          position.mt5_demo_execution = {
+            attempted: true,
+            ok: false,
+            reason: String(error?.message || error),
+            ticket: null,
+            retcode: null,
+            volume: demoLots,
+            demoOnly: true,
+            realTradingTouched: false
+          };
+        }
+      } else {
+        position.mt5_demo_execution = {
+          attempted: false,
+          reason: pair.venue === 'MT5' ? 'TRAINING_MT5_DEMO_ORDER_SEND_ENABLED=false' : 'not_mt5',
+          demoOnly: true,
+          realTradingTouched: false
+        };
+      }
       nextState = {
         ...nextState,
         positions: nextState.positions.concat(position)
@@ -532,6 +584,7 @@ async function evaluateTrainingDemoEntries(input = {}) {
 module.exports = {
   isTrainingBackendDemoEntryEnabled,
   isTrainingBackendDemoEntryAllowDefensiveSignalEnabled,
+  isTrainingMt5DemoOrderSendEnabled,
   buildBackendBootstrapPairs,
   evaluateTrainingDemoEntry,
   openTrainingDemoPosition,

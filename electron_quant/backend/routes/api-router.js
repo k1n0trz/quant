@@ -24,6 +24,7 @@ const { resolveTrainingMarketContext } = require('../training/training-market-co
 const { resolveTrainingSignalContext } = require('../training/training-signal-context-service');
 const { generateTrainingSignalCandidates } = require('../training/training-signal-candidate-engine');
 const { buildTrainingBotsStatus } = require('../training/bot-registry-service');
+const { placeMt5DemoOrder } = require('../adapters/mt5/mt5-demo-order-service');
 const {
   startTrainingDemoLoopScheduler,
   stopTrainingDemoLoopScheduler,
@@ -447,6 +448,20 @@ function createApiRouter(context) {
 
       if (method === 'POST' && pathname === '/api/connections/mt5/test') {
         return response(200, await testMt5Connection(env, deps));
+      }
+
+      if (method === 'POST' && pathname === '/api/mt5-demo/order') {
+        const executor = typeof deps.placeMt5DemoOrder === 'function'
+          ? deps.placeMt5DemoOrder
+          : (input) => placeMt5DemoOrder(input, { env });
+        const result = await executor(body);
+        return response(result.ok ? 200 : 409, {
+          ...result,
+          safety: {
+            demoOnly: true,
+            realTradingTouched: false
+          }
+        });
       }
 
       return null;

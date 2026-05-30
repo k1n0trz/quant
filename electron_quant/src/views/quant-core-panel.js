@@ -1,5 +1,5 @@
 /**
- * QUANT-CORE PANEL — laboratorio observable.
+ * QUANT-CORE PANEL — motor de aprendizaje observable.
  *
  * Renders the visible footprint of Quant-Core inside the Training Lab view.
  * Honest about state: shows that Quant-Core exists but is in shadow / waiting
@@ -10,7 +10,7 @@
  *
  *   1. system-state banner (mode shadow · scheduler inactivo · ...)
  *   2. calibración inicial (confidence/stability/sample)
- *   3. strategy registry (5 strategies, marked backendExecutable:false)
+ *   3. strategy registry (5 strategies, marked as real execution blocked)
  *   4. cierre operativo (edge · equity curve · last update)
  *
  * Pure rendering. No business logic. No side effects on legacy training
@@ -47,7 +47,7 @@
     el.innerHTML = ''
       + '<section class="panel quant-core-panel" data-quant-core-panel="true">'
       +   '<div class="panel-head">'
-      +     '<h2>QUANT-CORE · LABORATORIO</h2>'
+      +     '<h2>QUANT CORE · MOTOR DE APRENDIZAJE</h2>'
       +     '<span class="quant-core-banner" data-role="banner">cargando</span>'
       +   '</div>'
       +   '<div class="quant-core-calibration" data-role="calibration"></div>'
@@ -118,7 +118,7 @@
     if (!strategies || strategies.length === 0) {
       el.innerHTML = ''
         + '<div class="qc-section-head">STRATEGY REGISTRY</div>'
-        + '<div class="qc-empty">' + escHtml(es ? es.label('pending_backend') : 'pendiente backend') + '</div>';
+        + '<div class="qc-empty">' + escHtml(es ? es.label('learning') : 'estrategias cargando') + '</div>';
       return;
     }
 
@@ -141,11 +141,11 @@
         +     '<div class="qc-strategy-name">' + escHtml(s && s.name ? s.name : 'sin nombre') + '</div>'
         +   '</div>'
         +   '<div class="qc-strategy-meta">'
-        +     '<span>phase <b>' + escHtml(phaseTxt) + '</b></span>'
+        +     '<span>fase <b>' + escHtml(phaseTxt) + '</b></span>'
         +     '<span>minScore <b>' + escHtml(minScore) + '</b></span>'
         +     '<span>RR <b>' + escHtml(rrMin) + '</b></span>'
         +     '<span class="qc-exec ' + (executable ? 'is-on' : 'is-off') + '">'
-        +       'backendExecutable=' + (executable ? 'true' : 'false')
+        +       'ejecucion real=' + (executable ? 'lista' : 'bloqueada')
         +     '</span>'
         +   '</div>'
         +   rulesHtml
@@ -154,7 +154,7 @@
 
     el.innerHTML = ''
       + '<div class="qc-section-head">'
-      +   'STRATEGY REGISTRY · ' + strategies.length + ' estrategias'
+      +   'REGISTRO DE ESTRATEGIAS · ' + strategies.length + ' estrategias'
       + '</div>'
       + '<div class="qc-strategy-list">' + rows + '</div>';
   }
@@ -182,8 +182,8 @@
       : 'equity: ' + equityCurveLen + ' puntos';
 
     var schedulerCopy = state.schedulerActive === false
-      ? 'scheduler inactivo'
-      : (state.schedulerActive === true ? 'scheduler activo' : 'scheduler ?');
+      ? 'motor automatico inactivo'
+      : (state.schedulerActive === true ? 'motor automatico activo' : 'motor automatico ?');
 
     var ts = lastRefreshAt
       ? new Date(lastRefreshAt).toLocaleTimeString('es-CO', { hour12: false })

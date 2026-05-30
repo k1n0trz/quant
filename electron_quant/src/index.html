@@ -25,11 +25,8 @@
         <button class="nav-item active" data-view="dashboard">Inicio</button>
         <button class="nav-item" data-view="news">Noticias y Macro</button>
         <button class="nav-item" data-view="training">Entrenamiento</button>
-        <button class="nav-item" data-view="orders">Ordenes</button>
         <button class="nav-item" data-view="positions">Posiciones</button>
         <button class="nav-item" data-view="history">Rendimiento</button>
-        <button class="nav-item" data-view="backtest">Pruebas historicas</button>
-        <button class="nav-item" data-view="alerts">Alertas</button>
         <button class="nav-item" data-view="wallet">Billeteras</button>
         <button class="nav-item" data-view="conversations">Conversaciones</button>
         <button class="nav-item" data-view="settings">Configuracion</button>
@@ -121,22 +118,6 @@
           <div class="status-spacer"></div>
 
           <button class="btn-secondary" id="pauseTradingBtn" title="Pausa operaciones">⏸</button>
-          <button class="btn-danger kill-switch" id="killSwitchBtn" title="Stop all real trading">⚠</button>
-
-          <!-- Kill Switch Confirmation Modal (hidden by default) -->
-          <div class="kill-switch-confirm" id="killSwitchConfirm" style="display: none;">
-            <div class="confirm-box">
-              <p>CONFIRM: Stop real trading?</p>
-              <p class="confirm-hint">3 seconds required</p>
-              <div class="confirm-progress">
-                <div class="confirm-bar" id="confirmBar"></div>
-              </div>
-              <div class="confirm-buttons">
-                <button class="btn-secondary" id="cancelKillBtn">CANCEL</button>
-                <button class="btn-danger" id="confirmKillBtn" disabled>CONFIRM</button>
-              </div>
-            </div>
-          </div>
         </div>
 
         <!-- KPI GRID: Activo Principal + Sidekicks -->
@@ -186,7 +167,10 @@
           <section class="panel chart-panel chart-main">
             <div class="panel-head">
               <h2 id="chartTitle">GRAFICO EN TIEMPO REAL - BTCUSDT - M1</h2>
-              <button class="tiny-btn" id="expandChartBtn">↗</button>
+              <div class="chart-actions">
+                <button class="tiny-btn" id="chartRefreshBtn" title="Actualizar solo esta grafica">Actualizar chart</button>
+                <button class="tiny-btn" id="expandChartBtn">↗</button>
+              </div>
             </div>
             <div class="tf-row" id="tfRow">
               <button class="tf active" data-tf="M1">M1</button>
@@ -227,6 +211,7 @@
             <div class="tab-row">
               <button class="tab active" id="finnhubBtn">Finnhub</button>
               <button class="tab" id="alphaBtn">Alpha Vantage</button>
+              <button class="tab" id="cryptoNewsBtn">Crypto</button>
             </div>
             <div class="news-list" id="newsList"></div>
             <button class="news-more" data-jump="news">Ver todas las noticias â†’</button>
@@ -291,7 +276,7 @@
 
       <section class="view" id="view-news">
         <div class="view-head"><h1>Noticias & Macro</h1><p>Lectura rapida de noticias, sentimiento y eventos macro conectados.</p></div>
-        <div class="two-col"><div class="panel"><h2>Finnhub</h2><div id="newsFinnhubPage" class="news-list tall"></div></div><div class="panel"><h2>Alpha Vantage</h2><div id="newsAlphaPage" class="news-list tall"></div></div></div>
+        <div class="news-page-grid"><div class="panel"><h2>Finnhub</h2><div id="newsFinnhubPage" class="news-list tall"></div></div><div class="panel"><h2>Alpha Vantage</h2><div id="newsAlphaPage" class="news-list tall"></div></div><div class="panel"><h2>Crypto</h2><div id="newsCryptoPage" class="news-list tall"></div></div></div>
       </section>
 
       <section class="view" id="view-ai">
@@ -314,13 +299,13 @@
             <div class="training-mark">◎</div>
             <div>
               <h1>ENTRENAMIENTO DE QUANT <span>ACTIVO</span></h1>
-              <p>Autoaprendizaje paper con datos reales, scheduler backend y memoria persistente.</p>
+              <p>Autoaprendizaje paper con datos reales, motor automatico y memoria persistente.</p>
             </div>
           </div>
           <div class="training-mode-pill runtime-warn" id="trainingRuntimePill"><span class="dot"></span> Sin senal</div>
         </div>
         <div class="training-runtime-strip runtime-warn" id="trainingRuntimeStrip">
-          <span>Scheduler backend</span>
+          <span>Motor automatico</span>
           <strong>sin senal</strong>
           <small>esperando estado real del loop</small>
         </div>
@@ -665,6 +650,7 @@
           </form>
           <div class="panel-head" style="margin-top:28px"><h2>ESTADO DEL SISTEMA</h2></div>
           <div id="settingsBox" class="settings-grid"></div>
+          <div id="settingsAlertsMount"></div>
         </div>
       </section>
     </main>

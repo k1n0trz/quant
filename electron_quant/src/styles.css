@@ -1922,6 +1922,148 @@ html, body,
   scrollbar-gutter: stable;
 }
 
+/* Real-trading prep surface cleanup */
+.kill-switch,
+.kill-switch-confirm {
+  display: none !important;
+}
+
+.chart-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-actions .tiny-btn {
+  white-space: nowrap;
+}
+
+.news-page-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.content {
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 420px);
+}
+
+.chat-dock {
+  gap: 10px;
+  grid-template-rows: auto minmax(360px, 1.25fr) auto auto minmax(220px, .7fr);
+  padding: 12px;
+}
+
+.chat-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chat-log {
+  min-height: 0;
+  padding: 12px;
+  background: rgba(8, 13, 24, .72);
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+}
+
+.chat-msg {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+}
+
+.chat-msg b {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.chat-msg.quant-msg {
+  background: rgba(26, 37, 64, .76);
+}
+
+.chat-msg.user-msg {
+  background: rgba(41, 121, 255, .08);
+  border-color: rgba(41, 121, 255, .28);
+}
+
+.chat-input-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.mini-pipeline {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+  background: rgba(8, 13, 24, .55);
+  border: 1px solid var(--border-subtle);
+  border-radius: 7px;
+}
+
+.mini-pipeline .pipe-item {
+  grid-template-columns: 58px 52px 52px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.mini-pipeline .pipe-item > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wallet-view-panel {
+  background: radial-gradient(circle at top right, rgba(0, 229, 255, .06), transparent 34%), var(--bg-panel);
+}
+
+.wallet-view-panel .wallet-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+.wallet-card {
+  border-color: rgba(46, 66, 104, .88);
+  background: linear-gradient(180deg, rgba(20, 29, 46, .96), rgba(11, 17, 29, .96));
+  box-shadow: inset 0 1px rgba(255,255,255,.035);
+}
+
+.wallet-card h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-primary);
+  letter-spacing: .03em;
+}
+
+.balance-row {
+  align-items: center;
+  min-height: 32px;
+}
+
+.balance-row span:first-child {
+  color: #a7bad5;
+}
+
+@media (max-width: 1280px) {
+  .content {
+    grid-template-columns: minmax(0, 1fr) minmax(330px, 360px);
+  }
+
+  .chat-dock {
+    grid-template-rows: auto minmax(300px, 1fr) auto auto minmax(180px, .6fr);
+  }
+
+  .news-page-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 #view-training .panel {
   padding: 13px 15px;
 }

@@ -73,6 +73,8 @@ const state = {
   mt5Symbols: [],
   candles: [],
   ticker: null,
+  chartStatus: 'Esperando velas reales...',
+  chartRequestId: 0,
   wallet: null,
   messages: [],
   pipeline: [],
@@ -207,8 +209,26 @@ function fmtPrice(v) {
 
 function nowTime() { return new Date().toTimeString().slice(0, 8); }
 
+function fmtShortDateTime(value) {
+  const d = new Date(value || Date.now());
+  if (Number.isNaN(d.getTime())) return '--/-- --:--';
+  return d.toLocaleString('es-CO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function compactLogMessage(message) {
+  const text = String(message || '');
+  if (/Fontconfig error: No writable cache directories/i.test(text)) {
+    const ipc = text.match(/IPC recv failed/i) ? ' · IPC recv failed' : '';
+    return `MT5 velas: terminal sin respuesta util${ipc}. Revisa terminal/conector.`;
+  }
+  if (/Unexpected token '<',\s*"<html/i.test(text)) {
+    return 'API devolvio HTML en vez de JSON. Probable sesion/auth o endpoint incorrecto.';
+  }
+  return text.length > 220 ? `${text.slice(0, 217)}...` : text;
+}
+
 function logEvent(status, message) {
-  const item = { time: nowTime(), status, message };
+  const item = { time: nowTime(), status, message: compactLogMessage(message) };
   state.pipeline.unshift(item);
   state.pipeline = state.pipeline.slice(0, 80);
   renderPipeline();
@@ -232,7 +252,7 @@ function setView(name) {
   document.querySelectorAll('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.view === name));
   const view = $(`view-${name}`);
   if (view) view.classList.add('active');
-  if (name === 'settings')       { loadCustomInstructions(); loadCalibrationStatus(); loadApiConfig(); }
+  if (name === 'settings')       { loadCustomInstructions(); loadCalibrationStatus(); loadApiConfig(); mountAlertsIntoSettings(); loadAlerts(); }
   if (name === 'training')       refreshTrainingRuntimeStatus();
   if (name === 'conversations')  loadConversationsList();
   if (name === 'orders') loadOrders();
@@ -241,12 +261,29 @@ function setView(name) {
   if (name === 'alerts')  loadAlerts();
 }
 
+function mountAlertsIntoSettings() {
+  const mount = $('settingsAlertsMount');
+  const legacy = $('view-alerts');
+  if (!mount || !legacy || mount.dataset.mounted === 'true') return;
+  const wrap = document.createElement('div');
+  wrap.className = 'settings-alerts-panel';
+  wrap.innerHTML = '<div class="panel-head" style="margin-top:28px"><h2>ALERTAS</h2><span>configuracion integrada</span></div>';
+  [...legacy.children].forEach((child) => {
+    if (!child.classList.contains('view-head')) wrap.appendChild(child);
+  });
+  mount.appendChild(wrap);
+  mount.dataset.mounted = 'true';
+}
+
 function setTf(tf) {
   state.tf = tf;
   state.interval = intervalMap[tf] || '1m';
   document.querySelectorAll('.tf').forEach((b) => b.classList.toggle('active', b.dataset.tf === tf));
   $('chartTitle').textContent = `GRÁFICO EN TIEMPO REAL · ${state.symbol} · ${tf}`;
   setText('chartTitle', `GRAFICO EN TIEMPO REAL - ${state.symbol} - ${tf}`);
+  state.candles = [];
+  state.chartStatus = `Cargando velas de ${state.symbol} ${tf}...`;
+  drawChart();
   refreshCandles();
 }
 
@@ -365,6 +402,8 @@ function bindUi() {
   $('trainingReselectBtn').addEventListener('click', () => initTrainingMode(true));
   $('finnhubBtn').addEventListener('click', () => refreshNews('finnhub'));
   $('alphaBtn').addEventListener('click', () => refreshNews('alpha'));
+  $('cryptoNewsBtn').addEventListener('click', () => refreshNews('crypto'));
+  $('chartRefreshBtn').addEventListener('click', () => refreshMarket(true));
   $('sendChat').addEventListener('click', sendChat);
   $('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });
   $('askAiBtn').addEventListener('click', askAiAnalysis);
@@ -598,6 +637,13 @@ function setSymbol(symbol) {
   $('assetSub').textContent = `${state.platform} · símbolo principal`;
   $('chartTitle').textContent = `GRÁFICO EN TIEMPO REAL · ${symbol} · ${state.tf}`;
   setText('chartTitle', `GRAFICO EN TIEMPO REAL - ${symbol} - ${state.tf}`);
+  state.chartRequestId += 1;
+  state.candles = [];
+  state.ticker = null;
+  state.chartOffset = 0;
+  state.chartStatus = `Cargando velas de ${symbol} en ${state.platform}...`;
+  renderTicker();
+  drawChart();
   logEvent('OK', `Activo principal cambiado a ${symbol}`);
   refreshMarket(true);
 }
@@ -643,33 +689,53 @@ async function refreshAll() {
 }
 
 async function refreshCandles() {
+  const requestId = ++state.chartRequestId;
+  const symbol = state.symbol;
+  const platform = state.platform;
+  const tf = state.tf;
+  const interval = state.interval;
+  state.chartStatus = `Cargando velas de ${symbol} ${tf}...`;
+  drawChart();
   try {
-    if (state.platform === 'MT5') {
-      const data = await window.quant.mt5Rates(state.symbol, state.tf, 180);
+    if (platform === 'MT5') {
+      const data = await window.quant.mt5Rates(symbol, tf, 180);
+      if (requestId !== state.chartRequestId || symbol !== state.symbol || platform !== state.platform || tf !== state.tf) return;
       if (!data.ok) throw new Error(data.error || 'MT5 no devolvió velas');
       state.candles = data.candles || [];
       state.ticker = data.ticker || state.ticker;
       renderTicker();
     } else {
-      state.candles = await window.quant.klines(state.symbol, state.interval, 180);
+      const candles = await window.quant.klines(symbol, interval, 180);
+      if (requestId !== state.chartRequestId || symbol !== state.symbol || platform !== state.platform || tf !== state.tf) return;
+      state.candles = candles || [];
     }
+    state.chartStatus = state.candles.length ? '' : `Sin velas para ${symbol}`;
     drawChart();
     updateSignal();
-    logEvent('OK', `${state.symbol} ${state.tf}: ${state.candles.length} velas actualizadas`);
-    await window.quant.memoryWrite('observation', { type: 'candles_refreshed', symbol: state.symbol, timeframe: state.tf, bars: state.candles.length, lastClose: state.candles.at(-1)?.close });
+    logEvent('OK', `${symbol} ${tf}: ${state.candles.length} velas actualizadas`);
+    await window.quant.memoryWrite('observation', { type: 'candles_refreshed', symbol, timeframe: tf, bars: state.candles.length, lastClose: state.candles.at(-1)?.close });
     await loadMemoryStats();
   } catch (err) {
+    if (requestId === state.chartRequestId && symbol === state.symbol && platform === state.platform && tf === state.tf) {
+      state.candles = [];
+      state.chartStatus = `Sin velas para ${symbol}: ${compactLogMessage(err.message)}`;
+      drawChart();
+    }
     logEvent('WARN', `Velas: ${err.message}`);
   }
 }
 
 async function refreshMarket(forceCandles) {
+  const symbol = state.symbol;
+  const platform = state.platform;
   try {
-    if (state.platform === 'MT5') {
+    if (platform === 'MT5') {
       await refreshCandles();
       return;
     }
-    state.ticker = await window.quant.ticker(state.symbol);
+    const ticker = await window.quant.ticker(symbol);
+    if (symbol !== state.symbol || platform !== state.platform) return;
+    state.ticker = ticker;
     renderTicker();
     if (forceCandles || !state.candles.length) await refreshCandles();
     else {
@@ -756,7 +822,8 @@ function drawChart() {
   const data = state.candles.slice(start, end);
   if (!data.length) {
     ctx.fillStyle = '#8fa3be'; ctx.textAlign = 'center';
-    ctx.fillText('Esperando velas reales de Binance...', w / 2, h / 2);
+    ctx.fillText(state.chartStatus || `Esperando velas reales de ${state.platform} · ${state.symbol}...`, w / 2, h / 2);
+    if ($('ohlcLine')) $('ohlcLine').textContent = `Sin velas activas · ${state.platform} · ${state.symbol} · ${state.tf}`;
     return;
   }
   const maxP = Math.max(...data.map((c) => c.high));
@@ -1382,16 +1449,37 @@ function normalizeEconomicEvents(payload) {
 }
 
 function renderNewsFromState(source) {
+  const buttons = { finnhub: $('finnhubBtn'), alpha: $('alphaBtn'), crypto: $('cryptoNewsBtn') };
+  Object.entries(buttons).forEach(([key, btn]) => { if (btn) btn.classList.toggle('active', source === key); });
+  const cryptoItems = [
+    ...state.macroNews.finnhubCrypto.map((n) => ({
+      time: n.datetime ? new Date(n.datetime * 1000).toTimeString().slice(0, 5) : '--:--',
+      title: n.headline || n.summary || '',
+      source: n.source || 'Finnhub Crypto'
+    })),
+    ...state.macroNews.cryptoRss.map((n) => ({
+      time: n.pubDate ? new Date(n.pubDate).toTimeString().slice(0, 5) : '--:--',
+      title: n.title || n.summary || '',
+      source: n.source || 'Crypto RSS'
+    }))
+  ].slice(0, 16);
+  const cryptoHtml = cryptoItems.map((n) => `<div class="news-item"><span class="news-time">${n.time}</span><span>${escapeHtml(n.title)}</span><span class="impact">${escapeHtml(n.source)}</span></div>`).join('');
+  if ($('newsCryptoPage')) $('newsCryptoPage').innerHTML = cryptoHtml || '<div class="empty-state">Sin noticias crypto.</div>';
+
   if (source === 'alpha') {
-    $('alphaBtn').classList.add('active'); $('finnhubBtn').classList.remove('active');
     const html = state.macroNews.alphaFeed.slice(0, 10).map((n) => `<div class="news-item"><span class="news-time">${(n.time_published || '').slice(9, 13) || '--:--'}</span><span>${escapeHtml(n.title || '')}</span><span class="impact">${n.overall_sentiment_label || 'Info'}</span></div>`).join('');
-    $('newsList').innerHTML = html || '<div class="empty-state">Sin noticias Alpha.</div>';
-    $('newsAlphaPage').innerHTML = html;
+    const alphaReason = state.macroNews.alphaSentiment?.Note || state.macroNews.alphaSentiment?.Information || state.macroNews.alphaSentiment?.['Error Message'] || '';
+    const empty = alphaReason
+      ? `<div class="empty-state">Alpha Vantage no entrego feed ahora: ${escapeHtml(alphaReason).slice(0, 180)}</div>`
+      : '<div class="empty-state">Sin noticias Alpha.</div>';
+    $('newsList').innerHTML = html || empty;
+    $('newsAlphaPage').innerHTML = html || empty;
+  } else if (source === 'crypto') {
+    $('newsList').innerHTML = cryptoHtml || '<div class="empty-state">Sin noticias crypto.</div>';
   } else {
-    $('finnhubBtn').classList.add('active'); $('alphaBtn').classList.remove('active');
     const html = state.macroNews.finnhub.slice(0, 12).map((n) => `<div class="news-item"><span class="news-time">${n.datetime ? new Date(n.datetime * 1000).toTimeString().slice(0,5) : '--:--'}</span><span>${escapeHtml(n.headline || n.summary || '')}</span><span class="impact">${n.source || 'News'}</span></div>`).join('');
     $('newsList').innerHTML = html || '<div class="empty-state">Sin noticias Finnhub.</div>';
-    $('newsFinnhubPage').innerHTML = html;
+    $('newsFinnhubPage').innerHTML = html || '<div class="empty-state">Sin noticias Finnhub.</div>';
   }
 }
 
@@ -2729,7 +2817,99 @@ function renderTraining() {
   renderTrainingAdvice();
   renderTrainingTrades();
   renderTrainingLevelTable();
+  drawTrainingEquityCurve();
   renderChatContextPanel();
+}
+
+function trainingEquityPoints() {
+  const start = Number(state.training.balanceStart || 100000);
+  let equity = start;
+  const trades = [...(state.training.closedTrades || [])].sort((a, b) => {
+    const ta = Date.parse(a.closed_timestamp || a.timestamp || 0) || 0;
+    const tb = Date.parse(b.closed_timestamp || b.timestamp || 0) || 0;
+    return ta - tb;
+  });
+  const points = [{ label: 'Inicio', value: start }];
+  for (const trade of trades) {
+    equity += Number(trade.pnl_demo || 0);
+    points.push({
+      label: new Date(trade.closed_timestamp || trade.timestamp || Date.now()).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit' }),
+      value: Number(equity.toFixed(2))
+    });
+  }
+  const liveEquity = Number((state.training.balance + trainingUnrealizedPnl()).toFixed(2));
+  if (!points.length || Math.abs(liveEquity - points[points.length - 1].value) > 0.01) {
+    points.push({ label: 'Ahora', value: liveEquity });
+  }
+  return points;
+}
+
+function drawTrainingEquityCurve() {
+  const canvas = $('trainingEquityChart');
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const w = rect.width, h = rect.height;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = '#101927';
+  ctx.fillRect(0, 0, w, h);
+  const padL = 62, padR = 28, padT = 22, padB = 34;
+  const plotW = Math.max(10, w - padL - padR);
+  const plotH = Math.max(10, h - padT - padB);
+  ctx.strokeStyle = '#1b2a40';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 5; i++) {
+    const y = padT + plotH * i / 5;
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(padL + plotW, y); ctx.stroke();
+  }
+  for (let i = 0; i <= 6; i++) {
+    const x = padL + plotW * i / 6;
+    ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + plotH); ctx.stroke();
+  }
+  const points = trainingEquityPoints();
+  const values = points.map((p) => p.value).filter(Number.isFinite);
+  if (values.length < 2) {
+    ctx.fillStyle = '#8fa3be';
+    ctx.font = '13px Consolas';
+    ctx.textAlign = 'center';
+    ctx.fillText('Esperando curva suficiente; equity demo actual ' + fmtPrice(values[0] || state.training.balanceStart), w / 2, h / 2);
+    return;
+  }
+  const maxV = Math.max(...values);
+  const minV = Math.min(...values);
+  const span = Math.max(maxV - minV, 1);
+  const y = (v) => padT + (maxV - v) / span * plotH;
+  const x = (i) => padL + (points.length === 1 ? 0 : plotW * i / (points.length - 1));
+  const grad = ctx.createLinearGradient(0, padT, 0, padT + plotH);
+  grad.addColorStop(0, 'rgba(0,230,118,.24)');
+  grad.addColorStop(1, 'rgba(0,230,118,0)');
+  ctx.beginPath();
+  points.forEach((p, i) => { if (i === 0) ctx.moveTo(x(i), y(p.value)); else ctx.lineTo(x(i), y(p.value)); });
+  ctx.lineTo(x(points.length - 1), padT + plotH);
+  ctx.lineTo(x(0), padT + plotH);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.beginPath();
+  points.forEach((p, i) => { if (i === 0) ctx.moveTo(x(i), y(p.value)); else ctx.lineTo(x(i), y(p.value)); });
+  ctx.strokeStyle = values.at(-1) >= values[0] ? '#00e676' : '#ff5252';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+  ctx.fillStyle = '#8fa3be';
+  ctx.font = '10px Consolas';
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= 5; i++) {
+    const v = maxV - span * i / 5;
+    ctx.fillText('$' + fmtPrice(v), padL - 8, padT + plotH * i / 5 + 3);
+  }
+  const last = points[points.length - 1];
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#e8edf5';
+  ctx.fillText(`Equity demo ${last.value >= values[0] ? '+' : ''}$${(last.value - values[0]).toFixed(2)} · ${points.length - 1} cierres`, padL, h - 10);
 }
 
 function trainingLevel() {
@@ -2799,8 +2979,8 @@ function renderTrainingAdvice() {
 }
 
 function renderTrainingTrades() {
-  const rows = state.training.closedTrades.slice(0, 8).map((t) => `<div class="train-row"><span>${new Date(t.closed_timestamp || t.timestamp).toTimeString().slice(0,5)}</span><b>${t.symbol}</b><span class="${t.direction === 'LONG' ? 'train-status' : 'train-bad'}">${t.direction}</span><span>${t.size_demo.toFixed(5)}</span><span class="${t.pnl_demo >= 0 ? 'train-status' : 'train-bad'}">${t.pnl_demo.toFixed(2)}</span></div>`).join('');
-  const html = `<div class="train-trades"><div class="train-head"><span>HORA</span><span>PAR</span><span>DIR</span><span>TAMANO</span><span>P&L</span></div>${rows || '<div class="empty-state">Aun no hay operaciones demo cerradas.</div>'}</div>`;
+  const rows = state.training.closedTrades.slice(0, 8).map((t) => `<div class="train-row"><span>${fmtShortDateTime(t.closed_timestamp || t.timestamp)}</span><b>${t.symbol}</b><span class="${t.direction === 'LONG' ? 'train-status' : 'train-bad'}">${t.direction}</span><span>${t.size_demo.toFixed(5)}</span><span class="${t.pnl_demo >= 0 ? 'train-status' : 'train-bad'}">${t.pnl_demo.toFixed(2)}</span></div>`).join('');
+  const html = `<div class="train-trades"><div class="train-head"><span>FECHA</span><span>PAR</span><span>DIR</span><span>TAMANO</span><span>P&L</span></div>${rows || '<div class="empty-state">Aun no hay operaciones demo cerradas.</div>'}</div>`;
   if ($('trainingTradesTable')) $('trainingTradesTable').innerHTML = html;
 }
 

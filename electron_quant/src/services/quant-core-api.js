@@ -179,8 +179,8 @@
       parts.push('modo ' + state.mode);
     }
 
-    if (state.backendEnabled === false) parts.push('backend inactivo');
-    if (state.schedulerActive === false) parts.push('scheduler inactivo');
+    if (state.backendEnabled === false) parts.push('motor automatico en observacion');
+    if (state.schedulerActive === false) parts.push('motor automatico inactivo');
     if (state.readOnly === true) parts.push('read-only');
 
     if (state.sampleStatus === 'insufficient' || state.sampleSufficient === false) {

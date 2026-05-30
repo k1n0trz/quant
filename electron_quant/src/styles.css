@@ -2050,6 +2050,37 @@ html, body,
   color: #a7bad5;
 }
 
+/* Training scroll guard: the app shell keeps body fixed, so Training must own
+   the vertical scroll and leave enough bottom room for the last panels. */
+.content {
+  height: calc(100vh - 62px);
+  align-items: stretch;
+}
+
+.view.active {
+  max-height: 100%;
+}
+
+#view-training.view.active {
+  height: auto;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: scroll;
+  overscroll-behavior-y: contain;
+  scroll-padding-bottom: 120px;
+  padding-bottom: max(120px, env(safe-area-inset-bottom));
+}
+
+#view-training .training-tabs-container {
+  margin-bottom: 96px;
+}
+
+.chat-dock {
+  align-self: stretch;
+  max-height: 100%;
+  overflow: hidden;
+}
+
 @media (max-width: 1280px) {
   .content {
     grid-template-columns: minmax(0, 1fr) minmax(330px, 360px);

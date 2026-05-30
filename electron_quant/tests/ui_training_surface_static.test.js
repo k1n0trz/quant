@@ -43,7 +43,11 @@ assert.ok(css.includes('#view-lab') && css.includes('.nav-item[data-view="lab"]'
 assert.ok(css.includes('status-missing'), 'CSS debe diferenciar conectores sin clave.');
 assert.ok(css.includes('overflow-x: hidden'), 'La vista activa debe cortar overflow horizontal.');
 assert.ok(/#view-training\s*\{[\s\S]*overflow-y:\s*auto/.test(css), 'Training debe permitir scroll vertical dentro de la vista activa.');
-assert.ok(/#view-training\s*\{[\s\S]*padding-bottom:\s*28px/.test(css), 'Training debe dejar margen inferior para ver el final del panel.');
+assert.ok(/#view-training\.view\.active\s*\{[\s\S]*overflow-y:\s*scroll/.test(css), 'Training debe forzar scroll vertical aunque el body del shell este bloqueado.');
+assert.ok(/#view-training\.view\.active\s*\{[\s\S]*padding-bottom:\s*max\(120px/.test(css), 'Training debe dejar margen inferior suficiente para llegar al final del panel.');
+assert.ok(/#view-training\.view\.active\s*\{[\s\S]*overscroll-behavior-y:\s*contain/.test(css), 'Training debe contener el wheel scroll dentro de su propia vista.');
+assert.ok(/#view-training \.training-tabs-container\s*\{[\s\S]*margin-bottom:\s*96px/.test(css), 'Los tabs inferiores de Training deben quedar alcanzables al scrollear.');
+assert.ok(/\.chat-dock\s*\{[\s\S]*max-height:\s*100%/.test(css), 'El copiloto no debe estirar el layout ni bloquear el scroll de Training.');
 assert.ok(main.includes("'TRAINING_BACKEND_LOOP_ENABLED'"), 'Cloud/VPS deben leer flags de loop desde process.env.');
 assert.ok(main.includes('trainingStateReader.readSnapshot()'), 'Autostart debe usar el lector correcto del training state.');
 assert.ok(main.includes('getBinanceSymbols: () => binanceSymbols()'), 'Loop backend debe poder sembrar universo Binance persistente.');

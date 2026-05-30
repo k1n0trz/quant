@@ -113,6 +113,10 @@ jobs:
             git checkout "$TARGET_SHA"
 
             cd "$APP_SUBDIR"
+            if [ -d node_modules ]; then
+              sudo chown -R "$(id -u):$(id -g)" node_modules || true
+            fi
+            sudo chown "$(id -u):$(id -g)" package.json package-lock.json 2>/dev/null || true
             npm ci --omit=dev --ignore-scripts --no-audit --no-fund
             node --check main.js
             npm run test:backend

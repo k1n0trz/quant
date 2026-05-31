@@ -425,7 +425,7 @@ function bindUi() {
     const isLimit = $('orderType').value === 'LIMIT';
     $('limitPriceInput').closest('label').style.opacity = isLimit ? '1' : '0.35';
   });
-  $('enableTradingBtn').addEventListener('click', () => alert('Trading real requiere REAL_TRADING=true, confirmación exacta, límites de riesgo y una prueba final. No lo voy a activar a ciegas con dinero real.'));
+  $('enableTradingBtn').addEventListener('click', () => alert('Trading real se controla desde el estado backend y las APIs guardadas. Si REAL_TRADING esta armado, kill switch OFF y Binance tiene permisos, el canal real esta disponible; Training Mode no lo bloquea.'));
   $('saveCustomInstructionsBtn').addEventListener('click', saveCustomInstructions);
   $('runCalibrationBtn').addEventListener('click', manualCalibration);
   $('newConvBtn').addEventListener('click', startNewConversation);
@@ -1432,9 +1432,9 @@ function trainingContext() {
     .map((s) => `${s.name}: live=${s.liveCandidates}, open=${s.open}, closed=${s.closed}, WR=${s.closed ? Math.round(s.winrate * 100) + '%' : 'n/a'}, PnL=${s.pnl.toFixed(2)}, score=${s.avgScore ? s.avgScore.toFixed(0) : 'n/a'}`)
     .join(' | ');
   return [
-    'Training Mode: ACTIVO. Mercado real observado + operaciones demo internas. blockRealExecution solo protege el training: no bloquea ordenes manuales reales cuando los gates de trading real estan activos.',
+    'Training Mode: ACTIVO. Mercado real observado + operaciones demo internas. blockRealExecution solo protege el training: no bloquea ordenes reales del canal autorizado cuando REAL_TRADING, runtime, permisos y kill switch lo permiten.',
     `Ejecucion demo MT5: ${mt5DemoExecution.state}. ${mt5DemoExecution.detail}`,
-    'Ejecucion por orden del usuario: Binance real solo desde el panel manual con REAL_TRADING=true, confirmacion exacta y gates; MT5 demo usa puente demo-only si ambos flags estan armados; MT5 real sigue sin puente de ejecucion.',
+    'Ejecucion real: Binance puede operar por el canal real autorizado cuando REAL_TRADING=true, kill switch OFF, risk config valida y API con permisos. No uses Training, blockRealExecution ni ICT/CRT como bloqueo global. MT5 demo usa puente demo-only si ambos flags estan armados; MT5 real requiere adapter operativo y mercado abierto.',
     'ICT/CRT no es requisito global para operar real; es una estrategia dentro del laboratorio, comparable con Trend Momentum, Breakout Retest, Mean Reversion y Volume Pullback.',
     `Guard: mode=training, simulated=true, blockRealExecution=${tr.blockRealExecution}, targetOpenPositions=${tr.targetOpenPositions} (${tr.targetIntradayPositions} intradia + ${tr.targetSwingPositions} swing), maxPairs=${tr.maxPairs}.`,
     `Execution adapters: Core=${state.executionAdapters.core}, Paper=${state.executionAdapters.paper}, Binance=${state.executionAdapters.binance}, MT5=${state.executionAdapters.mt5}, TradingViewWebhook=${state.executionAdapters.tradingViewWebhook}, BrokerAPI=${state.executionAdapters.brokerApi}.`,
@@ -1453,7 +1453,7 @@ function trainingContext() {
 async function runSelfAudit() {
   const findings = [];
   const add = (severity, area, issue, fix) => findings.push({ ts: new Date().toISOString(), severity, area, issue, fix });
-  if (state.env.realTrading) add('HIGH', 'execution', 'REAL_TRADING esta activo; se requiere auditoria manual antes de dinero real.', 'Mantener risk gate y confirmacion exacta.');
+  if (state.env.realTrading) add('MED', 'execution', 'REAL_TRADING esta activo; canal real disponible fuera del loop de training.', 'Vigilar risk gate, kill switch, permisos Binance y horario MT5.');
   if (!state.training.blockRealExecution) {
     state.training.blockRealExecution = true;
     add('HIGH', 'training', 'Training tenia blockRealExecution desactivado.', 'Auto-fix: blockRealExecution=true.');
@@ -3102,7 +3102,7 @@ async function askQuant(text, writeToAi) {
     const recentWarnings = state.pipeline.filter((e) => e.status === 'WARN' || e.status === 'ERR').slice(0, 8).map((e) => `${e.time} ${e.status}: ${e.message}`).join('\n') || 'sin warnings recientes';
     const operationalContext = [
       fullContext,
-      'Trading real runtime: usar estado real actual; blockRealExecution solo protege el training paper.',
+      'Trading real runtime: usar estado real actual; blockRealExecution solo protege el training paper y no bloquea el canal real autorizado.',
       mt5MarketScheduleContext(),
       `Rendimiento/warnings recientes:\n${recentWarnings}`
     ].join('\n\n');

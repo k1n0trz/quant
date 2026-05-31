@@ -5,15 +5,17 @@ const path = require('node:path');
 const main = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
 const renderer = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer.js'), 'utf8');
 
-assert(main.includes('Trading real no depende de que ICT/CRT tenga muestra suficiente'), 'El prompt sistema debe separar real trading de una estrategia especifica.');
-assert(main.includes('restricciones suaves'), 'El prompt sistema debe hablar de restricciones suaves y gates operativos.');
+assert(main.includes('Trading real no depende de Training Mode, blockRealExecution'), 'El prompt sistema debe separar real trading del loop de training.');
+assert(main.includes('la operacion como ejecutable en Binance'), 'El prompt sistema debe permitir tratar Binance como ejecutable cuando los gates reales estan armados.');
+assert(main.includes('restricciones suaves y diagnosticas'), 'El prompt sistema debe hablar de restricciones suaves y diagnosticas, no bloqueos por estrategia.');
 assert(main.includes('puedes proponer correcciones concretas para warnings'), 'Quant debe tener poder para diagnosticar/corregir warnings.');
 assert(main.includes('horario MT5 Colombia'), 'El prompt sistema debe conocer horario MT5 Colombia.');
 
 assert(renderer.includes('mt5MarketScheduleContext'), 'El renderer debe inyectar horario MT5 al contexto del chat.');
 assert(renderer.includes('Rendimiento/warnings'), 'El contexto del chat debe incluir warnings de rendimiento recientes.');
 assert(renderer.includes('Trading real runtime'), 'El contexto debe reportar estado real runtime sin mezclarlo con Training.');
-assert(renderer.includes('blockRealExecution solo protege el training'), 'El contexto debe aclarar que blockRealExecution no bloquea ordenes manuales reales.');
+assert(renderer.includes('canal real autorizado'), 'El contexto debe aclarar que blockRealExecution no bloquea el canal real autorizado.');
 assert(renderer.includes('ICT/CRT no es requisito global para operar real'), 'El contexto debe aclarar que ICT/CRT es una estrategia y no un bloqueo global.');
+assert(!renderer.includes('No lo voy a activar a ciegas'), 'El UI no debe presentar trading real como negativa absoluta cuando el backend ya esta armado.');
 
 console.log('chat_operational_context_static.test.js OK');

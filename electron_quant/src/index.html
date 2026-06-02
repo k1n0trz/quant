@@ -654,6 +654,18 @@
           </form>
           <div class="panel-head" style="margin-top:28px"><h2>ESTADO DEL SISTEMA</h2></div>
           <div id="settingsBox" class="settings-grid"></div>
+          <div class="panel-head" style="margin-top:28px">
+            <h2>AUTO-AUDITORIA DE QUANT</h2>
+            <button class="tiny-btn" id="systemSelfAuditRefreshBtn" type="button">Actualizar</button>
+          </div>
+          <div class="self-audit-panel" id="systemSelfAuditPanel">
+            <div class="self-audit-top">
+              <div id="systemSelfAuditStatus" class="self-audit-status">Sin lectura</div>
+              <button class="ghost-btn" id="systemSelfAuditRunBtn" type="button">Auditar ahora</button>
+            </div>
+            <div id="systemSelfAuditFindings" class="self-audit-findings"></div>
+            <div id="systemSelfAuditHistory" class="self-audit-history"></div>
+          </div>
           <div id="settingsAlertsMount"></div>
         </div>
       </section>

@@ -33,14 +33,23 @@ const { createApiRouter } = require('./backend/routes/api-router');
 const { createReadOnlyTrainingStateReader, normalizeTrainingState } = require('./backend/training/training-state');
 const { normalizeTrainingStateTraceability } = require('./backend/training/training-traceability');
 const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
+const { getTrainingDemoLoopSchedulerStatus } = require('./backend/training/training-loop-scheduler');
 const { placeMt5DemoOrder } = require('./backend/adapters/mt5/mt5-demo-order-service');
 const { getMt5MarketSession } = require('./backend/market/mt5-market-hours');
+const { createSystemSelfAuditSchedulerController } = require('./backend/system/system-self-audit-scheduler');
+const {
+  runSystemSelfAudit,
+  writeSystemSelfAuditStatus,
+  appendSystemSelfAuditHistory,
+  SYSTEM_SELF_AUDIT_ALLOWED_SERVICES
+} = require('./backend/system/system-self-audit-service');
 
 const BINANCE_BASE = 'https://api.binance.com';
 const BINANCE_FAPI_BASE = 'https://fapi.binance.com';
 const BINANCE_DAPI_BASE = 'https://dapi.binance.com';
 let timeOffsetMs = 0;
 let trainingLoopAutoStartAttempted = false;
+let systemSelfAuditAutoStartAttempted = false;
 const logger = createLogger(IS_ELECTRON ? 'quant-desktop' : 'quant-backend');
 const DEFAULT_VPS_PUBLIC_IP = '37.60.227.190';
 const CLOUD_ENV_KEYS = [
@@ -56,6 +65,7 @@ const CLOUD_ENV_KEYS = [
   'TRAINING_BACKEND_LOOP_SCHEDULER_ENABLED','TRAINING_BACKEND_LOOP_INTERVAL_MS',
   'TRAINING_BACKEND_DEMO_ENTRY_ENABLED','TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED',
   'TRAINING_MT5_DEMO_ORDER_SEND_ENABLED','TRAINING_MT5_DEMO_LOT_SIZE',
+  'SYSTEM_SELF_AUDIT_ENABLED','SYSTEM_SELF_AUDIT_INTERVAL_MS','SYSTEM_SELF_AUDIT_REMEDIATION_ENABLED',
   'QUANT_WEB_PORT','QUANT_WEB_HOST','QUANT_DATA_DIR','QUANT_SYNC_URL','QUANT_SYNC_KEY',
   'QUANT_VPS_PUBLIC_IP',
   'QUANT_DESKTOP_DOWNLOAD_URL','DEFAULT_PROVIDER','QUANT_PRIMARY_MODEL',
@@ -150,6 +160,8 @@ const conversationsDir       = path.join(memoryDir, 'conversations');
 const mt5SnapshotFile        = path.join(memoryDir, 'mt5_snapshot.json');
 const backendStateFile       = path.join(memoryDir, 'backend_state.json');
 const riskConfigFile         = path.join(memoryDir, 'risk_config.json');
+const systemSelfAuditStatusFile  = path.join(memoryDir, 'system_self_audit_status.json');
+const systemSelfAuditHistoryFile = path.join(memoryDir, 'system_self_audit_history.jsonl');
 
 // Sync config (desktop -> cloud)
 const QUANT_SYNC_URL = (ENV.QUANT_SYNC_URL || process.env.QUANT_SYNC_URL || '').replace(/\/$/, '');
@@ -178,6 +190,62 @@ const riskConfigStore = createJsonStore(riskConfigFile, () => createDefaultRiskC
 function ensureMemoryDir() {
   fs.mkdirSync(memoryDir, { recursive: true });
   if (!fs.existsSync(memoryFile)) fs.writeFileSync(memoryFile, '', 'utf8');
+}
+
+function runSystemctl(args, timeoutMs = 5000) {
+  return new Promise((resolve) => {
+    if (process.platform === 'win32') {
+      resolve({ ok: false, code: null, stdout: '', stderr: 'systemctl_unavailable_on_windows' });
+      return;
+    }
+    const child = spawn('systemctl', args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      finish({ ok: false, code: null, stdout, stderr: stderr || 'systemctl_timeout' });
+    }, timeoutMs);
+    child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
+    child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+    child.on('error', (error) => {
+      finish({ ok: false, code: null, stdout, stderr: String(error?.message || error) });
+    });
+    child.on('close', (code) => {
+      finish({ ok: code === 0, code, stdout: stdout.trim(), stderr: stderr.trim() });
+    });
+  });
+}
+
+async function testAllowedSystemServiceStatus(service) {
+  if (!SYSTEM_SELF_AUDIT_ALLOWED_SERVICES.includes(service)) {
+    return { ok: false, service, active: false, reason: 'service_not_allowlisted' };
+  }
+  const result = await runSystemctl(['is-active', service], 3500);
+  return {
+    ok: result.ok && result.stdout === 'active',
+    service,
+    active: result.ok && result.stdout === 'active',
+    reason: result.ok ? null : (result.stdout || result.stderr || 'service_inactive')
+  };
+}
+
+async function restartAllowedSystemService(service) {
+  if (!SYSTEM_SELF_AUDIT_ALLOWED_SERVICES.includes(service)) {
+    return { ok: false, service, reason: 'service_not_allowlisted' };
+  }
+  const result = await runSystemctl(['restart', service], 8000);
+  return {
+    ok: result.ok,
+    service,
+    reason: result.ok ? null : (result.stderr || result.stdout || 'service_restart_failed')
+  };
 }
 
 function ensureEnvExampleFile() {
@@ -252,6 +320,44 @@ function assertRealTradingExecutionAllowed(env = ENV) {
   assertTradingRealCanBeEnabled(policy.state, policy.riskConfig);
   return policy;
 }
+
+async function runPersistentSystemSelfAudit(context = {}) {
+  const env = context.env || effectiveEnvForUser(WEB_AUTH_EMAIL);
+  const audit = await runSystemSelfAudit({
+    env,
+    botState: readBotState(),
+    riskValidation: validateRiskConfig(readRiskConfig()),
+    deps: {
+      readTrainingStateSnapshot: () => trainingStateReader.readSnapshot(),
+      getTrainingLoopStatus: () => getTrainingDemoLoopSchedulerStatus({
+        env,
+        deps: {
+          readTrainingStateSnapshot: () => trainingStateReader.readSnapshot(),
+          writeTrainingState: (nextState) => writeTrainingState(nextState),
+          getBinanceSymbols: () => binanceSymbols(),
+          getTicker: (symbol) => ticker(symbol),
+          readMt5Snapshot: () => readMt5Snapshot(),
+          readMemory: (limit) => readMemory(limit)
+        },
+        logger
+      }),
+      testServiceStatus: (service) => testAllowedSystemServiceStatus(service),
+      restartAllowedService: (service) => restartAllowedSystemService(service)
+    }
+  });
+  writeSystemSelfAuditStatus(systemSelfAuditStatusFile, audit);
+  appendSystemSelfAuditHistory(systemSelfAuditHistoryFile, audit);
+  logger.info('system.self_audit.completed', {
+    severity: audit.summary.severity,
+    findingsCount: audit.summary.findingsCount,
+    remediationActions: audit.remediation.actions.length
+  });
+  return audit;
+}
+
+const systemSelfAuditScheduler = createSystemSelfAuditSchedulerController({
+  runAudit: runPersistentSystemSelfAudit
+});
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
@@ -1832,7 +1938,12 @@ async function handleApi(req, res, url) {
         placeMt5DemoOrder: (input) => placeMt5DemoOrder(input, { env: userEnv }),
         syncBinanceTime: () => syncBinanceTime(),
         mt5AccountInfo: (envArg) => mt5Info(envArg),
-        botTemplatesRoot: path.join(__dirname, 'bots', 'templates')
+        botTemplatesRoot: path.join(__dirname, 'bots', 'templates'),
+        systemSelfAuditStatusFile,
+        systemSelfAuditHistoryFile,
+        systemSelfAuditScheduler,
+        testServiceStatus: (service) => testAllowedSystemServiceStatus(service),
+        restartAllowedService: (service) => restartAllowedSystemService(service)
       },
       getBotState: () => readBotState(),
       setBotState: (next) => writeBotState(next),
@@ -1842,7 +1953,7 @@ async function handleApi(req, res, url) {
     const modularResult = await modularRouter.dispatch({
       method: req.method,
       pathname: url.pathname,
-      body
+      body: { ...q, ...body }
     });
     if (modularResult) return sendJson(res, modularResult.body, modularResult.status);
     if (url.pathname === '/api/api-config-read') return sendJson(res, cfgStatus);
@@ -2505,6 +2616,25 @@ function startLocalWebServer() {
           },
           logger
         });
+      }
+      if (!systemSelfAuditAutoStartAttempted) {
+        systemSelfAuditAutoStartAttempted = true;
+        const auditEnv = effectiveEnvForUser(WEB_AUTH_EMAIL);
+        const started = systemSelfAuditScheduler.start({
+          env: auditEnv,
+          logger
+        });
+        logger.info('system.self_audit.autostart', {
+          started: started.ok === true,
+          reason: started.reason || null,
+          active: started.status?.active === true,
+          intervalMs: started.status?.intervalMs || null
+        });
+        if (started.ok) {
+          systemSelfAuditScheduler.runNow({ env: auditEnv, reason: 'startup' }).catch((error) => {
+            logger.error('system.self_audit.startup_failed', { message: String(error?.message || error) });
+          });
+        }
       }
     });
   };

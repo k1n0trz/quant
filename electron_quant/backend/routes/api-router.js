@@ -26,6 +26,13 @@ const { generateTrainingSignalCandidates } = require('../training/training-signa
 const { buildTrainingBotsStatus } = require('../training/bot-registry-service');
 const { placeMt5DemoOrder } = require('../adapters/mt5/mt5-demo-order-service');
 const {
+  runSystemSelfAudit,
+  writeSystemSelfAuditStatus,
+  readSystemSelfAuditStatus,
+  appendSystemSelfAuditHistory,
+  readSystemSelfAuditHistory
+} = require('../system/system-self-audit-service');
+const {
   startTrainingDemoLoopScheduler,
   stopTrainingDemoLoopScheduler,
   getTrainingDemoLoopSchedulerStatus
@@ -60,6 +67,84 @@ function createApiRouter(context) {
           bot: context.getBotState(),
           risk: validateRiskConfig(context.getRiskConfig()),
           adapters: getConnectionsSummary(env).adapters
+        });
+      }
+
+      if (method === 'POST' && pathname === '/api/system/self-audit/run') {
+        const audit = await runSystemSelfAudit({
+          env,
+          botState: context.getBotState(),
+          riskValidation: validateRiskConfig(context.getRiskConfig()),
+          deps: {
+            ...deps,
+            getTrainingLoopStatus: typeof deps.getTrainingLoopStatus === 'function'
+              ? deps.getTrainingLoopStatus
+              : () => loopScheduler.getTrainingDemoLoopSchedulerStatus({
+                env,
+                deps,
+                logger: context.logger || null
+              })
+          }
+        });
+        if (deps.systemSelfAuditStatusFile) writeSystemSelfAuditStatus(deps.systemSelfAuditStatusFile, audit);
+        if (deps.systemSelfAuditHistoryFile) appendSystemSelfAuditHistory(deps.systemSelfAuditHistoryFile, audit);
+        return response(200, audit);
+      }
+
+      if (method === 'GET' && pathname === '/api/system/self-audit/status') {
+        return response(200, readSystemSelfAuditStatus(deps.systemSelfAuditStatusFile));
+      }
+
+      if (method === 'GET' && pathname === '/api/system/self-audit/history') {
+        return response(200, readSystemSelfAuditHistory(deps.systemSelfAuditHistoryFile, body.limit));
+      }
+
+      if (method === 'GET' && pathname === '/api/system/self-audit/scheduler/status') {
+        const scheduler = deps.systemSelfAuditScheduler;
+        return response(200, {
+          ok: true,
+          scheduler: scheduler && typeof scheduler.status === 'function'
+            ? scheduler.status({ env, deps, logger: context.logger || null })
+            : { enabled: true, active: false, reason: 'system_self_audit_scheduler_unavailable' },
+          safety: {
+            readOnly: true,
+            writesPerformed: false,
+            realTradingTouched: false
+          }
+        });
+      }
+
+      if (method === 'POST' && pathname === '/api/system/self-audit/scheduler/start') {
+        const scheduler = deps.systemSelfAuditScheduler;
+        const result = scheduler && typeof scheduler.start === 'function'
+          ? scheduler.start({ env, deps, logger: context.logger || null })
+          : { ok: false, reason: 'system_self_audit_scheduler_unavailable', status: { active: false } };
+        return response(result.ok ? 200 : 409, {
+          ok: result.ok === true,
+          reason: result.reason || null,
+          scheduler: result.status,
+          safety: {
+            readOnly: false,
+            writesPerformed: false,
+            realTradingTouched: false
+          }
+        });
+      }
+
+      if (method === 'POST' && pathname === '/api/system/self-audit/scheduler/stop') {
+        const scheduler = deps.systemSelfAuditScheduler;
+        const result = scheduler && typeof scheduler.stop === 'function'
+          ? scheduler.stop({ env, deps, logger: context.logger || null })
+          : { ok: false, reason: 'system_self_audit_scheduler_unavailable', status: { active: false } };
+        return response(result.ok ? 200 : 409, {
+          ok: result.ok === true,
+          reason: result.reason || null,
+          scheduler: result.status,
+          safety: {
+            readOnly: false,
+            writesPerformed: false,
+            realTradingTouched: false
+          }
         });
       }
 

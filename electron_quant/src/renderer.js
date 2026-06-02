@@ -21,6 +21,10 @@ if (!window.quant) {
     trainingLoopStatus:    ()                          => apiGet('training/demo/loop/status'),
     trainingLoopStart:     ()                          => apiPost('training/demo/loop/start', {}),
     trainingBotsStatus:    ()                          => apiGet('training/bots/status'),
+    systemSelfAuditStatus: ()                          => apiGet('system/self-audit/status'),
+    systemSelfAuditRun:    ()                          => apiPost('system/self-audit/run', {}),
+    systemSelfAuditHistory:(limit)                     => apiGet(`system/self-audit/history?limit=${limit || 10}`),
+    systemSelfAuditScheduler: ()                       => apiGet('system/self-audit/scheduler/status'),
     finnhub:               ()                          => apiGet('news-finnhub'),
     finnhubEconomic:       ()                          => apiGet('calendar-finnhub-economic'),
     alpha:                 ()                          => apiGet('news-alpha'),
@@ -196,6 +200,10 @@ const state = {
   selfAudit: {
     lastRun: null,
     findings: []
+  },
+  systemSelfAudit: {
+    status: null,
+    history: []
   }
 };
 
@@ -253,7 +261,7 @@ function setView(name) {
   document.querySelectorAll('.nav-item').forEach((n) => n.classList.toggle('active', n.dataset.view === name));
   const view = $(`view-${name}`);
   if (view) view.classList.add('active');
-  if (name === 'settings')       { loadCustomInstructions(); loadCalibrationStatus(); loadApiConfig(); mountAlertsIntoSettings(); loadAlerts(); }
+  if (name === 'settings')       { loadCustomInstructions(); loadCalibrationStatus(); loadApiConfig(); loadSystemSelfAudit(); mountAlertsIntoSettings(); loadAlerts(); }
   if (name === 'training')       refreshTrainingRuntimeStatus();
   if (name === 'conversations')  loadConversationsList();
   if (name === 'orders') loadOrders();
@@ -274,6 +282,70 @@ function mountAlertsIntoSettings() {
   });
   mount.appendChild(wrap);
   mount.dataset.mounted = 'true';
+}
+
+function fmtAuditTime(ts) {
+  if (!ts) return 'sin lectura';
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime()) ? 'sin lectura' : d.toLocaleTimeString('es-CO', { hour12: false });
+}
+
+function renderSystemSelfAudit(statusPayload = null, historyPayload = null) {
+  const box = $('systemSelfAuditStatus');
+  const findingsBox = $('systemSelfAuditFindings');
+  const historyBox = $('systemSelfAuditHistory');
+  if (!box || !findingsBox || !historyBox) return;
+  const audit = statusPayload?.audit || state.systemSelfAudit.status?.audit || null;
+  const scheduler = state.systemSelfAudit.scheduler || {};
+  if (!audit) {
+    box.innerHTML = `<b>Sin auditoria persistida</b><span>scheduler ${scheduler.active ? 'activo' : 'sin lectura'}</span>`;
+    findingsBox.innerHTML = '<div class="self-audit-empty">Aun no hay hallazgos.</div>';
+  } else {
+    const sev = audit.summary?.severity || 'unknown';
+    box.innerHTML = [
+      `<b class="self-audit-sev ${escapeHtml(sev)}">${escapeHtml(sev.toUpperCase())}</b>`,
+      `<span>ultima ${fmtAuditTime(audit.ts)}</span>`,
+      `<span>scheduler ${scheduler.active ? 'activo' : 'off'} · runs ${scheduler.runs || 0}</span>`,
+      `<span>remediacion ${audit.remediation?.enabled ? 'ON' : 'OFF'} · acciones ${audit.remediation?.actions?.length || 0}</span>`
+    ].join('');
+    const findings = Array.isArray(audit.findings) ? audit.findings.slice(0, 8) : [];
+    findingsBox.innerHTML = findings.length
+      ? findings.map((f) => `<div class="self-audit-finding ${escapeHtml(f.severity || 'info')}"><b>${escapeHtml(f.area || 'system')} · ${escapeHtml(f.code || 'finding')}</b><span>${escapeHtml(f.message || '')}</span><small>${escapeHtml(f.action || '')}</small></div>`).join('')
+      : '<div class="self-audit-empty">Sin hallazgos activos.</div>';
+  }
+
+  const entries = Array.isArray(historyPayload?.entries) ? historyPayload.entries : state.systemSelfAudit.history;
+  historyBox.innerHTML = entries.length
+    ? entries.slice(-5).reverse().map((e) => `<div class="self-audit-history-row"><span>${fmtAuditTime(e.ts)}</span><b>${escapeHtml(e.summary?.severity || 'n/a')}</b><small>${Number(e.summary?.findingsCount || 0)} hallazgos · ${Number(e.remediation?.actions?.length || 0)} acciones</small></div>`).join('')
+    : '<div class="self-audit-empty">Historial vacio.</div>';
+}
+
+async function loadSystemSelfAudit(manual = false) {
+  if (!$('systemSelfAuditPanel') || !window.quant.systemSelfAuditStatus) return;
+  try {
+    const [status, history, scheduler] = await Promise.all([
+      window.quant.systemSelfAuditStatus(),
+      window.quant.systemSelfAuditHistory ? window.quant.systemSelfAuditHistory(10) : Promise.resolve({ entries: [] }),
+      window.quant.systemSelfAuditScheduler ? window.quant.systemSelfAuditScheduler() : Promise.resolve({ scheduler: {} })
+    ]);
+    state.systemSelfAudit.status = status;
+    state.systemSelfAudit.history = Array.isArray(history.entries) ? history.entries : [];
+    state.systemSelfAudit.scheduler = scheduler.scheduler || {};
+    renderSystemSelfAudit(status, history);
+    if (manual) logEvent('OK', 'System self-audit: estado actualizado');
+  } catch (err) {
+    setText('systemSelfAuditStatus', `Error leyendo self-audit: ${err.message}`);
+    if (manual) logEvent('WARN', `System self-audit: ${err.message}`);
+  }
+}
+
+async function runSystemSelfAuditNow() {
+  if (!window.quant.systemSelfAuditRun) return;
+  setText('systemSelfAuditStatus', 'Ejecutando auditoria...');
+  const result = await window.quant.systemSelfAuditRun();
+  state.systemSelfAudit.status = { ok: true, available: true, audit: result };
+  logEvent(result.summary?.severity === 'ok' ? 'OK' : 'WARN', `System self-audit: ${result.summary?.severity || 'done'} · ${result.summary?.findingsCount || 0} hallazgos`);
+  await loadSystemSelfAudit(false);
 }
 
 function setTf(tf) {
@@ -428,6 +500,8 @@ function bindUi() {
   $('enableTradingBtn').addEventListener('click', () => alert('Trading real se controla desde el estado backend y las APIs guardadas. Si REAL_TRADING esta armado, kill switch OFF y Binance tiene permisos, el canal real esta disponible; Training Mode no lo bloquea.'));
   $('saveCustomInstructionsBtn').addEventListener('click', saveCustomInstructions);
   $('runCalibrationBtn').addEventListener('click', manualCalibration);
+  if ($('systemSelfAuditRefreshBtn')) $('systemSelfAuditRefreshBtn').addEventListener('click', () => loadSystemSelfAudit(true));
+  if ($('systemSelfAuditRunBtn')) $('systemSelfAuditRunBtn').addEventListener('click', runSystemSelfAuditNow);
   $('newConvBtn').addEventListener('click', startNewConversation);
   $('ordersRefreshBtn').addEventListener('click', loadOrders);
   $('positionsRefreshBtn').addEventListener('click', loadPositions);
@@ -1426,6 +1500,7 @@ function trainingContext() {
   const mt5Open = open.filter((p) => p.venue === 'MT5').length;
   const realized = tr.balance - tr.balanceStart;
   const mt5DemoExecution = trainingMt5DemoExecutionStatus();
+  const backendAudit = state.systemSelfAudit.status?.audit || null;
   updateTrainingStrategyStats();
   const strategyLines = Object.values(tr.strategyStats || {})
     .sort((a, b) => (b.open + b.liveCandidates) - (a.open + a.liveCandidates))
@@ -1439,6 +1514,7 @@ function trainingContext() {
     `Guard: mode=training, simulated=true, blockRealExecution=${tr.blockRealExecution}, targetOpenPositions=${tr.targetOpenPositions} (${tr.targetIntradayPositions} intradia + ${tr.targetSwingPositions} swing), maxPairs=${tr.maxPairs}.`,
     `Execution adapters: Core=${state.executionAdapters.core}, Paper=${state.executionAdapters.paper}, Binance=${state.executionAdapters.binance}, MT5=${state.executionAdapters.mt5}, TradingViewWebhook=${state.executionAdapters.tradingViewWebhook}, BrokerAPI=${state.executionAdapters.brokerApi}.`,
     `Self-audit: lastRun=${state.selfAudit.lastRun || 'pendiente'}, findings=${state.selfAudit.findings.length}.`,
+    `System self-audit: lastRun=${backendAudit?.ts || 'pendiente'}, severity=${backendAudit?.summary?.severity || 'sin lectura'}, findings=${backendAudit?.summary?.findingsCount || 0}, remediation=${backendAudit?.remediation?.enabled ? 'ON' : 'OFF'}, actions=${backendAudit?.remediation?.actions?.length || 0}.`,
     `Estrategias activas y comparadas: ${Object.values(state.strategies).map((s) => `${s.name} minScore=${s.minScore || 'n/a'} RR=${s.rrMin || 'n/a'}`).join('; ')}.`,
     `Scoreboard estrategias: ${strategyLines || 'sin datos aun'}.`,
     `Pares activos reales: ${tr.activePairs.map((p) => `${p.venue}:${p.symbol}@${fmtPrice(p.price)} conf ${p.indicators?.confidence || 0} strategy=${p.indicators?.primaryStrategy?.id || 'n/a'}`).join('; ') || 'validando'}.`,

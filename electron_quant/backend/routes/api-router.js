@@ -26,6 +26,12 @@ const { generateTrainingSignalCandidates } = require('../training/training-signa
 const { buildTrainingBotsStatus } = require('../training/bot-registry-service');
 const { placeMt5DemoOrder } = require('../adapters/mt5/mt5-demo-order-service');
 const {
+  executeBinanceRealOrder,
+  summarizeBinanceRealOrderAudit,
+  appendBinanceRealOrderAudit,
+  readBinanceRealOrderAudit
+} = require('../execution/binance-real-order-service');
+const {
   runSystemSelfAudit,
   writeSystemSelfAuditStatus,
   readSystemSelfAuditStatus,
@@ -41,6 +47,36 @@ const { ApiError, toErrorPayload } = require('../utils/errors');
 
 function response(status, body) {
   return { status, body };
+}
+
+function flattenBinanceOrderResult(result) {
+  if (result?.ok === true) {
+    return {
+      ok: true,
+      executionStatus: result.status || 'executed',
+      request: result.request || null,
+      safety: result.safety || null,
+      ...(result.order || {})
+    };
+  }
+  return {
+    ok: false,
+    status: result?.status || 'error',
+    error: result?.error || 'binance_real_order_failed',
+    details: result?.details || [],
+    request: result?.request || null,
+    safety: result?.safety || null
+  };
+}
+
+function auditBinanceRealOrder(deps, request, result) {
+  if (!deps.binanceRealOrderAuditFile) return;
+  try {
+    appendBinanceRealOrderAudit(
+      deps.binanceRealOrderAuditFile,
+      summarizeBinanceRealOrderAudit({ request, result })
+    );
+  } catch {}
 }
 
 function createApiRouter(context) {
@@ -194,6 +230,26 @@ function createApiRouter(context) {
 
       if (method === 'GET' && pathname === '/api/signals') {
         return response(200, { items: readSignalsFromMemory(deps.readMemory) });
+      }
+
+      if (method === 'POST' && pathname === '/api/place-order') {
+        const runner = typeof deps.executeBinanceRealOrder === 'function'
+          ? deps.executeBinanceRealOrder
+          : executeBinanceRealOrder;
+        const result = await runner({
+          input: body,
+          env,
+          botState: context.getBotState(),
+          riskConfig: context.getRiskConfig(),
+          deps
+        });
+        auditBinanceRealOrder(deps, body, result);
+        const status = result.ok === true ? 200 : (result.status === 'blocked' ? 409 : 502);
+        return response(status, flattenBinanceOrderResult(result));
+      }
+
+      if (method === 'GET' && pathname === '/api/binance-real-order-audit') {
+        return response(200, readBinanceRealOrderAudit(deps.binanceRealOrderAuditFile, body.limit));
       }
 
       if (method === 'GET' && pathname === '/api/training/logs') {

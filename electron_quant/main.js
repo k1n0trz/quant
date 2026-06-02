@@ -30,6 +30,11 @@ const { createJsonStore } = require('./backend/memory/json-store');
 const { createDefaultBotState, mergeBotState } = require('./backend/services/bot-state-service');
 const { createDefaultRiskConfig, assertTradingRealCanBeEnabled, validateRiskConfig } = require('./backend/risk/risk-policy');
 const { createApiRouter } = require('./backend/routes/api-router');
+const {
+  executeBinanceRealOrder,
+  summarizeBinanceRealOrderAudit,
+  appendBinanceRealOrderAudit
+} = require('./backend/execution/binance-real-order-service');
 const { createReadOnlyTrainingStateReader, normalizeTrainingState } = require('./backend/training/training-state');
 const { normalizeTrainingStateTraceability } = require('./backend/training/training-traceability');
 const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
@@ -160,6 +165,7 @@ const conversationsDir       = path.join(memoryDir, 'conversations');
 const mt5SnapshotFile        = path.join(memoryDir, 'mt5_snapshot.json');
 const backendStateFile       = path.join(memoryDir, 'backend_state.json');
 const riskConfigFile         = path.join(memoryDir, 'risk_config.json');
+const binanceRealOrderAuditFile = path.join(memoryDir, 'binance_real_order_audit.jsonl');
 const systemSelfAuditStatusFile  = path.join(memoryDir, 'system_self_audit_status.json');
 const systemSelfAuditHistoryFile = path.join(memoryDir, 'system_self_audit_history.jsonl');
 
@@ -1663,6 +1669,45 @@ async function placeOrderBinance(side, symbol, qty, type = 'MARKET', price = nul
   };
 }
 
+function flattenBinanceExecutionResult(result) {
+  if (result?.ok === true) {
+    return {
+      ok: true,
+      executionStatus: result.status || 'executed',
+      request: result.request || null,
+      safety: result.safety || null,
+      ...(result.order || {})
+    };
+  }
+  return {
+    ok: false,
+    status: result?.status || 'error',
+    error: result?.error || 'binance_real_order_failed',
+    details: result?.details || [],
+    request: result?.request || null,
+    safety: result?.safety || null
+  };
+}
+
+async function executeAndAuditBinanceRealOrder(input, env = ENV) {
+  const result = await executeBinanceRealOrder({
+    input,
+    env,
+    botState: readBotState(),
+    riskConfig: readRiskConfig(),
+    deps: {
+      placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, env)
+    }
+  });
+  try {
+    appendBinanceRealOrderAudit(
+      binanceRealOrderAuditFile,
+      summarizeBinanceRealOrderAudit({ request: input, result })
+    );
+  } catch {}
+  return flattenBinanceExecutionResult(result);
+}
+
 // Cancela una orden abierta en Binance
 async function cancelOrderBinance(symbol, orderId, env = ENV) {
   if (!env.BINANCE_API_KEY || !env.BINANCE_SECRET)
@@ -1935,6 +1980,8 @@ async function handleApi(req, res, url) {
         getBinanceSymbols: () => binanceSymbols(),
         getTicker: (symbol) => ticker(symbol),
         readMt5Snapshot,
+        binanceRealOrderAuditFile,
+        placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, userEnv),
         placeMt5DemoOrder: (input) => placeMt5DemoOrder(input, { env: userEnv }),
         syncBinanceTime: () => syncBinanceTime(),
         mt5AccountInfo: (envArg) => mt5Info(envArg),
@@ -2741,7 +2788,8 @@ ipcMain.handle('calc-position-size', (_e, symbol, riskPct, entryPrice, stopPrice
   calcPositionSize(symbol, riskPct, entryPrice, stopPrice).catch((err) => ({ ok: false, error: err.message }))
 );
 ipcMain.handle('place-order', (_e, side, symbol, qty, type, price) =>
-  placeOrderBinance(side, symbol, qty, type, price).catch((err) => ({ ok: false, error: err.message }))
+  executeAndAuditBinanceRealOrder({ venue: 'BINANCE', side, symbol, qty, type, price }, ENV)
+    .catch((err) => ({ ok: false, status: 'error', error: err.message }))
 );
 ipcMain.handle('cancel-order', (_e, symbol, orderId) =>
   cancelOrderBinance(symbol, orderId).catch((err) => ({ ok: false, error: err.message }))

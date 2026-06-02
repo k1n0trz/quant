@@ -20,7 +20,7 @@ function boolFlag(value) {
 }
 
 function pythonCommand(env = {}) {
-  return env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
+  return env.MT5_PYTHON_COMMAND || env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
 }
 
 function demoServerLooksSafe(server) {

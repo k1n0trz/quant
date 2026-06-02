@@ -64,7 +64,7 @@ const CLOUD_ENV_KEYS = [
   'FINNHUB_API_KEY','ALPHA_VANTAGE_API_KEY','REAL_TRADING','MT5_CONNECTOR_ENABLED',
   'MT5_ACCOUNT1_LOGIN','MT5_ACCOUNT1_PASSWORD','MT5_ACCOUNT1_SERVER',
   'MT5_ACCOUNT2_LOGIN','MT5_ACCOUNT2_PASSWORD','MT5_ACCOUNT2_SERVER',
-  'MT5_PYTHON_COMMAND',
+  'MT5_PYTHON_COMMAND','MT5_BRIDGE_STATUS_FILE',
   'MT5_DEMO_TRADING_ENABLED','MT5_DEMO_MAX_LOTS','MT5_DEMO_DEVIATION','MT5_DEMO_MAGIC',
   'WEB_AUTH_ENABLED','WEB_AUTH_EMAIL','WEB_AUTH_PASSWORD',
   'TRAINING_BACKEND_WRITER_ENABLED',
@@ -1299,6 +1299,69 @@ function pythonCommand(env = ENV) {
 }
 
 const MT5_PYTHON_TIMEOUT_MS = 15000;
+const MT5_BRIDGE_STATUS_TTL_MS = 30000;
+
+function mt5BridgeStatusPath(env = ENV) {
+  return env.MT5_BRIDGE_STATUS_FILE
+    || process.env.MT5_BRIDGE_STATUS_FILE
+    || (process.platform === 'win32'
+      ? ''
+      : '/var/lib/quant/mt5/kinotrance/drive_c/Program Files/MetaTrader 5/MQL5/Files/quant_bridge_status.json');
+}
+
+function readMt5BridgeStatus(env = ENV) {
+  const file = mt5BridgeStatusPath(env);
+  if (!file) return null;
+  try {
+    const raw = fs.readFileSync(file, 'utf8');
+    const data = JSON.parse(raw);
+    const ts = Number(data.ts || 0);
+    const ageMs = ts ? Math.max(0, Date.now() - ts * 1000) : Infinity;
+    return {
+      ...data,
+      bridgeFile: file,
+      bridgeAgeMs: ageMs,
+      bridgeFresh: ageMs <= MT5_BRIDGE_STATUS_TTL_MS
+    };
+  } catch {
+    return null;
+  }
+}
+
+function mt5BridgeAccount(bridge) {
+  if (!bridge?.ok || !bridge.bridgeFresh) return null;
+  return {
+    available: Boolean(bridge.connected),
+    bridge: true,
+    source: bridge.source || 'QuantBridge.mq5',
+    login: bridge.login,
+    server: bridge.server,
+    currency: bridge.currency,
+    balance: Number(bridge.balance || 0),
+    equity: Number(bridge.equity || 0),
+    margin: Number(bridge.margin || 0),
+    margin_free: Number(bridge.marginFree || 0),
+    profit: Number(bridge.profit || 0),
+    trade_mode: bridge.tradeMode,
+    is_demo: Number(bridge.tradeMode) === 0 || /\bdemo\b/i.test(String(bridge.server || '')),
+    trade_allowed: Boolean(bridge.tradeAllowed && bridge.mqlTradeAllowed),
+    connected: Boolean(bridge.connected),
+    ageSec: Math.round(Number(bridge.bridgeAgeMs || 0) / 1000),
+    positions: Array.isArray(bridge.positions) ? bridge.positions.map((p) => ({
+      ticket: p.ticket,
+      symbol: p.symbol,
+      direction: p.side || p.direction,
+      volume: p.volume,
+      price_open: p.priceOpen,
+      price_current: p.priceCurrent,
+      profit: p.profit,
+      sl: p.sl,
+      tp: p.tp,
+      comment: p.comment || '',
+      time: p.time
+    })) : []
+  };
+}
 
 function safeMt5ProcessText(text) {
   return String(text || '')
@@ -1348,6 +1411,15 @@ function runPythonJson(code, fallback, env = ENV, timeoutMs = MT5_PYTHON_TIMEOUT
 }
 
 async function mt5MultiAccounts(usdCop = 0, env = ENV, passive = false) {
+  const bridgeAccount = mt5BridgeAccount(readMt5BridgeStatus(env));
+  if (bridgeAccount?.available) {
+    const account = {
+      ...bridgeAccount,
+      balanceCop: usdCop ? Math.round(bridgeAccount.balance * usdCop * 100) / 100 : 0,
+      equityCop: usdCop ? Math.round(bridgeAccount.equity * usdCop * 100) / 100 : 0
+    };
+    return { ok: true, source: 'mt5_bridge', accounts: [account] };
+  }
   const now = Date.now();
   // Non-passive = manual user action → always get fresh data, bypass cache
   if (!passive) _mt5AccountsCache.ts = 0;
@@ -1477,7 +1549,25 @@ except Exception as e:
   return runPythonJson(code, { ok: false, accounts: [] }, env);
 }
 
-function mt5Info(env = ENV) {
+async function mt5Info(env = ENV) {
+  const bridgeAccount = mt5BridgeAccount(readMt5BridgeStatus(env));
+  if (bridgeAccount?.available) {
+    return {
+      available: true,
+      bridge: true,
+      source: bridgeAccount.source,
+      login: bridgeAccount.login,
+      server: bridgeAccount.server,
+      currency: bridgeAccount.currency,
+      balance: bridgeAccount.balance,
+      equity: bridgeAccount.equity,
+      margin: bridgeAccount.margin,
+      margin_free: bridgeAccount.margin_free,
+      trade_allowed: bridgeAccount.trade_allowed,
+      connected: bridgeAccount.connected,
+      ageSec: bridgeAccount.ageSec
+    };
+  }
   const code = `
 import json
 try:
@@ -1504,7 +1594,27 @@ except Exception as e:
   return runPythonJson(code, { available: false, message: 'No pude leer MT5' }, env);
 }
 
-function mt5Positions(env = ENV) {
+async function mt5Positions(env = ENV) {
+  const bridgeAccount = mt5BridgeAccount(readMt5BridgeStatus(env));
+  if (bridgeAccount?.available) {
+    return {
+      ok: true,
+      bridge: true,
+      positions: bridgeAccount.positions,
+      account: {
+        login: bridgeAccount.login,
+        server: bridgeAccount.server,
+        currency: bridgeAccount.currency,
+        balance: bridgeAccount.balance,
+        equity: bridgeAccount.equity,
+        margin: bridgeAccount.margin,
+        margin_free: bridgeAccount.margin_free,
+        profit: bridgeAccount.profit,
+        trade_mode: bridgeAccount.trade_mode,
+        is_demo: bridgeAccount.is_demo
+      }
+    };
+  }
   const code = `
 import json
 try:

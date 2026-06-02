@@ -48,6 +48,7 @@ const CLOUD_ENV_KEYS = [
   'FINNHUB_API_KEY','ALPHA_VANTAGE_API_KEY','REAL_TRADING','MT5_CONNECTOR_ENABLED',
   'MT5_ACCOUNT1_LOGIN','MT5_ACCOUNT1_PASSWORD','MT5_ACCOUNT1_SERVER',
   'MT5_ACCOUNT2_LOGIN','MT5_ACCOUNT2_PASSWORD','MT5_ACCOUNT2_SERVER',
+  'MT5_PYTHON_COMMAND',
   'MT5_DEMO_TRADING_ENABLED','MT5_DEMO_MAX_LOTS','MT5_DEMO_DEVIATION','MT5_DEMO_MAGIC',
   'WEB_AUTH_ENABLED','WEB_AUTH_EMAIL','WEB_AUTH_PASSWORD',
   'TRAINING_BACKEND_WRITER_ENABLED',
@@ -166,6 +167,7 @@ const USER_API_FIELDS = [
   'DEEPINFRA_MODEL','DEEPINFRA_BASE_URL','FINNHUB_API_KEY','ALPHA_VANTAGE_API_KEY',
   'REAL_TRADING','MT5_CONNECTOR_ENABLED','MT5_ACCOUNT1_LOGIN','MT5_ACCOUNT1_PASSWORD',
   'MT5_ACCOUNT1_SERVER','MT5_ACCOUNT2_LOGIN','MT5_ACCOUNT2_PASSWORD','MT5_ACCOUNT2_SERVER',
+  'MT5_PYTHON_COMMAND',
   'MT5_DEMO_TRADING_ENABLED','MT5_DEMO_MAX_LOTS','TRAINING_MT5_DEMO_ORDER_SEND_ENABLED','TRAINING_MT5_DEMO_LOT_SIZE',
   'QUANT_SYNC_URL','QUANT_SYNC_KEY'
 ];
@@ -1154,7 +1156,56 @@ const _mt5AccountsCache = { ts: 0, data: null, inFlight: null };
 // Use passive=true for all background/auto operations.
 // Use passive=false only on explicit user action ("Actualizar datos").
 function pythonCommand(env = ENV) {
-  return env.PYTHON_BIN || process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
+  return env.MT5_PYTHON_COMMAND || env.PYTHON_BIN || process.env.MT5_PYTHON_COMMAND || process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
+}
+
+const MT5_PYTHON_TIMEOUT_MS = 15000;
+
+function safeMt5ProcessText(text) {
+  return String(text || '')
+    .replace(/("password"\s*:\s*")[^"]+(")/gi, '$1[MASKED]$2')
+    .replace(/(password\s*=\s*['"])[^'"]+(['"])/gi, '$1[MASKED]$2')
+    .replace(/(MT5_ACCOUNT\d+_PASSWORD=)[^\s]+/gi, '$1[MASKED]')
+    .slice(0, 700);
+}
+
+function runPythonJson(code, fallback, env = ENV, timeoutMs = MT5_PYTHON_TIMEOUT_MS) {
+  return new Promise((resolve) => {
+    const spawnOptions = { windowsHide: true };
+    if (process.platform !== 'win32') spawnOptions.detached = true;
+    const child = spawn(pythonCommand(env), ['-u', '-c', code], spawnOptions);
+    let out = '';
+    let err = '';
+    let settled = false;
+    const finish = (payload) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(payload);
+    };
+    const timer = setTimeout(() => {
+      try {
+        if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGKILL');
+        else child.kill('SIGKILL');
+      } catch {
+        try { child.kill('SIGKILL'); } catch {}
+      }
+      finish({ ...fallback, timedOut: true, error: `MT5 Python timeout after ${timeoutMs}ms` });
+    }, timeoutMs);
+    child.stdout.on('data', (chunk) => { out += chunk.toString(); });
+    child.stderr.on('data', (chunk) => { err += chunk.toString(); });
+    child.on('close', () => {
+      const trimmed = out.trim();
+      try {
+        finish(JSON.parse(trimmed));
+      } catch {
+        finish({ ...fallback, error: safeMt5ProcessText(trimmed || err) });
+      }
+    });
+    child.on('error', (error) => {
+      finish({ ...fallback, error: safeMt5ProcessText(error.message) });
+    });
+  });
 }
 
 async function mt5MultiAccounts(usdCop = 0, env = ENV, passive = false) {
@@ -1193,7 +1244,7 @@ function _mt5MultiAccountsImpl(usdCop = 0, env = ENV, passive = false) {
 import json
 try:
     import MetaTrader5 as mt5
-    if not mt5.initialize():
+    if not mt5.initialize(timeout=8000):
         print(json.dumps({"ok": False, "accounts": [], "error": str(mt5.last_error())}))
     else:
         passive = ${passiveN}
@@ -1284,24 +1335,15 @@ except Exception as e:
     except: pass
     print(json.dumps({"ok": False, "accounts": [], "error": str(e)}))
 `;
-  return new Promise((resolve) => {
-    const child = spawn(pythonCommand(env), ['-c', code], { windowsHide: true });
-    let out = '';
-    child.stdout.on('data', (chunk) => { out += chunk.toString(); });
-    child.on('close', () => {
-      try { resolve(JSON.parse(out.trim())); }
-      catch { resolve({ ok: false, accounts: [], error: out.trim() }); }
-    });
-    child.on('error', (err) => resolve({ ok: false, accounts: [], error: err.message }));
-  });
+  return runPythonJson(code, { ok: false, accounts: [] }, env);
 }
 
-function mt5Info() {
+function mt5Info(env = ENV) {
   const code = `
 import json
 try:
     import MetaTrader5 as mt5
-    ok = mt5.initialize()
+    ok = mt5.initialize(timeout=8000)
     if not ok:
         print(json.dumps({"available": False, "message": "MT5 no inicializó", "error": mt5.last_error()}))
     else:
@@ -1320,24 +1362,15 @@ except Exception as e:
     except: pass
     print(json.dumps({"available": False, "message": "MT5 no disponible para Python", "error": str(e)}))
 `;
-  return new Promise((resolve) => {
-    const child = spawn(pythonCommand(), ['-c', code], { windowsHide: true });
-    let out = '';
-    child.stdout.on('data', (chunk) => { out += chunk.toString(); });
-    child.on('close', () => {
-      try { resolve(JSON.parse(out.trim())); }
-      catch { resolve({ available: false, message: 'No pude leer MT5', error: out.trim() }); }
-    });
-    child.on('error', (err) => resolve({ available: false, message: 'Python no disponible', error: err.message }));
-  });
+  return runPythonJson(code, { available: false, message: 'No pude leer MT5' }, env);
 }
 
-function mt5Positions() {
+function mt5Positions(env = ENV) {
   const code = `
 import json
 try:
     import MetaTrader5 as mt5
-    if not mt5.initialize():
+    if not mt5.initialize(timeout=8000):
         print(json.dumps({"ok": False, "positions": [], "account": None, "error": str(mt5.last_error())}))
     else:
         info = mt5.account_info()
@@ -1381,16 +1414,7 @@ try:
 except Exception as e:
     print(json.dumps({"ok": False, "positions": [], "account": None, "error": str(e)}))
 `;
-  return new Promise((resolve) => {
-    const child = spawn(pythonCommand(), ['-c', code], { windowsHide: true });
-    let out = '';
-    child.stdout.on('data', (chunk) => { out += chunk.toString(); });
-    child.on('close', () => {
-      try { resolve(JSON.parse(out.trim())); }
-      catch { resolve({ ok: false, positions: [], account: null, error: out.trim() }); }
-    });
-    child.on('error', (err) => resolve({ ok: false, positions: [], account: null, error: err.message }));
-  });
+  return runPythonJson(code, { ok: false, positions: [], account: null }, env);
 }
 
 async function binanceOpenOrders(env = ENV) {
@@ -1561,12 +1585,12 @@ async function livePositions(env = ENV, passive = true) {
   return { mt5Accounts, binance: binanceResult };
 }
 
-function mt5Symbols() {
+function mt5Symbols(env = ENV) {
   const code = `
 import json
 try:
     import MetaTrader5 as mt5
-    if not mt5.initialize():
+    if not mt5.initialize(timeout=8000):
         print(json.dumps({"ok": False, "symbols": [], "error": str(mt5.last_error())}))
     else:
         symbols = mt5.symbols_get()
@@ -1580,26 +1604,17 @@ try:
 except Exception as e:
     print(json.dumps({"ok": False, "symbols": [], "error": str(e)}))
 `;
-  return new Promise((resolve) => {
-    const child = spawn(pythonCommand(), ['-c', code], { windowsHide: true });
-    let out = '';
-    child.stdout.on('data', (chunk) => { out += chunk.toString(); });
-    child.on('close', () => {
-      try { resolve(JSON.parse(out.trim())); }
-      catch { resolve({ ok: false, symbols: [], error: out.trim() }); }
-    });
-    child.on('error', (err) => resolve({ ok: false, symbols: [], error: err.message }));
-  });
+  return runPythonJson(code, { ok: false, symbols: [] }, env);
 }
 
-function mt5Rates(symbol, timeframe = 'M1', count = 180) {
+function mt5Rates(symbol, timeframe = 'M1', count = 180, env = ENV) {
   const tfMap = { M1: 'TIMEFRAME_M1', M5: 'TIMEFRAME_M5', M15: 'TIMEFRAME_M15', H1: 'TIMEFRAME_H1', H4: 'TIMEFRAME_H4', D1: 'TIMEFRAME_D1', W1: 'TIMEFRAME_W1' };
   const tf = tfMap[timeframe] || 'TIMEFRAME_M1';
   const code = `
 import json, time
 try:
     import MetaTrader5 as mt5
-    if not mt5.initialize():
+    if not mt5.initialize(timeout=8000):
         print(json.dumps({"ok": False, "error": str(mt5.last_error()), "candles": []}))
     else:
         symbol = ${JSON.stringify(symbol)}
@@ -1619,16 +1634,7 @@ try:
 except Exception as e:
     print(json.dumps({"ok": False, "error": str(e), "candles": []}))
 `;
-  return new Promise((resolve) => {
-    const child = spawn(pythonCommand(), ['-c', code], { windowsHide: true });
-    let out = '';
-    child.stdout.on('data', (chunk) => { out += chunk.toString(); });
-    child.on('close', () => {
-      try { resolve(JSON.parse(out.trim())); }
-      catch { resolve({ ok: false, error: out.trim(), candles: [] }); }
-    });
-    child.on('error', (err) => resolve({ ok: false, error: err.message, candles: [] }));
-  });
+  return runPythonJson(code, { ok: false, candles: [] }, env);
 }
 
 async function chat(messages, context = '', env = ENV) {
@@ -1871,8 +1877,8 @@ async function handleApi(req, res, url) {
       syncConfigured: Boolean((userEnv.QUANT_SYNC_URL || QUANT_SYNC_URL) && (userEnv.QUANT_SYNC_KEY || QUANT_SYNC_KEY))
     });
     if (url.pathname === '/api/binance-symbols') return sendJson(res, await binanceSymbols());
-    if (url.pathname === '/api/mt5-symbols') return sendJson(res, String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? await mt5Symbols() : { ok: false, symbols: [], error: 'MT5 adapter disabled' });
-    if (url.pathname === '/api/mt5-rates') return sendJson(res, String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? await mt5Rates(q.symbol, q.timeframe, Number(q.count || 180)) : { ok: false, candles: [], error: 'MT5 adapter disabled' });
+    if (url.pathname === '/api/mt5-symbols') return sendJson(res, String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? await mt5Symbols(userEnv) : { ok: false, symbols: [], error: 'MT5 adapter disabled' });
+    if (url.pathname === '/api/mt5-rates') return sendJson(res, String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? await mt5Rates(q.symbol, q.timeframe, Number(q.count || 180), userEnv) : { ok: false, candles: [], error: 'MT5 adapter disabled' });
     if (url.pathname === '/api/mt5-demo-order' && req.method === 'POST') return sendJson(res, await placeMt5DemoOrder(body, { env: userEnv }));
     if (url.pathname === '/api/ticker') return sendJson(res, await ticker(q.symbol));
     if (url.pathname === '/api/klines') return sendJson(res, await klines(q.symbol, q.interval, Number(q.limit || 180)));
@@ -2569,8 +2575,8 @@ ipcMain.handle('api-config-write', (_e, cfg) => writeApiConfigForUser(WEB_AUTH_E
 ipcMain.handle('bot-state-read', () => readBotState());
 ipcMain.handle('risk-config-read', () => readRiskConfig());
 ipcMain.handle('binance-symbols', () => binanceSymbols());
-ipcMain.handle('mt5-symbols', () => String(ENV.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? mt5Symbols() : { ok: false, symbols: [], error: 'MT5 adapter disabled' });
-ipcMain.handle('mt5-rates', (_e, symbol, timeframe, count) => String(ENV.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? mt5Rates(symbol, timeframe, count) : { ok: false, candles: [], error: 'MT5 adapter disabled' });
+ipcMain.handle('mt5-symbols', () => String(ENV.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? mt5Symbols(ENV) : { ok: false, symbols: [], error: 'MT5 adapter disabled' });
+ipcMain.handle('mt5-rates', (_e, symbol, timeframe, count) => String(ENV.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? mt5Rates(symbol, timeframe, count, ENV) : { ok: false, candles: [], error: 'MT5 adapter disabled' });
 ipcMain.handle('ticker', (_e, symbol) => ticker(symbol));
 ipcMain.handle('klines', (_e, symbol, interval, limit) => klines(symbol, interval, limit));
 ipcMain.handle('wallet', () => fullWallet());

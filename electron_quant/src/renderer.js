@@ -591,23 +591,25 @@ function renderMt5AccountStatuses() {
   const demo = state.env.mt5Demo || {};
   const real = state.env.mt5Real || {};
   const mt5Health = state.connectorHealth.mt5 || {};
-  const runtimeTitle = state.env.mt5?.runtime
-    ? `Runtime ${state.env.mt5.runtime.login || '--'} ${state.env.mt5.runtime.server || ''} · ${state.env.mt5.runtime.source || 'MT5'}`
-    : (mt5Health.error || 'Sin runtime MT5 activo');
+  const runtimeTitle = (runtime, label) => runtime
+    ? `${label} ${runtime.login || '--'} ${runtime.server || ''} · ${runtime.source || 'MT5'}`
+    : (mt5Health.error || `Sin runtime MT5 ${label}`);
+  const demoRuntimeTitle = runtimeTitle(demo.runtime, 'Demo');
+  const realRuntimeTitle = runtimeTitle(real.runtime, 'Real');
 
   if (demo.connected) {
     const detail = demo.trainingOrderSend ? 'Demo conectada · training order_send' : 'Demo conectada · solo lectura';
-    setConnectorStatus('stMt5Demo', true, detail, 'Demo pendiente', { title: runtimeTitle });
+    setConnectorStatus('stMt5Demo', true, detail, 'Demo pendiente', { title: demoRuntimeTitle });
   } else if (demo.configured) {
-    setConnectorStatus('stMt5Demo', false, 'Demo conectada', 'Demo sin terminal', { error: true, title: runtimeTitle });
+    setConnectorStatus('stMt5Demo', false, 'Demo conectada', 'Demo sin terminal', { error: true, title: demoRuntimeTitle });
   } else {
     setConnectorStatus('stMt5Demo', false, 'Demo conectada', 'Demo sin cuenta');
   }
 
   if (real.connected) {
-    setConnectorStatus('stMt5Real', true, 'Real conectado', 'Real pendiente', { title: runtimeTitle });
+    setConnectorStatus('stMt5Real', true, 'Real conectado', 'Real pendiente', { title: realRuntimeTitle });
   } else if (real.configured) {
-    setConnectorStatus('stMt5Real', false, 'Real conectado', 'Real sin terminal', { error: true, title: runtimeTitle });
+    setConnectorStatus('stMt5Real', false, 'Real conectado', 'Real sin terminal', { error: true, title: realRuntimeTitle });
   } else {
     setConnectorStatus('stMt5Real', false, 'Real conectado', 'Real sin cuenta');
   }

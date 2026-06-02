@@ -64,7 +64,7 @@ const CLOUD_ENV_KEYS = [
   'FINNHUB_API_KEY','ALPHA_VANTAGE_API_KEY','REAL_TRADING','MT5_CONNECTOR_ENABLED',
   'MT5_ACCOUNT1_LOGIN','MT5_ACCOUNT1_PASSWORD','MT5_ACCOUNT1_SERVER',
   'MT5_ACCOUNT2_LOGIN','MT5_ACCOUNT2_PASSWORD','MT5_ACCOUNT2_SERVER',
-  'MT5_PYTHON_COMMAND','MT5_BRIDGE_STATUS_FILE',
+  'MT5_PYTHON_COMMAND','MT5_BRIDGE_STATUS_FILE','MT5_REAL_BRIDGE_STATUS_FILE',
   'MT5_DEMO_TRADING_ENABLED','MT5_DEMO_MAX_LOTS','MT5_DEMO_DEVIATION','MT5_DEMO_MAGIC',
   'WEB_AUTH_ENABLED','WEB_AUTH_EMAIL','WEB_AUTH_PASSWORD',
   'TRAINING_BACKEND_WRITER_ENABLED',
@@ -1328,6 +1328,12 @@ function readMt5BridgeStatus(env = ENV) {
   }
 }
 
+function readMt5RealBridgeStatus(env = ENV) {
+  const file = env.MT5_REAL_BRIDGE_STATUS_FILE || process.env.MT5_REAL_BRIDGE_STATUS_FILE || '';
+  if (!file) return null;
+  return readMt5BridgeStatus({ ...env, MT5_BRIDGE_STATUS_FILE: file });
+}
+
 function mt5BridgeAccount(bridge) {
   if (!bridge?.ok || !bridge.bridgeFresh) return null;
   const server = String(bridge.server || '');
@@ -1380,11 +1386,9 @@ function publicMt5Config(env = {}, slot = 1) {
   };
 }
 
-function buildMt5AccountStatus(env = {}, runtimeAccount = null) {
-  const connectorEnabled = String(env.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true';
-  const demoTrading = String(env.MT5_DEMO_TRADING_ENABLED || 'false').toLowerCase() === 'true';
-  const trainingOrderSend = String(env.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED || 'false').toLowerCase() === 'true';
-  const runtime = runtimeAccount && runtimeAccount.available ? {
+function mt5RuntimeSummary(runtimeAccount = null) {
+  if (!runtimeAccount || !runtimeAccount.available) return null;
+  return {
     connected: Boolean(runtimeAccount.connected || runtimeAccount.available),
     isDemo: Boolean(runtimeAccount.is_demo),
     login: runtimeAccount.login ? Number(runtimeAccount.login) : null,
@@ -1392,11 +1396,21 @@ function buildMt5AccountStatus(env = {}, runtimeAccount = null) {
     source: runtimeAccount.source || '',
     ageSec: Number.isFinite(Number(runtimeAccount.ageSec)) ? Number(runtimeAccount.ageSec) : null,
     positionsTotal: Array.isArray(runtimeAccount.positions) ? runtimeAccount.positions.length : 0
-  } : null;
+  };
+}
+
+function buildMt5AccountStatus(env = {}, demoRuntimeAccount = null, realRuntimeAccount = null) {
+  const connectorEnabled = String(env.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true';
+  const demoTrading = String(env.MT5_DEMO_TRADING_ENABLED || 'false').toLowerCase() === 'true';
+  const trainingOrderSend = String(env.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED || 'false').toLowerCase() === 'true';
+  const runtimeAccounts = [demoRuntimeAccount, realRuntimeAccount].filter(Boolean);
+  const demoRuntime = mt5RuntimeSummary(runtimeAccounts.find((account) => account?.is_demo));
+  const realRuntime = mt5RuntimeSummary(runtimeAccounts.find((account) => account && !account.is_demo));
+  const runtime = demoRuntime || realRuntime || mt5RuntimeSummary(runtimeAccounts[0]);
   const demoConfig = publicMt5Config(env, 2);
   const realConfig = publicMt5Config(env, 1);
-  const demoConnected = Boolean(runtime?.connected && runtime.isDemo);
-  const realConnected = Boolean(runtime?.connected && !runtime.isDemo);
+  const demoConnected = Boolean(demoRuntime?.connected);
+  const realConnected = Boolean(realRuntime?.connected);
 
   return {
     connectorEnabled,
@@ -1404,6 +1418,7 @@ function buildMt5AccountStatus(env = {}, runtimeAccount = null) {
     demo: {
       ...demoConfig,
       connected: demoConnected,
+      runtime: demoRuntime,
       status: demoConnected ? 'connected' : demoConfig.configured ? 'configured_no_runtime' : 'missing_config',
       demoTrading,
       trainingOrderSend
@@ -1411,6 +1426,7 @@ function buildMt5AccountStatus(env = {}, runtimeAccount = null) {
     real: {
       ...realConfig,
       connected: realConnected,
+      runtime: realRuntime,
       status: realConnected ? 'connected' : realConfig.configured ? 'configured_no_runtime' : 'missing_config'
     }
   };
@@ -2205,8 +2221,9 @@ async function handleApi(req, res, url) {
     if (url.pathname === '/api/api-config-write' && req.method === 'POST') return sendJson(res, writeApiConfigForUser(currentUser, body));
     const runtimePolicy = backendRuntimePolicy(userEnv);
     if (url.pathname === '/api/env-status') {
-      const runtimeMt5Account = mt5BridgeAccount(readMt5BridgeStatus(userEnv));
-      const mt5AccountStatus = buildMt5AccountStatus(userEnv, runtimeMt5Account);
+      const demoRuntimeMt5Account = mt5BridgeAccount(readMt5BridgeStatus(userEnv));
+      const realRuntimeMt5Account = mt5BridgeAccount(readMt5RealBridgeStatus(userEnv));
+      const mt5AccountStatus = buildMt5AccountStatus(userEnv, demoRuntimeMt5Account, realRuntimeMt5Account);
       return sendJson(res, {
       user: cfgStatus.user,
       userEmail: currentUser,
@@ -2927,8 +2944,9 @@ if (IS_ELECTRON) {
 
 ipcMain.handle('env-status', () => {
   const runtimePolicy = backendRuntimePolicy(ENV);
-  const runtimeMt5Account = mt5BridgeAccount(readMt5BridgeStatus(ENV));
-  const mt5AccountStatus = buildMt5AccountStatus(ENV, runtimeMt5Account);
+  const demoRuntimeMt5Account = mt5BridgeAccount(readMt5BridgeStatus(ENV));
+  const realRuntimeMt5Account = mt5BridgeAccount(readMt5RealBridgeStatus(ENV));
+  const mt5AccountStatus = buildMt5AccountStatus(ENV, demoRuntimeMt5Account, realRuntimeMt5Account);
   return {
     envFile: ENV.__ENV_FILE || '',
     portableRoot: portableRoot(),

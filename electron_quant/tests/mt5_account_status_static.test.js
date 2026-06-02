@@ -12,6 +12,11 @@ assert.ok(main.includes('function publicMt5Config'), 'main debe publicar config 
 assert.ok(main.includes('mt5Demo: mt5AccountStatus.demo'), 'env-status debe exponer mt5Demo.');
 assert.ok(main.includes('mt5Real: mt5AccountStatus.real'), 'env-status debe exponer mt5Real.');
 assert.ok(main.includes('MT5_ACCOUNT2_LOGIN') && main.includes('MT5_ACCOUNT1_LOGIN'), 'estado debe distinguir cuenta demo slot 2 y real slot 1.');
+assert.ok(main.includes('MT5_REAL_BRIDGE_STATUS_FILE'), 'main debe aceptar un bridge status separado para MT5 Real.');
+assert.ok(main.includes('readMt5RealBridgeStatus'), 'env-status debe leer el bridge real separado del bridge demo.');
+assert.ok(main.includes('demoRuntimeMt5Account') && main.includes('realRuntimeMt5Account'), 'env-status debe normalizar runtimes demo y real por separado.');
+assert.ok(main.includes('buildMt5AccountStatus(userEnv, demoRuntimeMt5Account, realRuntimeMt5Account)'), 'HTTP env-status debe pasar ambos runtimes MT5.');
+assert.ok(main.includes('buildMt5AccountStatus(ENV, demoRuntimeMt5Account, realRuntimeMt5Account)'), 'IPC env-status debe pasar ambos runtimes MT5.');
 assert.equal(/Number\(bridge\.tradeMode\)\s*===\s*0\s*\|\|/.test(main), false, 'trade_mode=0 no debe clasificar MT5 como demo.');
 assert.ok(/is_demo:\s*\/\\b(?:demo)\\b\/i\.test\(server\)/.test(main), 'demo debe clasificarse por servidor demo.');
 

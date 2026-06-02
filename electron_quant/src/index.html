@@ -455,6 +455,16 @@
       <section class="view" id="view-manual"><div class="view-head"><h1>Trading Manual</h1><p>La consola manual principal vive en el dashboard para evitar duplicados.</p></div><div class="panel full-panel empty-state">Usa el bloque Trading Manual del dashboard.</div></section>
       <section class="view" id="view-orders">
         <div class="view-head"><h1>Ordenes</h1><p>Registro de instrucciones de trading enviadas, bloqueadas o canceladas. Incluye ordenes reales cuando el modo real este activo.</p></div>
+        <div class="panel full-panel" style="margin-bottom:18px">
+          <div class="panel-head">
+            <h2>AUDIT REAL BINANCE</h2>
+            <span id="ordersRealAuditMeta">sin lectura</span>
+          </div>
+          <div class="real-order-head">
+            <span>Fecha</span><span>Simbolo</span><span>Lado</span><span>Tipo</span><span>Qty</span><span>Precio</span><span>Notional</span><span>Estado</span><span>Ruta</span>
+          </div>
+          <div id="ordersRealAuditList" class="real-order-list"></div>
+        </div>
         <div class="panel full-panel">
           <div class="panel-head">
             <h2>HISTORIAL DE ORDENES</h2>
@@ -493,6 +503,16 @@
             <span>ID Orden</span><span>Simbolo</span><span>Lado</span><span>Tipo</span><span>Cantidad</span><span>Precio</span><span>Estado</span>
           </div>
           <div id="binanceOrdersTable" style="max-height:340px;overflow-y:auto"></div>
+        </div>
+        <div class="panel full-panel" style="margin-top:18px">
+          <div class="panel-head">
+            <h2>AUDIT REAL BINANCE</h2>
+            <span id="realOrderAuditMeta">sin lectura</span>
+          </div>
+          <div class="real-order-head">
+            <span>Fecha</span><span>Simbolo</span><span>Lado</span><span>Tipo</span><span>Qty</span><span>Precio</span><span>Notional</span><span>Estado</span><span>Ruta</span>
+          </div>
+          <div id="realOrderAuditList" class="real-order-list"></div>
         </div>
       </section>
       <section class="view" id="view-conversations">

@@ -27,6 +27,7 @@ const { buildTrainingBotsStatus } = require('../training/bot-registry-service');
 const { placeMt5DemoOrder } = require('../adapters/mt5/mt5-demo-order-service');
 const {
   executeBinanceRealOrder,
+  preflightBinanceRealOrder,
   summarizeBinanceRealOrderAudit,
   appendBinanceRealOrderAudit,
   readBinanceRealOrderAudit
@@ -246,6 +247,17 @@ function createApiRouter(context) {
         auditBinanceRealOrder(deps, body, result);
         const status = result.ok === true ? 200 : (result.status === 'blocked' ? 409 : 502);
         return response(status, flattenBinanceOrderResult(result));
+      }
+
+      if (method === 'POST' && pathname === '/api/binance-real-order-preflight') {
+        const result = await preflightBinanceRealOrder({
+          input: body,
+          env,
+          botState: context.getBotState(),
+          riskConfig: context.getRiskConfig(),
+          deps
+        });
+        return response(result.ok === true ? 200 : 409, result);
       }
 
       if (method === 'GET' && pathname === '/api/binance-real-order-audit') {

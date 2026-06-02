@@ -47,6 +47,8 @@ contextBridge.exposeInMainWorld('quant', {
   conversationRename:  (id, name)             => ipcRenderer.invoke('conversation-rename', id, name),
   conversationDelete:  (id)                   => ipcRenderer.invoke('conversation-delete', id),
   calcPositionSize: (symbol, riskPct, entryPrice, stopPrice) => ipcRenderer.invoke('calc-position-size', symbol, riskPct, entryPrice, stopPrice),
+  binanceRealOrderPreflight: (payload) => ipcRenderer.invoke('binance-real-order-preflight', payload),
+  binanceRealOrderAudit: (limit) => ipcRenderer.invoke('binance-real-order-audit', limit),
   placeOrder:       (side, symbol, qty, type, price) => ipcRenderer.invoke('place-order', side, symbol, qty, type, price),
   cancelOrder:      (symbol, orderId) => ipcRenderer.invoke('cancel-order', symbol, orderId)
 });

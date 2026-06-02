@@ -15,6 +15,21 @@ function finiteNumber(value) {
   return Number.isFinite(number) ? number : null;
 }
 
+function roundedNumber(value, decimals = 8) {
+  const number = finiteNumber(value);
+  if (number === null) return null;
+  return Number(number.toFixed(decimals));
+}
+
+function floorToStep(value, step) {
+  const number = finiteNumber(value);
+  const stepNumber = finiteNumber(step);
+  if (number === null || number <= 0) return 0;
+  if (stepNumber === null || stepNumber <= 0) return roundedNumber(number, 8);
+  const precision = Math.max(0, Math.min(12, Math.round(-Math.log10(stepNumber))));
+  return Number((Math.floor(number / stepNumber) * stepNumber).toFixed(precision));
+}
+
 function sanitizeText(value, max = 240) {
   return String(value || '')
     .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [REDACTED]')
@@ -51,6 +66,12 @@ function buildBlockedResult(error, request = null, details = []) {
       binanceSpotOnly: true
     }
   };
+}
+
+function hasPreflightDeps(deps = {}) {
+  return typeof deps.getSymbolFilters === 'function'
+    && typeof deps.getTicker === 'function'
+    && typeof deps.getBinanceSpotBalance === 'function';
 }
 
 function normalizeRequest(input = {}) {
@@ -99,6 +120,72 @@ function validateExecutionGates({ env = {}, botState = {}, riskConfig = {} }) {
   };
 }
 
+async function preflightBinanceRealOrder({ input = {}, env = {}, botState = {}, riskConfig = {}, deps = {} } = {}) {
+  const normalized = normalizeRequest(input);
+  if (!normalized.ok) {
+    return { ok: false, status: 'blocked', error: sanitizeText(normalized.error), reasons: [sanitizeText(normalized.error)], request: null };
+  }
+  const request = normalized.request;
+  const gates = validateExecutionGates({ env, botState, riskConfig });
+  if (!gates.ok) {
+    return { ok: false, status: 'blocked', error: sanitizeText(gates.issues[0]), reasons: gates.issues.map((issue) => sanitizeText(issue)), request };
+  }
+  if (!hasPreflightDeps(deps)) {
+    return { ok: false, status: 'blocked', error: 'Preflight Binance incompleto.', reasons: ['Preflight Binance incompleto.'], request };
+  }
+
+  const filters = await deps.getSymbolFilters(request.symbol);
+  const minQty = finiteNumber(filters?.minQty) || 0;
+  const stepSize = finiteNumber(filters?.stepSize) || 0;
+  const minNotional = finiteNumber(filters?.minNotional) || 0;
+  const quoteAsset = String(filters?.quoteAsset || 'USDT').toUpperCase();
+  const ticker = request.type === 'LIMIT' ? null : await deps.getTicker(request.symbol);
+  const effectivePrice = request.type === 'LIMIT'
+    ? request.price
+    : finiteNumber(ticker?.price ?? ticker?.lastPrice ?? ticker);
+  const balance = await deps.getBinanceSpotBalance(quoteAsset);
+  const quoteFree = finiteNumber(balance?.free ?? balance?.available ?? balance) || 0;
+  const requestedNotional = roundedNumber(request.qty * effectivePrice, 8);
+  const maxAffordableQty = effectivePrice > 0 ? floorToStep(quoteFree / effectivePrice, stepSize) : 0;
+  const suggestedQty = Math.min(request.qty, maxAffordableQty);
+  const suggestedNotional = roundedNumber(suggestedQty * effectivePrice, 8);
+
+  const checks = {
+    symbolTrading: String(filters?.status || 'TRADING').toUpperCase() === 'TRADING',
+    priceKnown: effectivePrice > 0,
+    qtyAboveMin: request.qty >= minQty,
+    minNotionalOk: requestedNotional >= minNotional,
+    balanceEnough: quoteFree >= requestedNotional,
+    suggestedMeetsMin: suggestedQty >= minQty && suggestedNotional >= minNotional
+  };
+  const reasons = [];
+  if (!checks.symbolTrading) reasons.push(`${request.symbol} no esta en estado TRADING.`);
+  if (!checks.priceKnown) reasons.push('Precio Binance no disponible para preflight.');
+  if (!checks.qtyAboveMin) reasons.push(`Cantidad ${request.qty} menor al minimo ${minQty}.`);
+  if (!checks.minNotionalOk) reasons.push(`Notional ${requestedNotional} ${quoteAsset} menor al minimo ${minNotional}.`);
+  if (!checks.balanceEnough) reasons.push(`Saldo insuficiente: libre ${quoteFree} ${quoteAsset}, requerido ${requestedNotional} ${quoteAsset}.`);
+  if (!checks.suggestedMeetsMin) reasons.push(`Saldo libre no permite una orden minima valida en ${request.symbol}.`);
+
+  return {
+    ok: reasons.length === 0,
+    status: reasons.length === 0 ? 'ready' : 'blocked',
+    error: reasons.length ? sanitizeText(reasons[0]) : null,
+    reasons: reasons.map((reason) => sanitizeText(reason)),
+    request,
+    quoteAsset,
+    quoteFree,
+    effectivePrice: roundedNumber(effectivePrice, 8),
+    requestedNotional,
+    minQty,
+    stepSize,
+    minNotional,
+    maxAffordableQty,
+    suggestedQty: roundedNumber(suggestedQty, 8),
+    suggestedNotional,
+    checks
+  };
+}
+
 async function executeBinanceRealOrder({ input = {}, env = {}, botState = {}, riskConfig = {}, deps = {} } = {}) {
   const normalized = normalizeRequest(input);
   if (!normalized.ok) return buildBlockedResult(normalized.error, null);
@@ -106,6 +193,15 @@ async function executeBinanceRealOrder({ input = {}, env = {}, botState = {}, ri
 
   const gates = validateExecutionGates({ env, botState, riskConfig });
   if (!gates.ok) return buildBlockedResult(gates.issues[0], request, gates.issues);
+
+  if (hasPreflightDeps(deps)) {
+    const preflight = await preflightBinanceRealOrder({ input, env, botState, riskConfig, deps });
+    if (!preflight.ok) {
+      const blocked = buildBlockedResult(preflight.error || 'Preflight Binance bloqueado.', request, preflight.reasons);
+      blocked.preflight = preflight;
+      return blocked;
+    }
+  }
 
   if (typeof deps.placeOrderBinance !== 'function') {
     return buildBlockedResult('Executor Binance real no disponible.', request);
@@ -213,6 +309,7 @@ function readBinanceRealOrderAudit(filePath, limit = DEFAULT_LIMIT) {
 
 module.exports = {
   executeBinanceRealOrder,
+  preflightBinanceRealOrder,
   summarizeBinanceRealOrderAudit,
   appendBinanceRealOrderAudit,
   readBinanceRealOrderAudit

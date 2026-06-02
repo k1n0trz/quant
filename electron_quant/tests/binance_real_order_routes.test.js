@@ -108,3 +108,57 @@ test('POST /api/place-order blocks when real trading is not armed and still audi
   assert.equal(audit.body.entries[0].status, 'blocked');
   assert.equal(audit.body.entries[0].realTradingTouched, false);
 });
+
+test('POST /api/binance-real-order-preflight returns affordability without touching executor', async () => {
+  let called = false;
+  const router = createApiRouter(armedContext({
+    deps: {
+      getSymbolFilters: async () => ({ minQty: 0.00001, stepSize: 0.00001, minNotional: 5, status: 'TRADING', quoteAsset: 'USDT' }),
+      getTicker: async () => ({ price: 65000 }),
+      getBinanceSpotBalance: async () => ({ asset: 'USDT', free: 0.005, locked: 0 }),
+      placeOrderBinance: async () => { called = true; return { ok: true }; }
+    }
+  }));
+
+  const res = await router.dispatch({
+    method: 'POST',
+    pathname: '/api/binance-real-order-preflight',
+    body: { side: 'BUY', symbol: 'BTCUSDT', qty: 0.001, type: 'MARKET' }
+  });
+
+  assert.equal(res.status, 409);
+  assert.equal(res.body.ok, false);
+  assert.equal(res.body.status, 'blocked');
+  assert.equal(res.body.quoteFree, 0.005);
+  assert.equal(res.body.requestedNotional, 65);
+  assert.equal(called, false);
+});
+
+test('POST /api/place-order uses preflight to block insufficient balance before executor', async () => {
+  const file = auditFile();
+  let called = false;
+  const router = createApiRouter(armedContext({
+    deps: {
+      binanceRealOrderAuditFile: file,
+      getSymbolFilters: async () => ({ minQty: 0.00001, stepSize: 0.00001, minNotional: 5, status: 'TRADING', quoteAsset: 'USDT' }),
+      getTicker: async () => ({ price: 65000 }),
+      getBinanceSpotBalance: async () => ({ asset: 'USDT', free: 0.005, locked: 0 }),
+      placeOrderBinance: async () => { called = true; return { ok: true }; }
+    }
+  }));
+
+  const res = await router.dispatch({
+    method: 'POST',
+    pathname: '/api/place-order',
+    body: { side: 'BUY', symbol: 'BTCUSDT', qty: 0.001, type: 'MARKET' }
+  });
+  const audit = await router.dispatch({ method: 'GET', pathname: '/api/binance-real-order-audit', body: { limit: 1 } });
+
+  assert.equal(res.status, 409);
+  assert.equal(res.body.ok, false);
+  assert.equal(res.body.status, 'blocked');
+  assert.equal(res.body.safety.realTradingTouched, false);
+  assert.equal(called, false);
+  assert.equal(audit.body.entries[0].status, 'blocked');
+  assert.equal(audit.body.entries[0].realTradingTouched, false);
+});

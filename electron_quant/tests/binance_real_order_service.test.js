@@ -7,6 +7,7 @@ const path = require('node:path');
 const { createDefaultRiskConfig } = require('../backend/risk/risk-policy');
 const {
   executeBinanceRealOrder,
+  preflightBinanceRealOrder,
   summarizeBinanceRealOrderAudit,
   appendBinanceRealOrderAudit,
   readBinanceRealOrderAudit
@@ -56,6 +57,51 @@ test('blocks real order when runtime is not armed and never calls executor', asy
   assert.equal(result.safety.realTradingTouched, false);
   assert.equal(called, false);
   assert.match(result.error, /REAL_TRADING/i);
+});
+
+test('preflight blocks insufficient Binance balance before executor is touched', async () => {
+  let called = false;
+  const result = await executeBinanceRealOrder({
+    input: { venue: 'BINANCE', side: 'BUY', symbol: 'BTCUSDT', qty: 0.001, type: 'MARKET' },
+    ...armedContext({
+      deps: {
+        getSymbolFilters: async () => ({ minQty: 0.00001, stepSize: 0.00001, minNotional: 5, status: 'TRADING', quoteAsset: 'USDT' }),
+        getTicker: async () => ({ price: 65000 }),
+        getBinanceSpotBalance: async () => ({ asset: 'USDT', free: 0.005, locked: 0 }),
+        placeOrderBinance: async () => { called = true; return { ok: true }; }
+      }
+    })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 'blocked');
+  assert.equal(result.safety.realTradingTouched, false);
+  assert.equal(called, false);
+  assert.match(result.error, /saldo insuficiente/i);
+  assert.equal(result.preflight.quoteFree, 0.005);
+  assert.equal(result.preflight.requestedNotional, 65);
+});
+
+test('preflight reports ready sizing when balance and minNotional are valid', async () => {
+  const result = await preflightBinanceRealOrder({
+    input: { venue: 'BINANCE', side: 'BUY', symbol: 'BTCUSDT', qty: 0.001, type: 'MARKET' },
+    env: { REAL_TRADING: 'true', BINANCE_API_KEY: 'k', BINANCE_SECRET: 's' },
+    botState: { tradingRealEnabled: true, killSwitch: false },
+    riskConfig: createDefaultRiskConfig(),
+    deps: {
+      getSymbolFilters: async () => ({ minQty: 0.00001, stepSize: 0.00001, minNotional: 5, status: 'TRADING', quoteAsset: 'USDT' }),
+      getTicker: async () => ({ price: 65000 }),
+      getBinanceSpotBalance: async () => ({ asset: 'USDT', free: 100, locked: 0 })
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 'ready');
+  assert.equal(result.requestedNotional, 65);
+  assert.equal(result.quoteFree, 100);
+  assert.equal(result.checks.balanceEnough, true);
+  assert.equal(result.checks.minNotionalOk, true);
+  assert.equal(result.suggestedQty, 0.001);
 });
 
 test('rejects unsupported venue side type and invalid limit price before executor', async () => {

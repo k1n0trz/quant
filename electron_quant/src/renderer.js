@@ -48,6 +48,8 @@ if (!window.quant) {
     conversationRename:    (id, name)                  => apiPost('conversation-rename', { id, name }),
     conversationDelete:    (id)                        => apiPost('conversation-delete', { id }),
     calcPositionSize:      (sym, riskPct, entry, stop) => apiPost('calc-position-size', { symbol: sym, riskPct, entryPrice: entry, stopPrice: stop }),
+    binanceRealOrderPreflight: (payload)                => apiPost('binance-real-order-preflight', payload),
+    binanceRealOrderAudit: (limit = 50)                 => apiGet(`binance-real-order-audit?limit=${limit || 50}`),
     placeOrder:            (side, sym, qty, type, price) => apiPost('place-order', { side, symbol: sym, qty, type, price }),
     cancelOrder:           (sym, orderId)              => apiPost('cancel-order', { symbol: sym, orderId }),
     mt5DemoOrder:          (payload)                   => apiPost('mt5-demo/order', payload),
@@ -265,7 +267,7 @@ function setView(name) {
   if (name === 'training')       refreshTrainingRuntimeStatus();
   if (name === 'conversations')  loadConversationsList();
   if (name === 'orders') loadOrders();
-  if (name === 'positions') loadPositions();
+  if (name === 'positions') { loadPositions(); loadOrders(); }
   if (name === 'backtest') initBacktest();
   if (name === 'alerts')  loadAlerts();
 }
@@ -3519,16 +3521,59 @@ let _ordersFilter = 'all';
 
 async function loadOrders() {
   try {
-    const records = await window.quant.memoryRead(5000);
+    const [recordsResult, auditResult] = await Promise.allSettled([
+      window.quant.memoryRead(5000),
+      window.quant.binanceRealOrderAudit(80)
+    ]);
+    const records = recordsResult.status === 'fulfilled' ? recordsResult.value : [];
+    const audit = auditResult.status === 'fulfilled'
+      ? auditResult.value
+      : { ok: false, entries: [], error: auditResult.reason?.message || 'audit no disponible' };
     const trades = records
       .filter((r) => r.kind === 'trade')
       .map((r) => ({ ...r.payload, _ts: r.ts }))
       .reverse();
     state._ordersCache = trades;
     renderOrdersTable(trades);
+    renderRealOrderAuditRows(audit);
   } catch (err) {
     logEvent('WARN', `loadOrders: ${err.message}`);
   }
+}
+
+function renderRealOrderAuditRows(payload = {}) {
+  const entries = Array.isArray(payload.entries) ? [...payload.entries].reverse() : [];
+  const metaText = payload.exists === false
+    ? 'sin audit real todavia'
+    : `${entries.length} eventos reales${payload.sizeBytes ? ` · ${Math.max(1, Math.round(payload.sizeBytes / 1024))} KB` : ''}`;
+  ['realOrderAuditMeta', 'ordersRealAuditMeta'].forEach((id) => { if ($(id)) $(id).textContent = metaText; });
+
+  const rows = entries.map((entry) => {
+    const status = String(entry.status || (entry.ok ? 'executed' : 'blocked')).toLowerCase();
+    const cls = status === 'executed' ? 'executed' : status === 'error' ? 'error' : 'blocked';
+    const ts = entry.ts ? new Date(entry.ts).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'medium' }) : '--';
+    const qty = entry.qty !== null && entry.qty !== undefined ? entry.qty : '--';
+    const price = entry.price !== null && entry.price !== undefined ? entry.price : '--';
+    const notional = entry.notional !== null && entry.notional !== undefined ? `${Number(entry.notional).toFixed(4)} USDT` : '--';
+    const err = entry.error ? `<small>${escapeHtml(String(entry.error).slice(0, 180))}</small>` : '<small>sin error reportado</small>';
+    return `<div class="real-order-row ${cls}">
+      <span>${escapeHtml(ts)}</span>
+      <b>${escapeHtml(entry.symbol || '--')}</b>
+      <span class="${entry.side === 'BUY' ? 'train-status' : 'train-bad'}">${escapeHtml(entry.side || '--')}</span>
+      <span>${escapeHtml(entry.type || 'MARKET')}</span>
+      <span>${escapeHtml(String(qty))}</span>
+      <span>${escapeHtml(String(price))}</span>
+      <span>${notional}</span>
+      <span>${escapeHtml(status)}</span>
+      <span>${entry.realTradingTouched ? 'Binance tocado' : 'bloqueado local'}</span>
+      ${err}
+    </div>`;
+  }).join('');
+
+  ['realOrderAuditList', 'ordersRealAuditList'].forEach((id) => {
+    const el = $(id);
+    if (el) el.innerHTML = rows || '<div class="empty-state" style="padding:24px 0">Sin intentos reales auditados.</div>';
+  });
 }
 
 function renderOrdersTable(trades) {
@@ -4114,6 +4159,57 @@ async function submitOrder(side) {
 
   // ── Envío ──────────────────────────────────────────────────────────────
   if (rb) { rb.style.display='block'; rb.style.color='#8fa3c0'; rb.textContent=`Enviando ${orderType} ${side} ${qty} ${symbol}…`; }
+  let preflight = null;
+  try {
+    if (rb) {
+      rb.style.display = 'block';
+      rb.style.color = '#8fa3c0';
+      rb.textContent = 'Preflight Binance: validando saldo, minimo y filtros del exchange...';
+    }
+    preflight = await window.quant.binanceRealOrderPreflight({ venue, side, symbol, qty, type: orderType, price: limitPrice });
+    if (!preflight.ok) {
+      const detail = [
+        `Preflight Binance bloqueado: ${preflight.error || 'orden no viable'}`,
+        preflight.quoteAsset ? `Saldo libre: ${Number(preflight.quoteFree || 0).toFixed(8)} ${preflight.quoteAsset}` : '',
+        preflight.requestedNotional ? `Requerido: ${Number(preflight.requestedNotional).toFixed(4)} ${preflight.quoteAsset || 'USDT'}` : '',
+        preflight.minNotional ? `Minimo exchange: ${Number(preflight.minNotional).toFixed(4)} ${preflight.quoteAsset || 'USDT'}` : '',
+        preflight.suggestedQty ? `Qty maxima sugerida: ${preflight.suggestedQty}` : ''
+      ].filter(Boolean).join(' · ');
+      if (rb) {
+        rb.style.display = 'block';
+        rb.style.color = '#e09a3a';
+        rb.textContent = detail;
+      }
+      logEvent('WARN', detail);
+      await window.quant.memoryWrite('trade', {
+        status: 'blocked',
+        reason: preflight.error || 'binance_preflight_blocked',
+        side,
+        symbol,
+        qty,
+        venue,
+        type: orderType,
+        preflight,
+        ts: new Date().toISOString()
+      });
+      loadMemoryStats();
+      loadOrders();
+      return;
+    }
+    if (rb) {
+      rb.style.color = '#4caf7d';
+      rb.textContent = `Preflight Binance OK · ${Number(preflight.requestedNotional || 0).toFixed(4)} ${preflight.quoteAsset || 'USDT'} · saldo libre ${Number(preflight.quoteFree || 0).toFixed(4)}`;
+    }
+  } catch (err) {
+    if (rb) {
+      rb.style.display = 'block';
+      rb.style.color = '#e05a5a';
+      rb.textContent = `Preflight Binance fallido: ${err.message}`;
+    }
+    logEvent('ERR', `Preflight Binance fallido: ${err.message}`);
+    return;
+  }
+
   logEvent('OK', `Enviando orden real: ${orderType} ${side} ${qty} ${symbol}`);
 
   try {
@@ -4135,6 +4231,7 @@ async function submitOrder(side) {
     loadMemoryStats();
 
     // Limpiar confirmación para evitar doble envío accidental
+    loadOrders();
     $('confirmInput').value = '';
 
     // Disparar alerta de email si está configurado
@@ -4149,6 +4246,7 @@ async function submitOrder(side) {
     logEvent('ERR', `Orden fallida: ${err.message}`);
     await window.quant.memoryWrite('trade', { status: 'error', reason: err.message, side, symbol, qty, venue, ts: new Date().toISOString() });
     loadMemoryStats();
+    loadOrders();
   }
 }
 

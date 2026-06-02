@@ -32,8 +32,10 @@ const { createDefaultRiskConfig, assertTradingRealCanBeEnabled, validateRiskConf
 const { createApiRouter } = require('./backend/routes/api-router');
 const {
   executeBinanceRealOrder,
+  preflightBinanceRealOrder,
   summarizeBinanceRealOrderAudit,
-  appendBinanceRealOrderAudit
+  appendBinanceRealOrderAudit,
+  readBinanceRealOrderAudit
 } = require('./backend/execution/binance-real-order-service');
 const { createReadOnlyTrainingStateReader, normalizeTrainingState } = require('./backend/training/training-state');
 const { normalizeTrainingStateTraceability } = require('./backend/training/training-traceability');
@@ -1232,6 +1234,17 @@ async function binanceWallet(env = ENV) {
   return out;
 }
 
+async function getBinanceSpotBalance(asset = 'USDT', env = ENV) {
+  const account = await signedBinance('/api/v3/account', {}, 'GET', env);
+  const symbol = String(asset || 'USDT').toUpperCase();
+  const row = (account.balances || []).find((balance) => balance.asset === symbol);
+  return {
+    asset: symbol,
+    free: Number(row?.free || 0),
+    locked: Number(row?.locked || 0)
+  };
+}
+
 function binanceWalletUnavailable(error, usdCop = 0) {
   return {
     ok: false,
@@ -1696,6 +1709,9 @@ async function executeAndAuditBinanceRealOrder(input, env = ENV) {
     botState: readBotState(),
     riskConfig: readRiskConfig(),
     deps: {
+      getTicker: (symbol) => ticker(symbol),
+      getSymbolFilters: (symbol) => getSymbolFilters(symbol),
+      getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, env),
       placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, env)
     }
   });
@@ -1979,6 +1995,8 @@ async function handleApi(req, res, url) {
         writeTrainingState,
         getBinanceSymbols: () => binanceSymbols(),
         getTicker: (symbol) => ticker(symbol),
+        getSymbolFilters: (symbol) => getSymbolFilters(symbol),
+        getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, userEnv),
         readMt5Snapshot,
         binanceRealOrderAuditFile,
         placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, userEnv),
@@ -2786,6 +2804,22 @@ ipcMain.handle('send-alert',         (_e, subject, body) => sendAlertEmail(subje
 ipcMain.handle('positions', () => livePositions());
 ipcMain.handle('calc-position-size', (_e, symbol, riskPct, entryPrice, stopPrice) =>
   calcPositionSize(symbol, riskPct, entryPrice, stopPrice).catch((err) => ({ ok: false, error: err.message }))
+);
+ipcMain.handle('binance-real-order-preflight', (_e, payload) =>
+  preflightBinanceRealOrder({
+    input: payload || {},
+    env: ENV,
+    botState: readBotState(),
+    riskConfig: readRiskConfig(),
+    deps: {
+      getTicker: (symbol) => ticker(symbol),
+      getSymbolFilters: (symbol) => getSymbolFilters(symbol),
+      getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, ENV)
+    }
+  }).catch((err) => ({ ok: false, status: 'blocked', error: err.message, reasons: [err.message] }))
+);
+ipcMain.handle('binance-real-order-audit', (_e, limit) =>
+  readBinanceRealOrderAudit(binanceRealOrderAuditFile, limit)
 );
 ipcMain.handle('place-order', (_e, side, symbol, qty, type, price) =>
   executeAndAuditBinanceRealOrder({ venue: 'BINANCE', side, symbol, qty, type, price }, ENV)

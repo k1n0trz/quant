@@ -133,6 +133,7 @@ assert.equal(isMt5DemoTradingEnabled({ ...demoEnv, MT5_ACCOUNT2_SERVER: 'FBS-REA
   assert.equal(bridgeOrder.bridge, true);
   assert.equal(bridgeOrder.ticket, 987654);
   assert.equal(bridgeOrder.realTradingTouched, false);
+  assert.equal(fs.existsSync(path.join(bridgeDir, 'quant_bridge_command.txt')), false, 'order command file debe consumirse una sola vez');
 
   const closeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'quant-mt5-close-'));
   const closeStatusFile = path.join(closeDir, 'quant_bridge_status.json');
@@ -177,6 +178,7 @@ assert.equal(isMt5DemoTradingEnabled({ ...demoEnv, MT5_ACCOUNT2_SERVER: 'FBS-REA
   assert.equal(closeResult.ticket, 1811606880);
   assert.equal(closeResult.demoOnly, true);
   assert.equal(closeResult.realTradingTouched, false);
+  assert.equal(fs.existsSync(path.join(closeDir, 'quant_bridge_command.txt')), false, 'close command file debe consumirse una sola vez');
 })()
   .then(() => {
     console.log('mt5_demo_order_service.test.js OK');

@@ -141,8 +141,14 @@ void ProcessCommand()
    string text = ReadTextFile(BridgeCommandFile);
    if(StringLen(text) <= 0) return;
    string id = Kv(text, "id");
-   if(StringLen(id) <= 0 || id == LastCommandId) return;
+   if(StringLen(id) <= 0) return;
+   if(id == LastCommandId)
+   {
+      FileDelete(BridgeCommandFile);
+      return;
+   }
    LastCommandId = id;
+   FileDelete(BridgeCommandFile);
 
    string action = Kv(text, "action");
    if(action != "ORDER" && action != "CLOSE")

@@ -42,6 +42,14 @@ function readJsonFile(filePath) {
   }
 }
 
+function removeFileQuietly(filePath) {
+  try {
+    fs.unlinkSync(filePath);
+  } catch {
+    // best effort cleanup; bridge result remains authoritative
+  }
+}
+
 function bridgeStatus(env = {}) {
   const file = defaultBridgeStatusFile(env);
   if (!file) return null;
@@ -144,6 +152,7 @@ async function executeBridgeDemoCommand(command, env = {}) {
   while (Date.now() - started < timeoutMs) {
     const result = readJsonFile(resultFile);
     if (result) {
+      removeFileQuietly(commandFile);
       return {
         ...result,
         bridge: true,
@@ -152,6 +161,7 @@ async function executeBridgeDemoCommand(command, env = {}) {
     }
     await wait(500);
   }
+  removeFileQuietly(commandFile);
   return {
     ok: false,
     bridge: true,

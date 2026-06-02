@@ -587,6 +587,32 @@ function setConnectorStatus(id, ok, onText = 'Activa', offText = 'Sin clave', op
   el.classList.toggle('status-error', hasError);
 }
 
+function renderMt5AccountStatuses() {
+  const demo = state.env.mt5Demo || {};
+  const real = state.env.mt5Real || {};
+  const mt5Health = state.connectorHealth.mt5 || {};
+  const runtimeTitle = state.env.mt5?.runtime
+    ? `Runtime ${state.env.mt5.runtime.login || '--'} ${state.env.mt5.runtime.server || ''} · ${state.env.mt5.runtime.source || 'MT5'}`
+    : (mt5Health.error || 'Sin runtime MT5 activo');
+
+  if (demo.connected) {
+    const detail = demo.trainingOrderSend ? 'Demo conectada · training order_send' : 'Demo conectada · solo lectura';
+    setConnectorStatus('stMt5Demo', true, detail, 'Demo pendiente', { title: runtimeTitle });
+  } else if (demo.configured) {
+    setConnectorStatus('stMt5Demo', false, 'Demo conectada', 'Demo sin terminal', { error: true, title: runtimeTitle });
+  } else {
+    setConnectorStatus('stMt5Demo', false, 'Demo conectada', 'Demo sin cuenta');
+  }
+
+  if (real.connected) {
+    setConnectorStatus('stMt5Real', true, 'Real conectado', 'Real pendiente', { title: runtimeTitle });
+  } else if (real.configured) {
+    setConnectorStatus('stMt5Real', false, 'Real conectado', 'Real sin terminal', { error: true, title: runtimeTitle });
+  } else {
+    setConnectorStatus('stMt5Real', false, 'Real conectado', 'Real sin cuenta');
+  }
+}
+
 function renderStatus() {
   setConnectorStatus('stInternet', true, 'Online', 'Offline');
   setConnectorStatus('stBinance', state.env.binance, `Activa (${connectorSourceLabel(['BINANCE_API_KEY', 'BINANCE_SECRET'])})`, 'Sin claves');
@@ -604,6 +630,7 @@ function renderStatus() {
   } else {
     setConnectorStatus('stMt5', true, 'Config ON', 'Sin terminal');
   }
+  renderMt5AccountStatuses();
   $('modeText').textContent = state.env.realTrading ? 'Modo: Trading Real ACTIVO' : 'Modo: Trading Real (Bloqueado por defecto)';
   $('settingsBox').innerHTML = [
     ['Usuario', state.env.user ? `${state.env.user.displayName || state.env.user.email} (${state.env.user.email})` : 'Sesion local'],
@@ -618,6 +645,8 @@ function renderStatus() {
     ['IP Binance whitelist', state.env.binanceWhitelistIp || 'Configura QUANT_VPS_PUBLIC_IP'],
     ['Trading real', state.env.realTrading ? 'ACTIVO' : 'Bloqueado'],
     ['Seguridad', 'BUY/SELL reales siguen requiriendo risk gate'],
+    ['MT5 Demo', state.env.mt5Demo?.connected ? `Conectado ${state.env.mt5Demo.login || ''} ${state.env.mt5Demo.server || ''}` : state.env.mt5Demo?.configured ? 'Configurado, sin terminal activo' : 'Sin cuenta demo'],
+    ['MT5 Real', state.env.mt5Real?.connected ? `Conectado ${state.env.mt5Real.login || ''} ${state.env.mt5Real.server || ''}` : state.env.mt5Real?.configured ? 'Configurado, sin terminal real activo' : 'Sin cuenta real'],
     ['MT5 Adapter', state.executionAdapters.mt5 ? 'Habilitado por conector' : 'Opcional / aislado'],
     ['Sync cloud MT5', state.env.syncConfigured ? 'Configurado ✓' : 'No configurado (QUANT_SYNC_URL + QUANT_SYNC_KEY en .env)']
   ].map(([k, v]) => `<div class="setting-card"><b>${k}</b><span>${escapeHtml(String(v))}</span></div>`).join('');
@@ -1338,7 +1367,7 @@ async function refreshWallet() {
     renderWallet(data);
     await window.quant.memoryWrite('observation', { type: 'wallet_refreshed', binanceAssets: data.binance?.length || 0, mt5: data.mt5 || {} });
     await loadMemoryStats();
-    $('stMt5').textContent = data.mt5?.available ? 'Conectado' : 'Revisar';
+    renderStatus();
     logEvent('OK', 'Wallet Binance/MT5 actualizada');
   } catch (err) {
     logEvent('WARN', `Wallet: ${err.message}`);

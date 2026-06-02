@@ -1330,12 +1330,13 @@ function readMt5BridgeStatus(env = ENV) {
 
 function mt5BridgeAccount(bridge) {
   if (!bridge?.ok || !bridge.bridgeFresh) return null;
+  const server = String(bridge.server || '');
   return {
     available: Boolean(bridge.connected),
     bridge: true,
     source: bridge.source || 'QuantBridge.mq5',
     login: bridge.login,
-    server: bridge.server,
+    server,
     currency: bridge.currency,
     balance: Number(bridge.balance || 0),
     equity: Number(bridge.equity || 0),
@@ -1343,7 +1344,7 @@ function mt5BridgeAccount(bridge) {
     margin_free: Number(bridge.marginFree || 0),
     profit: Number(bridge.profit || 0),
     trade_mode: bridge.tradeMode,
-    is_demo: Number(bridge.tradeMode) === 0 || /\bdemo\b/i.test(String(bridge.server || '')),
+    is_demo: /\bdemo\b/i.test(server),
     trade_allowed: Boolean(bridge.tradeAllowed && bridge.mqlTradeAllowed),
     connected: Boolean(bridge.connected),
     ageSec: Math.round(Number(bridge.bridgeAgeMs || 0) / 1000),
@@ -1360,6 +1361,58 @@ function mt5BridgeAccount(bridge) {
       comment: p.comment || '',
       time: p.time
     })) : []
+  };
+}
+
+function hasMt5AccountConfig(env = {}, slot = 1) {
+  return Boolean(
+    env[`MT5_ACCOUNT${slot}_LOGIN`]
+    && env[`MT5_ACCOUNT${slot}_PASSWORD`]
+    && env[`MT5_ACCOUNT${slot}_SERVER`]
+  );
+}
+
+function publicMt5Config(env = {}, slot = 1) {
+  return {
+    configured: hasMt5AccountConfig(env, slot),
+    login: env[`MT5_ACCOUNT${slot}_LOGIN`] ? Number(env[`MT5_ACCOUNT${slot}_LOGIN`]) : null,
+    server: env[`MT5_ACCOUNT${slot}_SERVER`] || ''
+  };
+}
+
+function buildMt5AccountStatus(env = {}, runtimeAccount = null) {
+  const connectorEnabled = String(env.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true';
+  const demoTrading = String(env.MT5_DEMO_TRADING_ENABLED || 'false').toLowerCase() === 'true';
+  const trainingOrderSend = String(env.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED || 'false').toLowerCase() === 'true';
+  const runtime = runtimeAccount && runtimeAccount.available ? {
+    connected: Boolean(runtimeAccount.connected || runtimeAccount.available),
+    isDemo: Boolean(runtimeAccount.is_demo),
+    login: runtimeAccount.login ? Number(runtimeAccount.login) : null,
+    server: runtimeAccount.server || '',
+    source: runtimeAccount.source || '',
+    ageSec: Number.isFinite(Number(runtimeAccount.ageSec)) ? Number(runtimeAccount.ageSec) : null,
+    positionsTotal: Array.isArray(runtimeAccount.positions) ? runtimeAccount.positions.length : 0
+  } : null;
+  const demoConfig = publicMt5Config(env, 2);
+  const realConfig = publicMt5Config(env, 1);
+  const demoConnected = Boolean(runtime?.connected && runtime.isDemo);
+  const realConnected = Boolean(runtime?.connected && !runtime.isDemo);
+
+  return {
+    connectorEnabled,
+    runtime,
+    demo: {
+      ...demoConfig,
+      connected: demoConnected,
+      status: demoConnected ? 'connected' : demoConfig.configured ? 'configured_no_runtime' : 'missing_config',
+      demoTrading,
+      trainingOrderSend
+    },
+    real: {
+      ...realConfig,
+      connected: realConnected,
+      status: realConnected ? 'connected' : realConfig.configured ? 'configured_no_runtime' : 'missing_config'
+    }
   };
 }
 
@@ -2151,7 +2204,10 @@ async function handleApi(req, res, url) {
     if (url.pathname === '/api/api-config-read') return sendJson(res, cfgStatus);
     if (url.pathname === '/api/api-config-write' && req.method === 'POST') return sendJson(res, writeApiConfigForUser(currentUser, body));
     const runtimePolicy = backendRuntimePolicy(userEnv);
-    if (url.pathname === '/api/env-status') return sendJson(res, {
+    if (url.pathname === '/api/env-status') {
+      const runtimeMt5Account = mt5BridgeAccount(readMt5BridgeStatus(userEnv));
+      const mt5AccountStatus = buildMt5AccountStatus(userEnv, runtimeMt5Account);
+      return sendJson(res, {
       user: cfgStatus.user,
       userEmail: currentUser,
       apiConfigStatus: cfgStatus,
@@ -2168,6 +2224,9 @@ async function handleApi(req, res, url) {
       mt5Connector: String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true',
       mt5DemoTrading: String(userEnv.MT5_DEMO_TRADING_ENABLED || 'false').toLowerCase() === 'true',
       trainingMt5DemoOrderSend: String(userEnv.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED || 'false').toLowerCase() === 'true',
+      mt5: mt5AccountStatus,
+      mt5Demo: mt5AccountStatus.demo,
+      mt5Real: mt5AccountStatus.real,
       webUrl: `http://127.0.0.1:${activeWebPort}`,
       binanceWhitelistIp: userEnv.QUANT_VPS_PUBLIC_IP || DEFAULT_VPS_PUBLIC_IP,
       realTrading: runtimePolicy.state.tradingRealEnabled,
@@ -2178,7 +2237,8 @@ async function handleApi(req, res, url) {
       riskValidation: runtimePolicy.riskValidation,
       desktopDownloadUrl: ENV.QUANT_DESKTOP_DOWNLOAD_URL || '',
       syncConfigured: Boolean((userEnv.QUANT_SYNC_URL || QUANT_SYNC_URL) && (userEnv.QUANT_SYNC_KEY || QUANT_SYNC_KEY))
-    });
+      });
+    }
     if (url.pathname === '/api/binance-symbols') return sendJson(res, await binanceSymbols());
     if (url.pathname === '/api/mt5-symbols') return sendJson(res, String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? await mt5Symbols(userEnv) : { ok: false, symbols: [], error: 'MT5 adapter disabled' });
     if (url.pathname === '/api/mt5-rates') return sendJson(res, String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? await mt5Rates(q.symbol, q.timeframe, Number(q.count || 180), userEnv) : { ok: false, candles: [], error: 'MT5 adapter disabled' });
@@ -2867,6 +2927,8 @@ if (IS_ELECTRON) {
 
 ipcMain.handle('env-status', () => {
   const runtimePolicy = backendRuntimePolicy(ENV);
+  const runtimeMt5Account = mt5BridgeAccount(readMt5BridgeStatus(ENV));
+  const mt5AccountStatus = buildMt5AccountStatus(ENV, runtimeMt5Account);
   return {
     envFile: ENV.__ENV_FILE || '',
     portableRoot: portableRoot(),
@@ -2881,6 +2943,9 @@ ipcMain.handle('env-status', () => {
     mt5Connector: String(ENV.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true',
     mt5DemoTrading: String(ENV.MT5_DEMO_TRADING_ENABLED || 'false').toLowerCase() === 'true',
     trainingMt5DemoOrderSend: String(ENV.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED || 'false').toLowerCase() === 'true',
+    mt5: mt5AccountStatus,
+    mt5Demo: mt5AccountStatus.demo,
+    mt5Real: mt5AccountStatus.real,
     webUrl: `http://127.0.0.1:${activeWebPort}`,
     binanceWhitelistIp: ENV.QUANT_VPS_PUBLIC_IP || DEFAULT_VPS_PUBLIC_IP,
     realTrading: runtimePolicy.state.tradingRealEnabled,

@@ -34,6 +34,10 @@ assert.ok(renderer.includes('connectorSourceLabel'), 'Sidebar debe indicar si un
 assert.ok(renderer.includes("Activa (${connectorSourceLabel(['BINANCE_API_KEY', 'BINANCE_SECRET'])})"), 'Binance debe mostrar fuente real de las claves, no solo un estado generico.');
 assert.ok(renderer.includes('state.connectorHealth.mt5'), 'MT5 debe reflejar salud runtime verificada, no solo el flag MT5_CONNECTOR_ENABLED.');
 assert.ok(renderer.includes('Sin terminal'), 'MT5 debe mostrar explicitamente cuando el conector esta configurado pero no responde.');
+assert.ok(html.includes('stMt5Demo') && html.includes('stMt5Real'), 'Sidebar debe separar MT5 Demo de MT5 Real.');
+assert.ok(renderer.includes('renderMt5AccountStatuses'), 'Renderer debe renderizar MT5 Demo y MT5 Real por separado.');
+assert.ok(renderer.includes('state.env.mt5Demo') && renderer.includes('state.env.mt5Real'), 'Renderer debe leer el estado separado de MT5 desde env-status.');
+assert.equal(/stMt5'\)\.textContent\s*=/.test(renderer), false, 'Wallet no debe sobrescribir el estado MT5 calculado por renderStatus.');
 assert.ok(css.includes('status-error'), 'CSS debe diferenciar errores reales de conectores.');
 for (const id of ['platformSelect', 'assetSearch', 'assetDropBtn', 'assetMenu', 'priceNow', 'tradeChart']) {
   const count = (html.match(new RegExp(`id="${id}"`, 'g')) || []).length;

@@ -21,6 +21,9 @@ assert.ok(submitBody.includes('window.quant.binanceRealOrderPreflight'), 'submit
 assert.ok(submitBody.indexOf('window.quant.binanceRealOrderPreflight') < submitBody.indexOf('window.quant.placeOrder'), 'preflight debe ocurrir antes de placeOrder.');
 assert.match(submitBody, /if\s*\(!preflight\.ok\)/, 'submitOrder debe bloquear cuando preflight no esta ready.');
 assert.match(submitBody, /Preflight Binance/i, 'submitOrder debe mostrar feedback de preflight.');
+assert.match(submitBody, /Faltante Spot/i, 'submitOrder debe mostrar faltante Spot.');
+assert.match(submitBody, /Earn Flexible detectado/i, 'submitOrder debe mostrar saldo Earn detectado.');
+assert.match(main, /getBinanceEarnBalance/, 'main debe leer saldo Simple Earn para preflight.');
 
 const loadOrdersBody = renderer.match(/async function loadOrders\(\) \{([\s\S]*?)\r?\n\}\r?\n\r?\nfunction renderRealOrderAuditRows/)?.[1] || '';
 assert.ok(loadOrdersBody.includes('window.quant.binanceRealOrderAudit'), 'loadOrders debe leer audit real Binance.');

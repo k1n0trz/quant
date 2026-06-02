@@ -116,6 +116,7 @@ test('POST /api/binance-real-order-preflight returns affordability without touch
       getSymbolFilters: async () => ({ minQty: 0.00001, stepSize: 0.00001, minNotional: 5, status: 'TRADING', quoteAsset: 'USDT' }),
       getTicker: async () => ({ price: 65000 }),
       getBinanceSpotBalance: async () => ({ asset: 'USDT', free: 0.005, locked: 0 }),
+      getBinanceEarnBalance: async () => ({ asset: 'USDT', total: 75, redeemable: 75, positions: [] }),
       placeOrderBinance: async () => { called = true; return { ok: true }; }
     }
   }));
@@ -131,6 +132,8 @@ test('POST /api/binance-real-order-preflight returns affordability without touch
   assert.equal(res.body.status, 'blocked');
   assert.equal(res.body.quoteFree, 0.005);
   assert.equal(res.body.requestedNotional, 65);
+  assert.equal(res.body.earn.redeemable, 75);
+  assert.equal(res.body.canCoverWithEarn, true);
   assert.equal(called, false);
 });
 

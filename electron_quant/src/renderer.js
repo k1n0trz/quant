@@ -4172,6 +4172,9 @@ async function submitOrder(side) {
         `Preflight Binance bloqueado: ${preflight.error || 'orden no viable'}`,
         preflight.quoteAsset ? `Saldo libre: ${Number(preflight.quoteFree || 0).toFixed(8)} ${preflight.quoteAsset}` : '',
         preflight.requestedNotional ? `Requerido: ${Number(preflight.requestedNotional).toFixed(4)} ${preflight.quoteAsset || 'USDT'}` : '',
+        preflight.spotShortfall ? `Faltante Spot: ${Number(preflight.spotShortfall).toFixed(4)} ${preflight.quoteAsset || 'USDT'}` : '',
+        preflight.earn?.redeemable ? `Earn Flexible detectado: ${Number(preflight.earn.redeemable).toFixed(4)} ${preflight.quoteAsset || 'USDT'} (requiere redimir a Spot)` : '',
+        preflight.canCoverWithEarn ? 'Earn cubre el faltante, pero no es usable directo para Spot' : '',
         preflight.minNotional ? `Minimo exchange: ${Number(preflight.minNotional).toFixed(4)} ${preflight.quoteAsset || 'USDT'}` : '',
         preflight.suggestedQty ? `Qty maxima sugerida: ${preflight.suggestedQty}` : ''
       ].filter(Boolean).join(' · ');

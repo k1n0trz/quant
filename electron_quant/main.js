@@ -1245,6 +1245,20 @@ async function getBinanceSpotBalance(asset = 'USDT', env = ENV) {
   };
 }
 
+async function getBinanceEarnBalance(asset = 'USDT', env = ENV) {
+  const symbol = String(asset || 'USDT').toUpperCase();
+  const result = await signedBinance('/sapi/v1/simple-earn/flexible/position', { asset: symbol, size: 100 }, 'GET', env);
+  const rows = Array.isArray(result?.rows) ? result.rows : [];
+  const total = rows.reduce((sum, row) => sum + Number(row.totalAmount || row.amount || 0), 0);
+  const redeemable = rows.reduce((sum, row) => sum + Number(row.redeemableAmount || row.totalAmount || row.amount || 0), 0);
+  return {
+    asset: symbol,
+    total,
+    redeemable,
+    positions: rows
+  };
+}
+
 function binanceWalletUnavailable(error, usdCop = 0) {
   return {
     ok: false,
@@ -1712,6 +1726,7 @@ async function executeAndAuditBinanceRealOrder(input, env = ENV) {
       getTicker: (symbol) => ticker(symbol),
       getSymbolFilters: (symbol) => getSymbolFilters(symbol),
       getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, env),
+      getBinanceEarnBalance: (asset) => getBinanceEarnBalance(asset, env),
       placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, env)
     }
   });
@@ -1997,6 +2012,7 @@ async function handleApi(req, res, url) {
         getTicker: (symbol) => ticker(symbol),
         getSymbolFilters: (symbol) => getSymbolFilters(symbol),
         getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, userEnv),
+        getBinanceEarnBalance: (asset) => getBinanceEarnBalance(asset, userEnv),
         readMt5Snapshot,
         binanceRealOrderAuditFile,
         placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, userEnv),
@@ -2814,7 +2830,8 @@ ipcMain.handle('binance-real-order-preflight', (_e, payload) =>
     deps: {
       getTicker: (symbol) => ticker(symbol),
       getSymbolFilters: (symbol) => getSymbolFilters(symbol),
-      getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, ENV)
+      getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, ENV),
+      getBinanceEarnBalance: (asset) => getBinanceEarnBalance(asset, ENV)
     }
   }).catch((err) => ({ ok: false, status: 'blocked', error: err.message, reasons: [err.message] }))
 );

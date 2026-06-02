@@ -74,6 +74,24 @@ function hasPreflightDeps(deps = {}) {
     && typeof deps.getBinanceSpotBalance === 'function';
 }
 
+function summarizeEarnBalance(earn = {}, asset = 'USDT') {
+  const positions = Array.isArray(earn?.positions) ? earn.positions : [];
+  const total = finiteNumber(earn?.total ?? earn?.amount ?? earn?.totalAmount) || 0;
+  const redeemable = finiteNumber(earn?.redeemable ?? earn?.redeemableAmount ?? earn?.available) || total;
+  return {
+    asset: String(earn?.asset || asset || 'USDT').toUpperCase(),
+    total: roundedNumber(total, 8),
+    redeemable: roundedNumber(redeemable, 8),
+    positions: positions.slice(0, 5).map((position) => ({
+      productId: sanitizeText(position.productId || '', 64),
+      asset: sanitizeText(position.asset || asset || 'USDT', 16),
+      totalAmount: roundedNumber(position.totalAmount ?? position.amount, 8),
+      redeemableAmount: roundedNumber(position.redeemableAmount ?? position.totalAmount ?? position.amount, 8)
+    })),
+    error: earn?.error ? sanitizeText(earn.error) : ''
+  };
+}
+
 function normalizeRequest(input = {}) {
   const venue = String(input.venue || 'BINANCE').trim().toUpperCase();
   if (venue !== 'BINANCE') return { ok: false, error: 'Solo Binance Spot esta soportado en este canal real.' };
@@ -149,6 +167,17 @@ async function preflightBinanceRealOrder({ input = {}, env = {}, botState = {}, 
   const maxAffordableQty = effectivePrice > 0 ? floorToStep(quoteFree / effectivePrice, stepSize) : 0;
   const suggestedQty = Math.min(request.qty, maxAffordableQty);
   const suggestedNotional = roundedNumber(suggestedQty * effectivePrice, 8);
+  const spotShortfall = roundedNumber(Math.max((requestedNotional || 0) - quoteFree, 0), 8);
+  let earn = { asset: quoteAsset, total: 0, redeemable: 0, positions: [], error: '' };
+  if (typeof deps.getBinanceEarnBalance === 'function') {
+    try {
+      earn = summarizeEarnBalance(await deps.getBinanceEarnBalance(quoteAsset), quoteAsset);
+    } catch (error) {
+      earn = { asset: quoteAsset, total: 0, redeemable: 0, positions: [], error: sanitizeText(error?.message || error) };
+    }
+  }
+  const totalPotentialQuote = roundedNumber(quoteFree + (earn.redeemable || 0), 8);
+  const canCoverWithEarn = spotShortfall > 0 && (earn.redeemable || 0) >= spotShortfall;
 
   const checks = {
     symbolTrading: String(filters?.status || 'TRADING').toUpperCase() === 'TRADING',
@@ -156,7 +185,8 @@ async function preflightBinanceRealOrder({ input = {}, env = {}, botState = {}, 
     qtyAboveMin: request.qty >= minQty,
     minNotionalOk: requestedNotional >= minNotional,
     balanceEnough: quoteFree >= requestedNotional,
-    suggestedMeetsMin: suggestedQty >= minQty && suggestedNotional >= minNotional
+    suggestedMeetsMin: suggestedQty >= minQty && suggestedNotional >= minNotional,
+    earnCanCoverShortfall: canCoverWithEarn
   };
   const reasons = [];
   if (!checks.symbolTrading) reasons.push(`${request.symbol} no esta en estado TRADING.`);
@@ -164,6 +194,9 @@ async function preflightBinanceRealOrder({ input = {}, env = {}, botState = {}, 
   if (!checks.qtyAboveMin) reasons.push(`Cantidad ${request.qty} menor al minimo ${minQty}.`);
   if (!checks.minNotionalOk) reasons.push(`Notional ${requestedNotional} ${quoteAsset} menor al minimo ${minNotional}.`);
   if (!checks.balanceEnough) reasons.push(`Saldo insuficiente: libre ${quoteFree} ${quoteAsset}, requerido ${requestedNotional} ${quoteAsset}.`);
+  if (!checks.balanceEnough && earn.redeemable > 0) {
+    reasons.push(`Hay ${earn.redeemable} ${quoteAsset} en Earn Flexible, pero Spot no puede usarlo hasta redimirlo a Spot.`);
+  }
   if (!checks.suggestedMeetsMin) reasons.push(`Saldo libre no permite una orden minima valida en ${request.symbol}.`);
 
   return {
@@ -176,9 +209,13 @@ async function preflightBinanceRealOrder({ input = {}, env = {}, botState = {}, 
     quoteFree,
     effectivePrice: roundedNumber(effectivePrice, 8),
     requestedNotional,
+    spotShortfall,
     minQty,
     stepSize,
     minNotional,
+    earn,
+    totalPotentialQuote,
+    canCoverWithEarn,
     maxAffordableQty,
     suggestedQty: roundedNumber(suggestedQty, 8),
     suggestedNotional,

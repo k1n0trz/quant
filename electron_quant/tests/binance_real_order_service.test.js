@@ -82,6 +82,36 @@ test('preflight blocks insufficient Binance balance before executor is touched',
   assert.equal(result.preflight.requestedNotional, 65);
 });
 
+test('preflight reports Earn funds as non-spot liquidity when they can cover the shortfall', async () => {
+  const result = await preflightBinanceRealOrder({
+    input: { venue: 'BINANCE', side: 'BUY', symbol: 'BTCUSDT', qty: 0.0002, type: 'MARKET' },
+    env: { REAL_TRADING: 'true', BINANCE_API_KEY: 'k', BINANCE_SECRET: 's' },
+    botState: { tradingRealEnabled: true, killSwitch: false },
+    riskConfig: createDefaultRiskConfig(),
+    deps: {
+      getSymbolFilters: async () => ({ minQty: 0.00001, stepSize: 0.00001, minNotional: 5, status: 'TRADING', quoteAsset: 'USDT' }),
+      getTicker: async () => ({ price: 68000 }),
+      getBinanceSpotBalance: async () => ({ asset: 'USDT', free: 0, locked: 0 }),
+      getBinanceEarnBalance: async () => ({
+        asset: 'USDT',
+        total: 55,
+        redeemable: 55,
+        positions: [{ productId: 'USDT001', asset: 'USDT', totalAmount: '55', redeemableAmount: '55' }]
+      })
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 'blocked');
+  assert.equal(result.quoteFree, 0);
+  assert.equal(result.requestedNotional, 13.6);
+  assert.equal(result.spotShortfall, 13.6);
+  assert.equal(result.earn.redeemable, 55);
+  assert.equal(result.canCoverWithEarn, true);
+  assert.equal(result.checks.earnCanCoverShortfall, true);
+  assert.match(result.reasons.join(' '), /Earn Flexible/i);
+});
+
 test('preflight reports ready sizing when balance and minNotional are valid', async () => {
   const result = await preflightBinanceRealOrder({
     input: { venue: 'BINANCE', side: 'BUY', symbol: 'BTCUSDT', qty: 0.001, type: 'MARKET' },

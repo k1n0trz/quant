@@ -61,13 +61,15 @@ test('buildTrainingBotsStatus separates training and real bots and computes pnl'
   });
   assert.equal(status.ok, true);
   assert.equal(status.trainingBots.length, 2);
-  assert.equal(status.realBots.length, 1);
+  assert.equal(status.realBots.length, 2);
   assert.equal(status.trainingBots[0].id, 'EdiLearningBot_XAUUSD');
   assert.equal(status.trainingBots[0].realizedPnl, 32);
   assert.equal(status.trainingBots[0].openPositions, 1);
   assert.equal(status.trainingBots[1].status, 'queued_for_generation');
   assert.equal(status.realBots[0].mode, 'real');
-  assert.equal(status.realBots[0].status, 'not_deployed');
+  assert.equal(status.realBots[0].status, 'real_candidate_not_deployed');
+  assert.equal(status.realBots.some((bot) => bot.symbol === 'BTCUSDT'), true);
+  assert.equal(status.realBots.every((bot) => bot.scope === 'real_separated'), true);
 });
 
 test('buildTrainingBotsStatus derives bot queue from open positions when activePairs is empty', () => {

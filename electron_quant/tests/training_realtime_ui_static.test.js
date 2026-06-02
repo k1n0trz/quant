@@ -26,6 +26,9 @@ assert.ok(renderer.includes('renderTrainingInsights'), 'Renderer debe renderizar
 assert.ok(renderer.includes('Date.now() - Date.parse'), 'Insights deben expirar por edad.');
 assert.ok(renderer.includes('10 * 60 * 1000'), 'Insights deben borrarse despues de 10 minutos.');
 assert.ok(renderer.includes('trainingBotsStatus'), 'Renderer debe consultar estado de bots.');
+assert.ok(html.includes('seed XAUUSD + Quant Auto'), 'UI de bots debe explicar que XAUUSD es seed y Quant Auto genera por par.');
+assert.ok(renderer.includes('candidatos real'), 'UI de bots debe distinguir candidatos reales separados.');
+assert.ok(renderer.includes('sourceTrainingBot') || renderer.includes('templateSource'), 'UI de bots debe mostrar de que seed/bot training viene cada candidato.');
 assert.ok(apiRouter.includes('/api/training/bots/status'), 'Backend debe exponer estado de bots para la pestana Training.');
 
 for (const klass of [

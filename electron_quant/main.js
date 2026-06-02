@@ -34,6 +34,7 @@ const { createReadOnlyTrainingStateReader, normalizeTrainingState } = require('.
 const { normalizeTrainingStateTraceability } = require('./backend/training/training-traceability');
 const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
 const { placeMt5DemoOrder } = require('./backend/adapters/mt5/mt5-demo-order-service');
+const { getMt5MarketSession } = require('./backend/market/mt5-market-hours');
 
 const BINANCE_BASE = 'https://api.binance.com';
 const BINANCE_FAPI_BASE = 'https://fapi.binance.com';
@@ -1633,11 +1634,25 @@ except Exception as e:
 async function chat(messages, context = '', env = ENV) {
   const route = modelRoute(env);
   if (!route.apiKey) return 'Estoy en modo local: puedo operar el dashboard, pero falta una API key de modelo para razonar con proveedor remoto.';
+  const now = new Date();
+  const mt5Session = getMt5MarketSession(now);
+  const bogotaNow = now.toLocaleString('es-CO', {
+    timeZone: 'America/Bogota',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  });
   const memory = readMemory(120)
     .map((m) => `${m.ts} ${m.kind}: ${JSON.stringify(m.payload).slice(0, 500)}`)
     .join('\n');
   const system = `Eres Quant, una IA de escritorio para un sistema de trading. Tienes memoria permanente local guardada en disco; no digas que tu memoria solo dura la sesión. Puedes recordar mensajes, observaciones, señales, errores y trades de sesiones anteriores usando el contexto de memoria que recibes. Respondes como asistente general, elocuente y prudente. No haces análisis de trading salvo que el usuario lo pida. Si hay riesgo real, adviertes y validas.
 
+Fecha/hora actual obligatoria: ${bogotaNow} hora Colombia. No uses fechas viejas del historial de chat. Estado horario MT5 actual: ${mt5Session.open ? 'ABIERTO' : 'CERRADO'} (${mt5Session.reason}) - ${mt5Session.message}
 Conciencia de sistema obligatoria:
 Tienes contexto de feeds de mercado, wallet, Training Mode, Finnhub, Alpha Vantage, calendario macro si esta disponible, senales, posiciones demo y memoria. Si el contexto incluye Macro/news, nunca digas que no tienes acceso a noticias o macro; explica que datos recibiste y sus limites.
 Tienes autonomia de diagnostico sobre Binance cuando las claves estan configuradas: Spot, Funding, Earn, Margin, USD-M Futures y COIN-M Futures se tratan como wallet observable. No inventes saldos; usa el contexto recibido y si un sub-wallet falla, nombra el sub-wallet y la razon.

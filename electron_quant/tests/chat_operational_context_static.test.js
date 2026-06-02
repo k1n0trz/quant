@@ -10,6 +10,8 @@ assert(main.includes('la operacion como ejecutable en Binance'), 'El prompt sist
 assert(main.includes('restricciones suaves y diagnosticas'), 'El prompt sistema debe hablar de restricciones suaves y diagnosticas, no bloqueos por estrategia.');
 assert(main.includes('puedes proponer correcciones concretas para warnings'), 'Quant debe tener poder para diagnosticar/corregir warnings.');
 assert(main.includes('horario MT5 Colombia'), 'El prompt sistema debe conocer horario MT5 Colombia.');
+assert(main.includes('Fecha/hora actual obligatoria') && main.includes('bogotaNow'), 'El prompt sistema debe inyectar fecha/hora Colombia actual, no memoria vieja.');
+assert(main.includes('getMt5MarketSession'), 'El backend debe calcular la sesion MT5 actual para el chat.');
 
 assert(renderer.includes('mt5MarketScheduleContext'), 'El renderer debe inyectar horario MT5 al contexto del chat.');
 assert(renderer.includes('Rendimiento/warnings'), 'El contexto del chat debe incluir warnings de rendimiento recientes.');

@@ -2790,12 +2790,14 @@ function renderTrainingBots() {
     const rows = bots.map((bot) => {
       const pnl = Number(bot.realizedPnl || 0);
       const pnlClass = pnl >= 0 ? 'train-status' : 'train-bad';
-      return `<div class="training-bot-row"><b>${escapeHtml(bot.name || bot.id)}<small>${bot.venue}:${bot.symbol}</small></b><span>${escapeHtml(bot.mode || '')}</span><span>${escapeHtml(bot.status || '')}</span><span>${bot.openPositions || 0} open</span><span>${bot.closedTrades || 0} trades</span><span class="${pnlClass}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</span></div>`;
+      const source = bot.templateSource || bot.sourceTrainingBot || bot.sourceTrainingTemplate || '';
+      const statusLabel = String(bot.status || '').replace(/_/g, ' ');
+      return `<div class="training-bot-row"><b>${escapeHtml(bot.name || bot.id)}<small>${bot.venue}:${bot.symbol}${source ? ` · seed ${escapeHtml(source)}` : ''}</small></b><span>${escapeHtml(bot.mode || '')}</span><span>${escapeHtml(statusLabel)}</span><span>${bot.openPositions || 0} open</span><span>${bot.closedTrades || 0} trades</span><span class="${pnlClass}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</span></div>`;
     }).join('');
     return `<h3>${label}</h3><div class="training-bot-head"><span>BOT</span><span>MODO</span><span>ESTADO</span><span>OPEN</span><span>OPS</span><span>P&L</span></div>${rows || '<div class="empty-state">Sin bots en esta categoria.</div>'}`;
   };
   box.innerHTML = [
-    `<div class="training-bot-summary">Plantillas: ${status.templatesCount || 0} - training: ${status.totals?.training || 0} - real: ${status.totals?.real || 0}</div>`,
+    `<div class="training-bot-summary">Plantillas seed: ${status.templatesCount || 0} - training/demo: ${status.totals?.training || 0} - candidatos real: ${status.totals?.real || 0}</div>`,
     renderGroup('Training / Demo', status.trainingBots || []),
     renderGroup('Real separado', status.realBots || [])
   ].join('');

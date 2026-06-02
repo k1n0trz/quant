@@ -99,6 +99,27 @@ function buildQueuedBot(pair, template = null, state = {}) {
   return { ...bot, ...botFinancials(bot, state) };
 }
 
+function buildRealBotCandidate(bot = {}) {
+  return {
+    id: `QuantReal_${safeString(bot.venue, 'BINANCE')}_${safeString(bot.symbol, 'UNKNOWN')}`,
+    name: `Quant Real ${safeString(bot.symbol, 'UNKNOWN')}`,
+    symbol: safeString(bot.symbol, 'UNKNOWN'),
+    venue: safeString(bot.venue, 'BINANCE'),
+    mode: 'real',
+    status: 'real_candidate_not_deployed',
+    scope: 'real_separated',
+    templateSource: bot.templateSource || bot.sourceTrainingTemplate || bot.id || null,
+    sourceTrainingBot: bot.id || null,
+    openPositions: 0,
+    closedTrades: 0,
+    realizedPnl: 0,
+    winRate: null,
+    hasSource: Boolean(bot.hasSource),
+    hasCompiled: Boolean(bot.hasCompiled),
+    description: 'Candidato real separado. No se despliega hasta validar el bot de training/demo y confirmar permisos reales.'
+  };
+}
+
 function activePairsFromState(state = {}) {
   const explicit = Array.isArray(state.activePairs) ? state.activePairs.filter((pair) => pair?.venue && pair?.symbol) : [];
   const seen = new Set();
@@ -129,17 +150,7 @@ function buildTrainingBotsStatus(options = {}) {
     if (!pair || !pair.symbol || trainingBots.some((bot) => sameSymbol(bot, pair))) continue;
     trainingBots.push(buildQueuedBot(pair, seed, state));
   }
-  const realBots = templates.map((template) => ({
-    ...template,
-    mode: 'real',
-    status: 'not_deployed',
-    scope: 'real_separated',
-    openPositions: 0,
-    closedTrades: 0,
-    realizedPnl: 0,
-    winRate: null,
-    sourceTrainingTemplate: template.id
-  }));
+  const realBots = trainingBots.map(buildRealBotCandidate);
   return {
     ok: true,
     generatedAt: new Date().toISOString(),

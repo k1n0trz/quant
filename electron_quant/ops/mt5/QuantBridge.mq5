@@ -1,6 +1,6 @@
 #property strict
-#property version   "1.10"
-#property description "Quant VPS bridge for MT5 demo account status and demo order commands"
+#property version   "1.11"
+#property description "Quant VPS bridge for MT5 account status and controlled demo order commands"
 
 #include <Trade/Trade.mqh>
 
@@ -8,6 +8,7 @@ input string BridgeStatusFile = "quant_bridge_status.json";
 input string BridgeCommandFile = "quant_bridge_command.txt";
 input string BridgeLastResultFile = "quant_bridge_last_result.json";
 input int PollSeconds = 5;
+input bool AllowBridgeCommands = true;
 input bool AllowDemoOrderSend = true;
 
 CTrade Trade;
@@ -241,9 +242,9 @@ void ProcessCommand()
 int OnInit()
 {
    EventSetTimer(MathMax(1, PollSeconds));
-   Print("QuantBridge initialized status and demo command bridge");
+   Print("QuantBridge initialized status bridge; commands=", BoolJson(AllowBridgeCommands));
    WriteStatus();
-   ProcessCommand();
+   if(AllowBridgeCommands) ProcessCommand();
    return INIT_SUCCEEDED;
 }
 
@@ -256,5 +257,5 @@ void OnDeinit(const int reason)
 void OnTimer()
 {
    WriteStatus();
-   ProcessCommand();
+   if(AllowBridgeCommands) ProcessCommand();
 }

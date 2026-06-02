@@ -6,6 +6,7 @@ const root = path.join(__dirname, '..');
 const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 const envExample = fs.readFileSync(path.join(root, 'backend', 'config', 'env.js'), 'utf8');
 const demoOrderService = fs.readFileSync(path.join(root, 'backend', 'adapters', 'mt5', 'mt5-demo-order-service.js'), 'utf8');
+const quantBridge = fs.readFileSync(path.join(root, 'ops', 'mt5', 'QuantBridge.mq5'), 'utf8');
 
 assert.ok(main.includes('MT5_BRIDGE_STATUS_FILE'), 'main debe aceptar MT5_BRIDGE_STATUS_FILE.');
 assert.ok(main.includes('MT5_BRIDGE_STATUS_TTL_MS'), 'bridge MT5 debe tener TTL defensivo.');
@@ -31,5 +32,7 @@ assert.ok(bridgePositionsIdx > mt5PositionsIdx && bridgePositionsIdx < pythonPos
 assert.ok(envExample.includes('MT5_BRIDGE_STATUS_FILE='), 'ENV_EXAMPLE debe documentar MT5_BRIDGE_STATUS_FILE.');
 assert.ok(envExample.includes('MT5_PYTHON_COMMAND='), 'ENV_EXAMPLE debe documentar MT5_PYTHON_COMMAND.');
 assert.ok(/return env\.MT5_PYTHON_COMMAND \|\| env\.PYTHON_BIN/.test(demoOrderService), 'mt5-demo-order-service debe respetar MT5_PYTHON_COMMAND.');
+assert.ok(quantBridge.includes('input bool AllowBridgeCommands = true;'), 'QuantBridge debe tener switch explicito para comandos.');
+assert.ok(quantBridge.includes('if(AllowBridgeCommands) ProcessCommand();'), 'QuantBridge solo debe procesar comandos cuando AllowBridgeCommands este activo.');
 
 console.log('mt5_bridge_status_static.test.js OK');

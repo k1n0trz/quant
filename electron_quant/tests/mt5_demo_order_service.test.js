@@ -1,4 +1,7 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 
 const {
   isMt5DemoTradingEnabled,
@@ -84,6 +87,50 @@ assert.equal(isMt5DemoTradingEnabled({ ...demoEnv, MT5_ACCOUNT2_SERVER: 'FBS-REA
   assert.equal(captured.payload.order.symbol, 'XAUUSD');
   assert.match(captured.script, /order_send/);
   assert.match(captured.script, /ACCOUNT_TRADE_MODE_DEMO/);
+
+  const bridgeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'quant-mt5-bridge-'));
+  const statusFile = path.join(bridgeDir, 'quant_bridge_status.json');
+  fs.writeFileSync(statusFile, JSON.stringify({
+    ok: true,
+    ts: Math.floor(Date.now() / 1000),
+    connected: true,
+    tradeMode: 0,
+    server: 'FBS-Demo'
+  }));
+  const bridgeEnv = { ...demoEnv, MT5_BRIDGE_STATUS_FILE: statusFile, MT5_BRIDGE_ORDER_TIMEOUT_MS: '5000' };
+  const watcher = (async () => {
+    const commandFile = path.join(bridgeDir, 'quant_bridge_command.txt');
+    for (let i = 0; i < 20; i++) {
+      if (fs.existsSync(commandFile)) {
+        const text = fs.readFileSync(commandFile, 'utf8');
+        const id = text.match(/^id=(.+)$/m)?.[1];
+        assert.ok(id, 'bridge command debe incluir id');
+        assert.match(text, /^action=ORDER$/m);
+        assert.match(text, /^symbol=XAUUSD$/m);
+        fs.writeFileSync(path.join(bridgeDir, `quant_bridge_result_${id}.json`), JSON.stringify({
+          ok: true,
+          retcode: 10009,
+          ticket: 987654,
+          deal: 123,
+          comment: 'bridge done'
+        }));
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error('bridge command not written');
+  })();
+  const bridgeOrder = await placeMt5DemoOrder({
+    symbol: 'XAUUSD',
+    side: 'SELL',
+    volume: 0.01,
+    trainingPositionId: 'bridge_demo'
+  }, { env: bridgeEnv });
+  await watcher;
+  assert.equal(bridgeOrder.ok, true);
+  assert.equal(bridgeOrder.bridge, true);
+  assert.equal(bridgeOrder.ticket, 987654);
+  assert.equal(bridgeOrder.realTradingTouched, false);
 })()
   .then(() => {
     console.log('mt5_demo_order_service.test.js OK');

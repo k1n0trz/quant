@@ -1,4 +1,7 @@
 const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
 
 function textValue(...values) {
   for (const value of values) {
@@ -21,6 +24,37 @@ function boolFlag(value) {
 
 function pythonCommand(env = {}) {
   return env.MT5_PYTHON_COMMAND || env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
+}
+
+function defaultBridgeStatusFile(env = {}) {
+  return env.MT5_BRIDGE_STATUS_FILE
+    || process.env.MT5_BRIDGE_STATUS_FILE
+    || (process.platform === 'win32'
+      ? ''
+      : '/var/lib/quant/mt5/kinotrance/drive_c/Program Files/MetaTrader 5/MQL5/Files/quant_bridge_status.json');
+}
+
+function readJsonFile(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function bridgeStatus(env = {}) {
+  const file = defaultBridgeStatusFile(env);
+  if (!file) return null;
+  const data = readJsonFile(file);
+  if (!data?.ok) return null;
+  const ageMs = data.ts ? Math.max(0, Date.now() - Number(data.ts) * 1000) : Infinity;
+  return { ...data, file, dir: path.dirname(file), ageMs, fresh: ageMs <= 30000 };
+}
+
+function bridgeCanSendDemoOrder(status) {
+  if (!status?.fresh || !status.connected) return false;
+  const server = String(status.server || '');
+  return Number(status.tradeMode) === 0 || /\bdemo\b/i.test(server);
 }
 
 function demoServerLooksSafe(server) {
@@ -59,6 +93,60 @@ function safeComment(reason, trainingPositionId) {
   const id = textValue(trainingPositionId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24);
   const prefix = String(reason || '').includes('training') ? 'Quant demo training' : 'Quant demo order';
   return `${prefix}${id ? ` ${id}` : ''}`.slice(0, 31);
+}
+
+function bridgeCommandText(command) {
+  return Object.entries(command)
+    .map(([key, value]) => `${key}=${String(value ?? '').replace(/[\r\n=]/g, ' ').slice(0, 120)}`)
+    .join('\n') + '\n';
+}
+
+function buildBridgeOrderCommand(order) {
+  return {
+    id: `q${Date.now().toString(36)}${crypto.randomBytes(4).toString('hex')}`,
+    action: 'ORDER',
+    symbol: order.symbol,
+    side: order.side,
+    volume: order.volume,
+    type: order.type,
+    price: order.price || '',
+    deviation: order.deviation,
+    magic: order.magic,
+    comment: order.comment
+  };
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function executeBridgeDemoOrder(order, env = {}) {
+  const status = bridgeStatus(env);
+  if (!bridgeCanSendDemoOrder(status)) return null;
+  const command = buildBridgeOrderCommand(order);
+  const commandFile = path.join(status.dir, 'quant_bridge_command.txt');
+  const resultFile = path.join(status.dir, `quant_bridge_result_${command.id}.json`);
+  fs.writeFileSync(commandFile, bridgeCommandText(command), 'utf8');
+  const timeoutMs = Math.max(3000, Math.min(60000, finiteNumber(env.MT5_BRIDGE_ORDER_TIMEOUT_MS, 15000) || 15000));
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const result = readJsonFile(resultFile);
+    if (result) {
+      return {
+        ...result,
+        bridge: true,
+        commandId: command.id
+      };
+    }
+    await wait(500);
+  }
+  return {
+    ok: false,
+    bridge: true,
+    commandId: command.id,
+    reason: 'mt5_bridge_order_timeout',
+    error: `MT5 bridge order timeout after ${timeoutMs}ms`
+  };
 }
 
 function buildMt5DemoOrderRequest(input = {}, env = {}) {
@@ -213,6 +301,23 @@ async function placeMt5DemoOrder(input = {}, options = {}) {
     order: built.order,
     password: String(env.MT5_ACCOUNT2_PASSWORD || '')
   };
+  const bridgeResult = options.executeBridge === false ? null : await executeBridgeDemoOrder(built.order, env);
+  if (bridgeResult) {
+    return {
+      ...bridgeResult,
+      order: {
+        symbol: built.order.symbol,
+        side: built.order.side,
+        volume: built.order.volume,
+        type: built.order.type,
+        price: built.order.price,
+        server: built.order.server,
+        login: built.order.login
+      },
+      demoOnly: true,
+      realTradingTouched: false
+    };
+  }
   const executePython = options.executePython || ((script, nextPayload) => defaultExecutePython(script, nextPayload, env));
   const result = await executePython(mt5DemoOrderPythonScript(), payload);
   return {
@@ -235,5 +340,7 @@ module.exports = {
   isMt5DemoTradingEnabled,
   buildMt5DemoOrderRequest,
   placeMt5DemoOrder,
-  mt5DemoOrderPythonScript
+  mt5DemoOrderPythonScript,
+  buildBridgeOrderCommand,
+  bridgeCommandText
 };

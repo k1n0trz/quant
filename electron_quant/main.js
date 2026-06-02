@@ -41,7 +41,7 @@ const { createReadOnlyTrainingStateReader, normalizeTrainingState } = require('.
 const { normalizeTrainingStateTraceability } = require('./backend/training/training-traceability');
 const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
 const { getTrainingDemoLoopSchedulerStatus } = require('./backend/training/training-loop-scheduler');
-const { placeMt5DemoOrder } = require('./backend/adapters/mt5/mt5-demo-order-service');
+const { placeMt5DemoOrder, closeMt5DemoPosition } = require('./backend/adapters/mt5/mt5-demo-order-service');
 const { getMt5MarketSession } = require('./backend/market/mt5-market-hours');
 const { createSystemSelfAuditSchedulerController } = require('./backend/system/system-self-audit-scheduler');
 const {
@@ -71,7 +71,7 @@ const CLOUD_ENV_KEYS = [
   'TRAINING_BACKEND_ENABLED','TRAINING_BACKEND_LOOP_ENABLED',
   'TRAINING_BACKEND_LOOP_SCHEDULER_ENABLED','TRAINING_BACKEND_LOOP_INTERVAL_MS',
   'TRAINING_BACKEND_DEMO_ENTRY_ENABLED','TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED',
-  'TRAINING_MT5_DEMO_ORDER_SEND_ENABLED','TRAINING_MT5_DEMO_LOT_SIZE',
+  'TRAINING_MT5_DEMO_ORDER_SEND_ENABLED','TRAINING_MT5_DEMO_CLOSE_ENABLED','TRAINING_MT5_DEMO_LOT_SIZE',
   'SYSTEM_SELF_AUDIT_ENABLED','SYSTEM_SELF_AUDIT_INTERVAL_MS','SYSTEM_SELF_AUDIT_REMEDIATION_ENABLED',
   'QUANT_WEB_PORT','QUANT_WEB_HOST','QUANT_DATA_DIR','QUANT_SYNC_URL','QUANT_SYNC_KEY',
   'QUANT_VPS_PUBLIC_IP',
@@ -2127,6 +2127,7 @@ async function handleApi(req, res, url) {
         binanceRealOrderAuditFile,
         placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, userEnv),
         placeMt5DemoOrder: (input) => placeMt5DemoOrder(input, { env: userEnv }),
+        closeMt5DemoPosition: (input) => closeMt5DemoPosition(input, { env: userEnv }),
         syncBinanceTime: () => syncBinanceTime(),
         mt5AccountInfo: (envArg) => mt5Info(envArg),
         botTemplatesRoot: path.join(__dirname, 'bots', 'templates'),
@@ -2182,6 +2183,7 @@ async function handleApi(req, res, url) {
     if (url.pathname === '/api/mt5-symbols') return sendJson(res, String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? await mt5Symbols(userEnv) : { ok: false, symbols: [], error: 'MT5 adapter disabled' });
     if (url.pathname === '/api/mt5-rates') return sendJson(res, String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? await mt5Rates(q.symbol, q.timeframe, Number(q.count || 180), userEnv) : { ok: false, candles: [], error: 'MT5 adapter disabled' });
     if (url.pathname === '/api/mt5-demo-order' && req.method === 'POST') return sendJson(res, await placeMt5DemoOrder(body, { env: userEnv }));
+    if (url.pathname === '/api/mt5-demo-close' && req.method === 'POST') return sendJson(res, await closeMt5DemoPosition(body, { env: userEnv }));
     if (url.pathname === '/api/ticker') return sendJson(res, await ticker(q.symbol));
     if (url.pathname === '/api/klines') return sendJson(res, await klines(q.symbol, q.interval, Number(q.limit || 180)));
     if (url.pathname === '/api/wallet') return sendJson(res, await fullWallet(userEnv));
@@ -2917,6 +2919,7 @@ ipcMain.handle('push-cloud-data',     () => pushAllDataToCloud(ENV));
 ipcMain.handle('pull-cloud-data',     () => pullDataFromCloud(ENV));
 ipcMain.handle('mt5-snapshot',        () => readMt5Snapshot());
 ipcMain.handle('mt5-demo-order',      (_e, payload) => placeMt5DemoOrder(payload, { env: ENV }));
+ipcMain.handle('mt5-demo-close',      (_e, payload) => closeMt5DemoPosition(payload, { env: ENV }));
 ipcMain.handle('conversations-list',              () => listConversations());
 ipcMain.handle('conversation-load',   (_e, id)   => loadConversation(id));
 ipcMain.handle('conversation-save',   (_e, id, name, messages) => saveConversation(id, name, messages));

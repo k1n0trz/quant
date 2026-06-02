@@ -24,7 +24,7 @@ const { resolveTrainingMarketContext } = require('../training/training-market-co
 const { resolveTrainingSignalContext } = require('../training/training-signal-context-service');
 const { generateTrainingSignalCandidates } = require('../training/training-signal-candidate-engine');
 const { buildTrainingBotsStatus } = require('../training/bot-registry-service');
-const { placeMt5DemoOrder } = require('../adapters/mt5/mt5-demo-order-service');
+const { placeMt5DemoOrder, closeMt5DemoPosition } = require('../adapters/mt5/mt5-demo-order-service');
 const {
   executeBinanceRealOrder,
   preflightBinanceRealOrder,
@@ -607,6 +607,20 @@ function createApiRouter(context) {
         const executor = typeof deps.placeMt5DemoOrder === 'function'
           ? deps.placeMt5DemoOrder
           : (input) => placeMt5DemoOrder(input, { env });
+        const result = await executor(body);
+        return response(result.ok ? 200 : 409, {
+          ...result,
+          safety: {
+            demoOnly: true,
+            realTradingTouched: false
+          }
+        });
+      }
+
+      if (method === 'POST' && pathname === '/api/mt5-demo/close') {
+        const executor = typeof deps.closeMt5DemoPosition === 'function'
+          ? deps.closeMt5DemoPosition
+          : (input) => closeMt5DemoPosition(input, { env });
         const result = await executor(body);
         return response(result.ok ? 200 : 409, {
           ...result,

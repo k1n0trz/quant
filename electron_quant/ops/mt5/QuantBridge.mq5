@@ -145,7 +145,7 @@ void ProcessCommand()
    LastCommandId = id;
 
    string action = Kv(text, "action");
-   if(action != "ORDER")
+   if(action != "ORDER" && action != "CLOSE")
    {
       WriteResult(id, StringFormat("{\"ok\":false,\"reason\":\"unsupported_action\",\"commandId\":\"%s\"}", Esc(id)));
       return;
@@ -170,6 +170,35 @@ void ProcessCommand()
       WriteResult(id, StringFormat("{\"ok\":false,\"reason\":\"terminal_trade_not_allowed\",\"commandId\":\"%s\"}", Esc(id)));
       return;
    }
+
+   if(action == "CLOSE")
+   {
+      ulong ticket = (ulong)IntNum(Kv(text, "ticket"), 0);
+      if(ticket <= 0)
+      {
+         WriteResult(id, StringFormat("{\"ok\":false,\"reason\":\"invalid_close_ticket\",\"commandId\":\"%s\"}", Esc(id)));
+         return;
+      }
+      if(!PositionSelectByTicket(ticket))
+      {
+         WriteResult(id, StringFormat("{\"ok\":false,\"reason\":\"position_not_found\",\"commandId\":\"%s\",\"ticket\":%I64u}", Esc(id), ticket));
+         return;
+      }
+      string closeSymbol = PositionGetString(POSITION_SYMBOL);
+      double closeVolume = PositionGetDouble(POSITION_VOLUME);
+      long closeType = PositionGetInteger(POSITION_TYPE);
+      string closeSide = closeType == POSITION_TYPE_BUY ? "BUY" : "SELL";
+      Trade.SetExpertMagicNumber(magic);
+      Trade.SetDeviationInPoints(deviation);
+      bool closeOk = Trade.PositionClose(ticket, deviation);
+      long closeRetcode = Trade.ResultRetcode();
+      string closeResult = StringFormat("{\"ok\":%s,\"commandId\":\"%s\",\"action\":\"CLOSE\",\"retcode\":%I64d,\"ticket\":%I64u,\"deal\":%I64u,\"comment\":\"%s\",\"symbol\":\"%s\",\"side\":\"%s\",\"volume\":%.8f,\"account\":{\"login\":%I64d,\"server\":\"%s\",\"tradeMode\":%I64d}}",
+         BoolJson(closeOk), Esc(id), closeRetcode, ticket, Trade.ResultDeal(), Esc(Trade.ResultComment()), Esc(closeSymbol), closeSide, closeVolume, AccountInfoInteger(ACCOUNT_LOGIN), Esc(AccountInfoString(ACCOUNT_SERVER)), AccountInfoInteger(ACCOUNT_TRADE_MODE));
+      WriteResult(id, closeResult);
+      WriteStatus();
+      return;
+   }
+
    if(StringLen(symbol) < 3 || volume <= 0 || (side != "BUY" && side != "SELL"))
    {
       WriteResult(id, StringFormat("{\"ok\":false,\"reason\":\"invalid_order_payload\",\"commandId\":\"%s\"}", Esc(id)));

@@ -116,14 +116,26 @@ function buildBridgeOrderCommand(order) {
   };
 }
 
+function buildBridgeCloseCommand(close) {
+  return {
+    id: `q${Date.now().toString(36)}${crypto.randomBytes(4).toString('hex')}`,
+    action: 'CLOSE',
+    ticket: close.ticket,
+    symbol: close.symbol || '',
+    volume: close.volume || '',
+    deviation: close.deviation,
+    magic: close.magic,
+    comment: close.comment
+  };
+}
+
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function executeBridgeDemoOrder(order, env = {}) {
+async function executeBridgeDemoCommand(command, env = {}) {
   const status = bridgeStatus(env);
   if (!bridgeCanSendDemoOrder(status)) return null;
-  const command = buildBridgeOrderCommand(order);
   const commandFile = path.join(status.dir, 'quant_bridge_command.txt');
   const resultFile = path.join(status.dir, `quant_bridge_result_${command.id}.json`);
   fs.writeFileSync(commandFile, bridgeCommandText(command), 'utf8');
@@ -147,6 +159,14 @@ async function executeBridgeDemoOrder(order, env = {}) {
     reason: 'mt5_bridge_order_timeout',
     error: `MT5 bridge order timeout after ${timeoutMs}ms`
   };
+}
+
+async function executeBridgeDemoOrder(order, env = {}) {
+  return executeBridgeDemoCommand(buildBridgeOrderCommand(order), env);
+}
+
+async function executeBridgeDemoClose(close, env = {}) {
+  return executeBridgeDemoCommand(buildBridgeCloseCommand(close), env);
 }
 
 function buildMt5DemoOrderRequest(input = {}, env = {}) {
@@ -200,6 +220,47 @@ function buildMt5DemoOrderRequest(input = {}, env = {}) {
   return {
     ok: true,
     order,
+    safety: {
+      demoOnly: true,
+      realTradingTouched: false,
+      accountSlot: 'MT5_ACCOUNT2',
+      requiresDemoServer: true
+    }
+  };
+}
+
+function buildMt5DemoCloseRequest(input = {}, env = {}) {
+  if (!isMt5DemoTradingEnabled(env)) {
+    return {
+      ok: false,
+      reason: 'mt5_demo_trading_disabled',
+      safety: { demoOnly: true, realTradingTouched: false }
+    };
+  }
+
+  const ticket = finiteNumber(input.ticket, input.positionTicket, input.order);
+  if (!ticket || ticket <= 0) {
+    return { ok: false, reason: 'invalid_ticket', safety: { demoOnly: true, realTradingTouched: false } };
+  }
+
+  const symbol = input.symbol ? safeMt5Symbol(input.symbol) : '';
+  if (input.symbol && !symbol) {
+    return { ok: false, reason: 'symbol_not_mt5_demo_safe', safety: { demoOnly: true, realTradingTouched: false } };
+  }
+
+  const volume = finiteNumber(input.volume, input.lots);
+  const close = {
+    ticket: Math.trunc(ticket),
+    symbol,
+    volume: volume && volume > 0 ? volume : null,
+    deviation: Math.max(1, Math.min(100, finiteNumber(input.deviation, env.MT5_DEMO_DEVIATION, 20) || 20)),
+    magic: finiteNumber(env.MT5_DEMO_MAGIC, 260530) || 260530,
+    comment: safeComment(input.reason || 'training-demo-close', input.trainingPositionId)
+  };
+
+  return {
+    ok: true,
+    close,
     safety: {
       demoOnly: true,
       realTradingTouched: false,
@@ -336,11 +397,57 @@ async function placeMt5DemoOrder(input = {}, options = {}) {
   };
 }
 
+async function closeMt5DemoPosition(input = {}, options = {}) {
+  const env = options.env || {};
+  const built = buildMt5DemoCloseRequest(input, env);
+  if (!built.ok) {
+    return {
+      ok: false,
+      reason: built.reason,
+      demoOnly: true,
+      realTradingTouched: false
+    };
+  }
+
+  const bridgeResult = options.executeBridge === false ? null : await executeBridgeDemoClose(built.close, env);
+  if (bridgeResult) {
+    return {
+      ...bridgeResult,
+      close: {
+        ticket: built.close.ticket,
+        symbol: built.close.symbol,
+        volume: built.close.volume,
+        server: String(env.MT5_ACCOUNT2_SERVER),
+        login: Number(env.MT5_ACCOUNT2_LOGIN)
+      },
+      demoOnly: true,
+      realTradingTouched: false
+    };
+  }
+
+  return {
+    ok: false,
+    reason: 'mt5_bridge_unavailable',
+    close: {
+      ticket: built.close.ticket,
+      symbol: built.close.symbol,
+      volume: built.close.volume,
+      server: String(env.MT5_ACCOUNT2_SERVER),
+      login: Number(env.MT5_ACCOUNT2_LOGIN)
+    },
+    demoOnly: true,
+    realTradingTouched: false
+  };
+}
+
 module.exports = {
   isMt5DemoTradingEnabled,
   buildMt5DemoOrderRequest,
+  buildMt5DemoCloseRequest,
   placeMt5DemoOrder,
+  closeMt5DemoPosition,
   mt5DemoOrderPythonScript,
   buildBridgeOrderCommand,
+  buildBridgeCloseCommand,
   bridgeCommandText
 };

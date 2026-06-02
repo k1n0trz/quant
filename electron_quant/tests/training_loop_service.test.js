@@ -162,6 +162,76 @@ test('tick updates balance once for one closure', async () => {
   assert.equal(result.balanceAfter, 4988.25);
 });
 
+test('tick closes MT5 demo bridge position before removing it from training state', async () => {
+  const open = {
+    id: 'pos-mt5-bridge-close',
+    signal_id: 'sig-mt5-bridge-close',
+    symbol: 'EURUSD',
+    venue: 'MT5',
+    direction: 'LONG',
+    entry_price: 1.1,
+    size_demo: 1000,
+    fees_simuladas: 0,
+    spread_estimado: 0,
+    slippage_estimado: 0,
+    opened_tick: Date.parse('2026-05-09T00:00:00.000Z'),
+    min_hold_ms: 30 * 60 * 1000,
+    max_hold_ms: 12 * 60 * 60 * 1000,
+    horizon: 'intraday',
+    mt5_demo_execution: {
+      attempted: true,
+      ok: true,
+      ticket: 1811606880,
+      volume: 0.01,
+      demoOnly: true,
+      realTradingTouched: false
+    }
+  };
+  const closeCalls = [];
+
+  const result = await runTrainingDemoTick({
+    state: createState({
+      balance: 100000,
+      positions: [
+        open,
+        { id: 'pos-keep-a', symbol: 'BTCUSDT', venue: 'BINANCE', direction: 'LONG', entry_price: 10, size_demo: 1 },
+        { id: 'pos-keep-b', symbol: 'ETHUSDT', venue: 'BINANCE', direction: 'LONG', entry_price: 10, size_demo: 1 }
+      ],
+      targetOpenPositions: 3
+    }),
+    positionContexts: [{
+      signalId: 'sig-mt5-bridge-close',
+      pair: { symbol: 'EURUSD', venue: 'MT5', price: 1.12 },
+      signal: { bias: 'LONG', confidence: 70 }
+    }],
+    env: {
+      TRAINING_MT5_DEMO_ORDER_SEND_ENABLED: 'true',
+      TRAINING_MT5_DEMO_CLOSE_ENABLED: 'true'
+    },
+    deps: {
+      closeMt5DemoPosition: async (payload) => {
+        closeCalls.push(payload);
+        return { ok: true, ticket: payload.ticket, retcode: 10009, deal: 998, bridge: true, demoOnly: true, realTradingTouched: false };
+      }
+    },
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z')
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(closeCalls.length, 1);
+  assert.deepEqual(closeCalls[0], {
+    ticket: 1811606880,
+    symbol: 'EURUSD',
+    volume: 0.01,
+    reason: 'training-demo-close',
+    trainingPositionId: 'pos-mt5-bridge-close'
+  });
+  assert.equal(result.closedPositions, 1);
+  assert.equal(result.nextState.closedTrades[0].mt5_demo_close.ok, true);
+  assert.equal(result.nextState.closedTrades[0].mt5_demo_close.ticket, 1811606880);
+  assert.equal(result.nextState.closedTrades[0].mt5_demo_close.realTradingTouched, false);
+});
+
 test('tick does not mutate input state', async () => {
   const open = {
     id: 'pos-immutable-loop',

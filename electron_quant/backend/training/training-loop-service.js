@@ -34,6 +34,12 @@ function isTrainingBackendLoopEnabled(env = {}) {
   return String(env.TRAINING_BACKEND_LOOP_ENABLED || 'false').toLowerCase() === 'true';
 }
 
+function isTrainingMt5DemoCloseEnabled(env = {}) {
+  const explicit = env.TRAINING_MT5_DEMO_CLOSE_ENABLED;
+  if (explicit != null) return String(explicit || 'false').toLowerCase() === 'true';
+  return String(env.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED || 'false').toLowerCase() === 'true';
+}
+
 function buildTickId(now = new Date()) {
   return `tick_${now.toISOString().replace(/[-:.TZ]/g, '')}`;
 }
@@ -62,6 +68,95 @@ function findPositionContext(position, contexts = []) {
     ) return context;
   }
   return null;
+}
+
+function mt5DemoExecutionTicket(position = {}) {
+  return finiteNumber(
+    position.mt5_demo_execution?.ticket,
+    position.mt5DemoExecution?.ticket,
+    position.mt5_ticket,
+    position.mt5Ticket
+  );
+}
+
+function mt5DemoExecutionVolume(position = {}) {
+  return finiteNumber(
+    position.mt5_demo_execution?.volume,
+    position.mt5DemoExecution?.volume,
+    position.mt5_lots,
+    position.mt5Lots
+  );
+}
+
+function requiresMt5DemoBridgeClose(position = {}) {
+  if (!sameText(position.venue, 'MT5')) return false;
+  const execution = isObject(position.mt5_demo_execution) ? position.mt5_demo_execution : position.mt5DemoExecution;
+  if (!isObject(execution)) return false;
+  const ticket = mt5DemoExecutionTicket(position);
+  return Boolean(
+    ticket && ticket > 0
+    && execution.ok !== false
+    && execution.demoOnly !== false
+    && execution.realTradingTouched !== true
+  );
+}
+
+function compactMt5DemoCloseResult(result = {}) {
+  return {
+    attempted: true,
+    ok: Boolean(result.ok),
+    reason: result.reason || null,
+    ticket: finiteNumber(result.ticket, result.close?.ticket),
+    deal: finiteNumber(result.deal),
+    retcode: finiteNumber(result.retcode),
+    bridge: Boolean(result.bridge),
+    demoOnly: result.demoOnly !== false,
+    realTradingTouched: false
+  };
+}
+
+async function closeMt5DemoBridgePosition(openPosition, source = {}) {
+  if (!requiresMt5DemoBridgeClose(openPosition)) return { required: false, result: null };
+  const env = source.env || {};
+  const deps = source.deps || {};
+  if (!isTrainingMt5DemoCloseEnabled(env)) {
+    return { required: true, ok: false, reason: 'mt5_demo_close_disabled' };
+  }
+  if (typeof deps.closeMt5DemoPosition !== 'function') {
+    return { required: true, ok: false, reason: 'mt5_demo_close_executor_missing' };
+  }
+  try {
+    const result = await deps.closeMt5DemoPosition({
+      ticket: mt5DemoExecutionTicket(openPosition),
+      symbol: openPosition.symbol,
+      volume: mt5DemoExecutionVolume(openPosition),
+      reason: 'training-demo-close',
+      trainingPositionId: openPosition.id || null
+    });
+    return {
+      required: true,
+      ok: Boolean(result?.ok),
+      reason: result?.ok ? null : (result?.reason || 'mt5_demo_close_failed'),
+      result: compactMt5DemoCloseResult(result || {})
+    };
+  } catch (error) {
+    return {
+      required: true,
+      ok: false,
+      reason: String(error?.message || error),
+      result: {
+        attempted: true,
+        ok: false,
+        reason: String(error?.message || error),
+        ticket: mt5DemoExecutionTicket(openPosition),
+        deal: null,
+        retcode: null,
+        bridge: false,
+        demoOnly: true,
+        realTradingTouched: false
+      }
+    };
+  }
 }
 
 function evaluateCloseDecision(position, context, state, nowMs) {
@@ -151,6 +246,17 @@ async function runTrainingDemoTick(input = {}) {
       continue;
     }
 
+    const mt5Close = await closeMt5DemoBridgePosition(openPosition, source);
+    if (mt5Close.required && !mt5Close.ok) {
+      skippedPositions.push({
+        id: openPosition.id || null,
+        signal_id: openPosition.signal_id || null,
+        reason: mt5Close.reason || 'mt5_demo_close_failed',
+        mt5_demo_close: mt5Close.result || null
+      });
+      continue;
+    }
+
     const atomicResult = applyAtomicTrainingDemoClose({
       state: nextState,
       openPosition,
@@ -166,6 +272,19 @@ async function runTrainingDemoTick(input = {}) {
     }
 
     nextState = atomicResult.nextState;
+    if (mt5Close.result) {
+      const closedTrades = Array.isArray(nextState.closedTrades) ? nextState.closedTrades.slice() : [];
+      if (closedTrades[0]) {
+        closedTrades[0] = {
+          ...closedTrades[0],
+          mt5_demo_close: mt5Close.result
+        };
+        nextState = {
+          ...nextState,
+          closedTrades
+        };
+      }
+    }
     closedPositions += 1;
     if (atomicResult.lessonPending) lessonPendingCount += 1;
   }
@@ -202,5 +321,6 @@ async function runTrainingDemoTick(input = {}) {
 
 module.exports = {
   isTrainingBackendLoopEnabled,
+  isTrainingMt5DemoCloseEnabled,
   runTrainingDemoTick
 };

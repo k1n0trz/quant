@@ -75,6 +75,7 @@ assert.equal(isMt5DemoTradingEnabled({ ...demoEnv, MT5_ACCOUNT2_SERVER: 'FBS-REA
     trainingPositionId: 'pos_demo'
   }, {
     env: demoEnv,
+    executeBridge: false,
     executePython: async (script, payload) => {
       captured = { script, payload };
       return { ok: true, ticket: 123456, retcode: 10009, comment: 'done', account: { login: 106075877, trade_mode: 0 } };

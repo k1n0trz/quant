@@ -33,6 +33,8 @@ assert.ok(envExample.includes('MT5_BRIDGE_STATUS_FILE='), 'ENV_EXAMPLE debe docu
 assert.ok(envExample.includes('MT5_PYTHON_COMMAND='), 'ENV_EXAMPLE debe documentar MT5_PYTHON_COMMAND.');
 assert.ok(/return env\.MT5_PYTHON_COMMAND \|\| env\.PYTHON_BIN/.test(demoOrderService), 'mt5-demo-order-service debe respetar MT5_PYTHON_COMMAND.');
 assert.ok(quantBridge.includes('input bool AllowBridgeCommands = true;'), 'QuantBridge debe tener switch explicito para comandos.');
-assert.ok(quantBridge.includes('if(AllowBridgeCommands) ProcessCommand();'), 'QuantBridge solo debe procesar comandos cuando AllowBridgeCommands este activo.');
+assert.ok(quantBridge.includes('bool BridgeCommandsEnabled()'), 'QuantBridge debe calcular permisos de comandos en una funcion dedicada.');
+assert.ok(quantBridge.includes('return AllowBridgeCommands && DemoAccount();'), 'QuantBridge solo debe permitir comandos en cuentas demo.');
+assert.ok(quantBridge.includes('if(BridgeCommandsEnabled()) ProcessCommand();'), 'QuantBridge solo debe procesar comandos cuando BridgeCommandsEnabled este activo.');
 
 console.log('mt5_bridge_status_static.test.js OK');

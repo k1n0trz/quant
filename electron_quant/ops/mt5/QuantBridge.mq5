@@ -82,6 +82,11 @@ bool DemoAccount()
    return AccountInfoInteger(ACCOUNT_TRADE_MODE) == ACCOUNT_TRADE_MODE_DEMO || StringFind(lower, "demo") >= 0;
 }
 
+bool BridgeCommandsEnabled()
+{
+   return AllowBridgeCommands && DemoAccount();
+}
+
 string PositionJson(int index)
 {
    ulong ticket = PositionGetTicket(index);
@@ -242,9 +247,9 @@ void ProcessCommand()
 int OnInit()
 {
    EventSetTimer(MathMax(1, PollSeconds));
-   Print("QuantBridge initialized status bridge; commands=", BoolJson(AllowBridgeCommands));
+   Print("QuantBridge initialized status bridge; commands=", BoolJson(BridgeCommandsEnabled()));
    WriteStatus();
-   if(AllowBridgeCommands) ProcessCommand();
+   if(BridgeCommandsEnabled()) ProcessCommand();
    return INIT_SUCCEEDED;
 }
 
@@ -257,5 +262,5 @@ void OnDeinit(const int reason)
 void OnTimer()
 {
    WriteStatus();
-   if(AllowBridgeCommands) ProcessCommand();
+   if(BridgeCommandsEnabled()) ProcessCommand();
 }

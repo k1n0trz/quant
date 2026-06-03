@@ -147,6 +147,41 @@ function mergeEntryPairs(primary = [], fallback = []) {
   return out;
 }
 
+function balancedTrainingBootstrapPairs(mt5Pairs = [], binancePairs = [], maxPairs = 40) {
+  const max = Math.max(1, Math.floor(finiteNumber(maxPairs, 40) || 40));
+  const hasMt5 = mt5Pairs.length > 0;
+  const hasBinance = binancePairs.length > 0;
+  const mt5Quota = hasMt5 && hasBinance ? Math.floor(max / 2) : max;
+  const binanceQuota = hasMt5 && hasBinance ? max - mt5Quota : max;
+  const out = [];
+  const seen = new Set();
+
+  function add(pair) {
+    const normalized = normalizeEntryPair(pair);
+    if (!normalized?.symbol) return;
+    const key = `${String(normalized.venue || 'BINANCE').toUpperCase()}:${String(normalized.symbol).toUpperCase()}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(normalized);
+  }
+
+  const pairedQuota = Math.max(mt5Quota, binanceQuota);
+  for (let index = 0; index < pairedQuota && out.length < max; index += 1) {
+    if (index < mt5Quota) add(mt5Pairs[index]);
+    if (index < binanceQuota) add(binancePairs[index]);
+  }
+
+  let mt5Index = mt5Quota;
+  let binanceIndex = binanceQuota;
+  while (out.length < max && (mt5Index < mt5Pairs.length || binanceIndex < binancePairs.length)) {
+    if (mt5Index < mt5Pairs.length) add(mt5Pairs[mt5Index++]);
+    if (out.length >= max) break;
+    if (binanceIndex < binancePairs.length) add(binancePairs[binanceIndex++]);
+  }
+
+  return out.slice(0, max);
+}
+
 function hasActionableEntryIndicators(pair = {}) {
   const indicators = isObject(pair.indicators) ? pair.indicators : {};
   return Boolean(
@@ -180,7 +215,8 @@ async function buildBackendBootstrapPairs(input = {}) {
     ...symbols.filter((symbol) => typeof symbol === 'string' && symbol.endsWith('USDT') && !preferred.includes(symbol))
   ];
   const candidates = (universe.length ? universe : preferred).slice(0, 40);
-  const pairs = [];
+  const mt5Pairs = [];
+  const binancePairs = [];
 
   function buildPair({ venue, symbol, ticker, fallbackChangePct = 0 }) {
     const price = finiteNumber(ticker?.price, ticker?.lastPrice, ticker?.bid && ticker?.ask ? (Number(ticker.bid) + Number(ticker.ask)) / 2 : null);
@@ -248,7 +284,7 @@ async function buildBackendBootstrapPairs(input = {}) {
   const mt5Candidates = [
     ...mt5Preferred.filter((symbol) => mt5Symbols.includes(symbol)),
     ...mt5Symbols.filter((symbol) => typeof symbol === 'string' && !mt5Preferred.includes(symbol))
-  ].slice(0, 20);
+  ].slice(0, 40);
 
   for (const symbol of mt5Candidates) {
     if (typeof deps.getMt5Ticker !== 'function') continue;
@@ -261,7 +297,7 @@ async function buildBackendBootstrapPairs(input = {}) {
     const hash = parseInt(stableTraceHash(symbol), 36);
     const fallbackChangePct = (hash % 2 === 0 ? 1 : -1) * (0.35 + (hash % 7) * 0.08);
     const pair = buildPair({ venue: 'MT5', symbol, ticker, fallbackChangePct });
-    if (pair) pairs.push(pair);
+    if (pair) mt5Pairs.push(pair);
   }
 
   for (const symbol of candidates) {
@@ -274,10 +310,10 @@ async function buildBackendBootstrapPairs(input = {}) {
       }
     }
     const pair = buildPair({ venue: 'BINANCE', symbol, ticker });
-    if (pair) pairs.push(pair);
+    if (pair) binancePairs.push(pair);
   }
 
-  return pairs;
+  return balancedTrainingBootstrapPairs(mt5Pairs, binancePairs, 40);
 }
 
 function mergeSignalForEntry(pair, signalContext, forcedHorizon = null) {
@@ -519,10 +555,15 @@ async function evaluateTrainingDemoEntries(input = {}) {
     finiteNumber(state.targetOpenPositions, state.targets?.total, 40) || 40
   ));
   const needsIndicatorRefresh = pairs.some((pair) => !hasActionableEntryIndicators(pair));
+  const hasMt5BootstrapSource = (
+    typeof deps.getMt5Symbols === 'function'
+    || typeof deps.getMt5Ticker === 'function'
+    || String(env.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true'
+  );
   const bootstrappedPairs = (
     (pairs.length < targetUniverseSize && (intradayNeeded > 0 || swingNeeded > 0))
     || needsIndicatorRefresh
-    || (!hasMt5EntryPair && String(env.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true')
+    || (!hasMt5EntryPair && hasMt5BootstrapSource)
   )
     ? await buildBackendBootstrapPairs({ deps, env, nowMs })
     : [];

@@ -307,6 +307,35 @@ test('backend bootstrap includes MT5 candidates when MT5 symbols and ticks are a
   assert.equal(pairs.some((pair) => pair.venue === 'BINANCE' && pair.symbol === 'BTCUSDT'), true);
 });
 
+test('backend bootstrap caps to 40 and balances Binance with MT5 when both venues are available', async () => {
+  const binanceSymbols = Array.from({ length: 45 }, (_, index) => `B${index + 1}USDT`);
+  const mt5Symbols = Array.from({ length: 30 }, (_, index) => `MT5${index + 1}`);
+
+  const pairs = await buildBackendBootstrapPairs({
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z'),
+    deps: {
+      getBinanceSymbols: async () => binanceSymbols,
+      getTicker: async (symbol) => ({
+        price: 100 + Number(symbol.match(/\d+/)?.[0] || 0),
+        changePct: 1.4,
+        quoteVolume: 90000000
+      }),
+      getMt5Symbols: async () => ({ ok: true, symbols: mt5Symbols }),
+      getMt5Ticker: async (symbol) => ({
+        price: 1.1 + Number(symbol.match(/\d+/)?.[0] || 0) / 100,
+        bid: 1.1,
+        ask: 1.1002,
+        spread: 0.0002,
+        changePct: -0.8
+      })
+    }
+  });
+
+  assert.equal(pairs.length, 40);
+  assert.equal(pairs.filter((pair) => pair.venue === 'BINANCE').length, 20);
+  assert.equal(pairs.filter((pair) => pair.venue === 'MT5').length, 20);
+});
+
 test('entry evaluator refreshes stale active pairs that no longer carry actionable indicators', async () => {
   const state = createState({
     activePairs: [
@@ -343,4 +372,50 @@ test('entry evaluator refreshes stale active pairs that no longer carry actionab
   assert.equal(Number.isFinite(result.nextState.activePairs[0].indicators.htfAlignmentScore), true);
   assert.equal(Number.isFinite(result.nextState.activePairs[0].indicators.patternScore), true);
   assert.equal(Number.isFinite(result.nextState.activePairs[0].indicators.volumeRatio), true);
+});
+
+test('entry evaluator rebalances a full Binance-only universe when MT5 source is available', async () => {
+  const binanceSymbols = Array.from({ length: 40 }, (_, index) => `B${index + 1}USDT`);
+  const mt5Symbols = Array.from({ length: 25 }, (_, index) => `FX${index + 1}`);
+  const activePairs = binanceSymbols.map((symbol) => createPair({ symbol, venue: 'BINANCE' }));
+  const positions = binanceSymbols.map((symbol, index) => ({
+    id: `pos-${symbol}`,
+    venue: 'BINANCE',
+    symbol,
+    horizon: index < 20 ? 'intraday' : 'swing',
+    direction: 'LONG',
+    entry_price: 100
+  }));
+  const state = createState({
+    activePairs,
+    positions,
+    targets: { total: 40, intraday: 20, swing: 20 },
+    targetOpenPositions: 40,
+    targetIntradayPositions: 20,
+    targetSwingPositions: 20
+  });
+
+  const result = await evaluateTrainingDemoEntries({
+    state,
+    env: { TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true' },
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z'),
+    deps: {
+      getBinanceSymbols: async () => binanceSymbols,
+      getTicker: async () => ({ price: 100, changePct: 1.2, quoteVolume: 80000000 }),
+      getMt5Symbols: async () => ({ ok: true, symbols: mt5Symbols }),
+      getMt5Ticker: async (symbol) => ({
+        price: 1.1 + Number(symbol.match(/\d+/)?.[0] || 0) / 100,
+        bid: 1.1,
+        ask: 1.1002,
+        spread: 0.0002,
+        changePct: -0.7
+      })
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.openedEntries.length, 0);
+  assert.equal(result.nextState.activePairs.length, 40);
+  assert.equal(result.nextState.activePairs.filter((pair) => pair.venue === 'MT5').length, 20);
+  assert.equal(result.nextState.activePairs.filter((pair) => pair.venue === 'BINANCE').length, 20);
 });

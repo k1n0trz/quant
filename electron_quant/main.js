@@ -594,6 +594,8 @@ function trainingLessonMergeKey(lesson = {}) {
   ].map((value) => String(value ?? '')).join('|');
 }
 
+const TRAINING_CLOSED_TRADES_LIMIT = 5000;
+
 function mergeTrainingArray(existing = [], incoming = [], keyFn, limit = 400) {
   const out = [];
   const seen = new Set();
@@ -624,7 +626,7 @@ function mergeTrainingStateForWrite(incomingState) {
     ...incomingState,
     positions: incomingPositions.length ? incomingPositions : existingPositions,
     activePairs: incomingPairs.length ? incomingPairs : existingPairs,
-    closedTrades: mergeTrainingArray(existingClosed, incomingClosed, trainingTradeMergeKey, 400),
+    closedTrades: mergeTrainingArray(existingClosed, incomingClosed, trainingTradeMergeKey, TRAINING_CLOSED_TRADES_LIMIT),
     lessons: mergeTrainingArray(existingLessons, incomingLessons, trainingLessonMergeKey, 500),
     strategyStats: {
       ...(existingState.strategyStats || {}),

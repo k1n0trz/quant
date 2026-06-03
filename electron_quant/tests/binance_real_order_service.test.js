@@ -134,6 +134,26 @@ test('preflight reports ready sizing when balance and minNotional are valid', as
   assert.equal(result.suggestedQty, 0.001);
 });
 
+test('preflight blocks Binance API key symbol whitelist failures before real order placement', async () => {
+  const result = await preflightBinanceRealOrder({
+    input: { venue: 'BINANCE', side: 'BUY', symbol: 'ALLOUSDC', qty: 57, type: 'MARKET' },
+    env: { REAL_TRADING: 'true', BINANCE_API_KEY: 'k', BINANCE_SECRET: 's' },
+    botState: { tradingRealEnabled: true, killSwitch: false },
+    riskConfig: createDefaultRiskConfig(),
+    deps: {
+      getSymbolFilters: async () => ({ minQty: 0.1, stepSize: 0.1, minNotional: 5, status: 'TRADING', quoteAsset: 'USDC' }),
+      getTicker: async () => ({ price: 0.1755 }),
+      getBinanceSpotBalance: async () => ({ asset: 'USDC', free: 30, locked: 0 }),
+      testOrderBinance: async () => ({ ok: false, error: 'HTTP 400: {"code":-2010,"msg":"Symbol not whitelisted for API key."}' })
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 'blocked');
+  assert.equal(result.checks.orderTestOk, false);
+  assert.match(result.reasons.join(' '), /whitelisted/i);
+});
+
 test('preflight and execution support Binance Spot USDC quote pairs', async () => {
   const calls = [];
   const result = await executeBinanceRealOrder({

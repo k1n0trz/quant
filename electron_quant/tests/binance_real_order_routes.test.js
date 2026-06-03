@@ -169,6 +169,29 @@ test('POST /api/binance-real-order-preflight supports USDC quote pairs with USDC
   assert.equal(res.body.requestedNotional, 13.6);
 });
 
+test('POST /api/binance-real-order-preflight reports Binance API key whitelist blocks', async () => {
+  const router = createApiRouter(armedContext({
+    deps: {
+      getSymbolFilters: async () => ({ minQty: 0.1, stepSize: 0.1, minNotional: 5, status: 'TRADING', quoteAsset: 'USDC' }),
+      getTicker: async () => ({ price: 0.1755 }),
+      getBinanceSpotBalance: async () => ({ asset: 'USDC', free: 30, locked: 0 }),
+      testOrderBinance: async () => ({ ok: false, error: 'HTTP 400: {"code":-2010,"msg":"Symbol not whitelisted for API key."}' })
+    }
+  }));
+
+  const res = await router.dispatch({
+    method: 'POST',
+    pathname: '/api/binance-real-order-preflight',
+    body: { side: 'BUY', symbol: 'ALLOUSDC', qty: 57, type: 'MARKET' }
+  });
+
+  assert.equal(res.status, 409);
+  assert.equal(res.body.ok, false);
+  assert.equal(res.body.status, 'blocked');
+  assert.equal(res.body.checks.orderTestOk, false);
+  assert.match(res.body.reasons.join(' '), /whitelisted/i);
+});
+
 test('POST /api/place-order uses preflight to block insufficient balance before executor', async () => {
   const file = auditFile();
   let called = false;

@@ -188,7 +188,8 @@ async function preflightBinanceRealOrder({ input = {}, env = {}, botState = {}, 
     minNotionalOk: requestedNotional >= minNotional,
     balanceEnough: quoteFree >= requestedNotional,
     suggestedMeetsMin: suggestedQty >= minQty && suggestedNotional >= minNotional,
-    earnCanCoverShortfall: canCoverWithEarn
+    earnCanCoverShortfall: canCoverWithEarn,
+    orderTestOk: null
   };
   const reasons = [];
   if (!checks.symbolTrading) reasons.push(`${request.symbol} no esta en estado TRADING.`);
@@ -200,6 +201,16 @@ async function preflightBinanceRealOrder({ input = {}, env = {}, botState = {}, 
     reasons.push(`Hay ${earn.redeemable} ${quoteAsset} en Earn Flexible, pero Spot no puede usarlo hasta redimirlo a Spot.`);
   }
   if (!checks.suggestedMeetsMin) reasons.push(`Saldo libre no permite una orden minima valida en ${request.symbol}.`);
+  if (reasons.length === 0 && typeof deps.testOrderBinance === 'function') {
+    try {
+      const testOrder = await deps.testOrderBinance(request.side, request.symbol, request.qty, request.type, request.price);
+      checks.orderTestOk = testOrder?.ok === true;
+      if (!checks.orderTestOk) reasons.push(`Binance order/test rechazo la orden: ${sanitizeText(testOrder?.error || testOrder?.msg || 'order_test_failed')}`);
+    } catch (error) {
+      checks.orderTestOk = false;
+      reasons.push(`Binance order/test rechazo la orden: ${sanitizeText(error?.message || error)}`);
+    }
+  }
 
   return {
     ok: reasons.length === 0,

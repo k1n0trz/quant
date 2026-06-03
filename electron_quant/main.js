@@ -1907,6 +1907,28 @@ async function placeOrderBinance(side, symbol, qty, type = 'MARKET', price = nul
   };
 }
 
+async function testOrderBinance(side, symbol, qty, type = 'MARKET', price = null, env = ENV) {
+  assertRealTradingExecutionAllowed(env);
+  if (!env.BINANCE_API_KEY || !env.BINANCE_SECRET)
+    throw new Error('Faltan BINANCE_API_KEY / BINANCE_SECRET en .env');
+
+  const filters = await getSymbolFilters(symbol);
+  if (filters.status !== 'TRADING')
+    throw new Error(`${symbol} no esta en estado TRADING en Binance`);
+
+  const params = { symbol, side, type, quantity: qty };
+  if (type === 'LIMIT') {
+    if (!price) throw new Error('Se requiere precio para orden LIMIT');
+    params.price = roundTick(price, filters.tickSize);
+    params.timeInForce = 'GTC';
+  }
+
+  const res = await signedBinance('/api/v3/order/test', params, 'POST', env);
+  if (res.code && res.code < 0)
+    throw new Error(`Binance order/test ${res.code}: ${res.msg}`);
+  return { ok: true };
+}
+
 function flattenBinanceExecutionResult(result) {
   if (result?.ok === true) {
     return {
@@ -1938,6 +1960,7 @@ async function executeAndAuditBinanceRealOrder(input, env = ENV) {
       getSymbolFilters: (symbol) => getSymbolFilters(symbol),
       getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, env),
       getBinanceEarnBalance: (asset) => getBinanceEarnBalance(asset, env),
+      testOrderBinance: (side, symbol, qty, type, price) => testOrderBinance(side, symbol, qty, type, price, env),
       placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, env)
     }
   });
@@ -3103,7 +3126,8 @@ ipcMain.handle('binance-real-order-preflight', (_e, payload) =>
       getTicker: (symbol) => ticker(symbol),
       getSymbolFilters: (symbol) => getSymbolFilters(symbol),
       getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, ENV),
-      getBinanceEarnBalance: (asset) => getBinanceEarnBalance(asset, ENV)
+      getBinanceEarnBalance: (asset) => getBinanceEarnBalance(asset, ENV),
+      testOrderBinance: (side, symbol, qty, type, price) => testOrderBinance(side, symbol, qty, type, price, ENV)
     }
   }).catch((err) => ({ ok: false, status: 'blocked', error: err.message, reasons: [err.message] }))
 );

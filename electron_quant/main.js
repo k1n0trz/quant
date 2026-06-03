@@ -2285,6 +2285,7 @@ async function handleApi(req, res, url) {
         readMt5Snapshot,
         binanceRealOrderAuditFile,
         placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, userEnv),
+        testOrderBinance: (side, symbol, qty, type, price) => testOrderBinance(side, symbol, qty, type, price, userEnv),
         placeMt5DemoOrder: (input) => placeMt5DemoOrder(input, { env: userEnv }),
         closeMt5DemoPosition: (input) => closeMt5DemoPosition(input, { env: userEnv }),
         syncBinanceTime: () => syncBinanceTime(),

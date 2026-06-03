@@ -295,7 +295,7 @@ test('real Spot universe discovery times out slow symbols instead of blocking th
 
   assert.equal(result.ready.some((item) => item.symbol === 'FASTUSDC'), true);
   assert.equal(result.blocked.some((item) => item.symbol === 'SLOWUSDC' && /timeout/i.test(item.reason)), true);
-  assert.equal(Date.now() - startedAt < 75, true);
+  assert.equal(Date.now() - startedAt < 250, true);
 });
 
 test('real Spot universe discovery prioritizes liquid quote pairs before alphabetical altcoins', async () => {

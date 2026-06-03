@@ -34,6 +34,14 @@ function isTrainingBackendDemoEntryAllowDefensiveSignalEnabled(env = {}) {
   return String(env.TRAINING_BACKEND_DEMO_ENTRY_ALLOW_DEFENSIVE_SIGNAL || 'false').toLowerCase() === 'true';
 }
 
+function isGuardedPaperTrainingState(state = {}) {
+  return (
+    String(state.mode || '').toLowerCase() === 'training'
+    && state.simulated !== false
+    && state.blockRealExecution !== false
+  );
+}
+
 function isTrainingMt5DemoOrderSendEnabled(env = {}) {
   return String(env.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED || 'false').toLowerCase() === 'true';
 }
@@ -229,7 +237,9 @@ function mergeSignalForEntry(pair, signalContext, forcedHorizon = null) {
     ...(isObject(pair?.indicators) ? pair.indicators : {}),
     ...(isObject(signalContext) ? signalContext : {})
   };
+  const fallbackSignal = signal.missing_signal === true || signal.defensive === true || signal.source === 'defensive_fallback';
   const professional =
+    !fallbackSignal &&
     signal.bias !== 'NEUTRAL' &&
     Number(signal.confidence || 0) >= 70 &&
     Number(signal.htfAlignmentScore || 0) >= 0.5 &&
@@ -299,7 +309,7 @@ function evaluateTrainingDemoEntry(input = {}) {
   const env = input.env || {};
   const nowMs = Number.isFinite(Number(input.nowMs)) ? Number(input.nowMs) : Date.now();
   const forcedHorizon = textValue(input.horizon) || 'intraday';
-  const allowDefensive = isTrainingBackendDemoEntryAllowDefensiveSignalEnabled(env);
+  const allowDefensive = isTrainingBackendDemoEntryAllowDefensiveSignalEnabled(env) || isGuardedPaperTrainingState(state);
   const mergedSignal = mergeSignalForEntry(pair, rawSignal, forcedHorizon);
   const key = `${pair.venue}:${pair.symbol}:${forcedHorizon}`;
   const cooldownUntil = Number(state.pairCooldowns?.[key] || 0);

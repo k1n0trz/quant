@@ -109,7 +109,7 @@ test('missing price does not open demo position', () => {
   assert.equal(result.reason, 'missing_price');
 });
 
-test('defensive signal does not open by default', () => {
+test('defensive fallback opens only inside guarded paper training', () => {
   const result = evaluateTrainingDemoEntry({
     state: createState(),
     pair: createPair(),
@@ -118,8 +118,20 @@ test('defensive signal does not open by default', () => {
     env: { TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true' }
   });
 
-  assert.equal(result.shouldOpen, false);
-  assert.equal(result.reason, 'defensive_signal_not_allowed');
+  assert.equal(result.shouldOpen, true);
+  assert.equal(result.reason, null);
+  assert.equal(result.signal.learning_mode, 'exploration_paper');
+
+  const unguarded = evaluateTrainingDemoEntry({
+    state: createState({ blockRealExecution: false }),
+    pair: createPair(),
+    marketContext: createMarketContext(),
+    signalContext: createSignalContext({ defensive: true, missing_signal: true, source: 'defensive_fallback' }),
+    env: { TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true' }
+  });
+
+  assert.equal(unguarded.shouldOpen, false);
+  assert.equal(unguarded.reason, 'defensive_signal_not_allowed');
 });
 
 test('low confidence does not open', () => {
@@ -188,7 +200,9 @@ test('valid demo entry opens traceable simulated position', () => {
 
 test('entry evaluator opens valid position without touching real trading and preserves metadata', async () => {
   const state = createState({
-    activePairs: [createPair()]
+    activePairs: [createPair()],
+    targets: { total: 1, intraday: 1, swing: 0 },
+    targetOpenPositions: 1
   });
 
   const result = await evaluateTrainingDemoEntries({
@@ -214,7 +228,9 @@ test('entry evaluator opens valid position without touching real trading and pre
 test('entry evaluator can send MT5 demo order only when demo flags are armed', async () => {
   let calls = 0;
   const state = createState({
-    activePairs: [createPair({ symbol: 'XAUUSD', venue: 'MT5' })]
+    activePairs: [createPair({ symbol: 'XAUUSD', venue: 'MT5' })],
+    targets: { total: 1, intraday: 1, swing: 0 },
+    targetOpenPositions: 1
   });
 
   const result = await evaluateTrainingDemoEntries({

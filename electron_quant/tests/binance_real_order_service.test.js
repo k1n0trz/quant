@@ -267,3 +267,33 @@ test('discovers executable Binance Spot universe from balances filters and order
   assert.equal(tested.some((item) => item.symbol === 'ETHUSDT'), false);
   assert.equal(result.balances.USDC.free, 30);
 });
+
+test('real Spot universe discovery times out slow symbols instead of blocking the request', async () => {
+  const {
+    discoverBinanceRealSpotUniverse
+  } = require('../backend/execution/binance-real-order-service');
+  const startedAt = Date.now();
+  const result = await discoverBinanceRealSpotUniverse({
+    symbols: ['SLOWUSDC', 'FASTUSDC'],
+    env: { REAL_TRADING: 'true', BINANCE_API_KEY: 'k', BINANCE_SECRET: 's' },
+    botState: { tradingRealEnabled: true, killSwitch: false },
+    riskConfig: createDefaultRiskConfig(),
+    deps: {
+      getSymbolFilters: async (symbol) => {
+        if (symbol === 'SLOWUSDC') await new Promise((resolve) => setTimeout(resolve, 80));
+        return { minQty: 1, stepSize: 1, minNotional: 5, status: 'TRADING', quoteAsset: 'USDC' };
+      },
+      getTicker: async () => ({ price: 1 }),
+      getBinanceSpotBalance: async (asset) => ({ asset, free: 30, locked: 0 }),
+      testOrderBinance: async () => ({ ok: true })
+    },
+    limit: 10,
+    maxChecks: 2,
+    concurrency: 2,
+    perCandidateTimeoutMs: 20
+  });
+
+  assert.equal(result.ready.some((item) => item.symbol === 'FASTUSDC'), true);
+  assert.equal(result.blocked.some((item) => item.symbol === 'SLOWUSDC' && /timeout/i.test(item.reason)), true);
+  assert.equal(Date.now() - startedAt < 75, true);
+});

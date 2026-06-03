@@ -355,15 +355,24 @@ async function discoverBinanceRealSpotUniverse(input = {}) {
     unique.push(symbol);
   }
 
-  const ready = [];
-  const blocked = [];
-  let checked = 0;
-  for (const symbol of unique) {
-    if (checked >= maxChecks || ready.length >= limit) break;
-    checked += 1;
-    let filters = null;
-    let market = null;
+  const perCandidateTimeoutMs = Math.max(25, Math.min(15000, Number(input.perCandidateTimeoutMs || 4500)));
+  const concurrency = Math.max(1, Math.min(10, Math.floor(Number(input.concurrency || 5))));
+  const scanSymbols = unique.slice(0, maxChecks);
+
+  function withTimeout(promise, ms, label) {
+    let timer = null;
+    return Promise.race([
+      promise.finally(() => { if (timer) clearTimeout(timer); }),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label}_timeout_${ms}ms`)), ms);
+      })
+    ]);
+  }
+
+  async function evaluateUniverseSymbol(symbol) {
     try {
+      let filters = null;
+      let market = null;
       filters = typeof deps.getSymbolFilters === 'function' ? await deps.getSymbolFilters(symbol) : null;
       market = typeof deps.getTicker === 'function' ? await deps.getTicker(symbol) : null;
       const quoteAsset = String(filters?.quoteAsset || quoteAssetFromSymbol(symbol) || 'USDT').toUpperCase();
@@ -373,14 +382,12 @@ async function discoverBinanceRealSpotUniverse(input = {}) {
       const stepSize = finiteNumber(filters?.stepSize) || 0;
       const minQty = finiteNumber(filters?.minQty) || 0;
       if (!price || price <= 0 || quoteFree < minNotional) {
-        blocked.push({ symbol, quoteAsset, reason: quoteFree < minNotional ? 'quote_balance_below_min_notional' : 'price_unavailable' });
-        continue;
+        return { type: 'blocked', row: { symbol, quoteAsset, reason: quoteFree < minNotional ? 'quote_balance_below_min_notional' : 'price_unavailable' } };
       }
       const requestedNotional = Math.min(quoteFree, Math.max(minNotional, Math.min(quoteFree, Number(input.targetNotional || minNotional * 2))));
       const qty = floorToStep(requestedNotional / price, stepSize);
       if (!qty || qty < minQty) {
-        blocked.push({ symbol, quoteAsset, reason: 'qty_below_min_after_sizing' });
-        continue;
+        return { type: 'blocked', row: { symbol, quoteAsset, reason: 'qty_below_min_after_sizing' } };
       }
       const preflight = await preflightBinanceRealOrder({
         input: { venue: 'BINANCE', side: 'BUY', symbol, qty, type: 'MARKET' },
@@ -404,12 +411,30 @@ async function discoverBinanceRealSpotUniverse(input = {}) {
         status: preflight.status,
         reasons: preflight.reasons || []
       };
-      if (preflight.ok) ready.push(row);
-      else blocked.push({ ...row, reason: row.reasons[0] || preflight.error || 'preflight_blocked' });
+      if (preflight.ok) return { type: 'ready', row };
+      return { type: 'blocked', row: { ...row, reason: row.reasons[0] || preflight.error || 'preflight_blocked' } };
     } catch (error) {
-      blocked.push({ symbol, reason: sanitizeText(error?.message || error) });
+      return { type: 'blocked', row: { symbol, reason: sanitizeText(error?.message || error) } };
     }
   }
+
+  const results = [];
+  for (let index = 0; index < scanSymbols.length; index += concurrency) {
+    const batch = scanSymbols.slice(index, index + concurrency);
+    const resolved = await Promise.all(batch.map((symbol) => (
+      withTimeout(evaluateUniverseSymbol(symbol), perCandidateTimeoutMs, `${symbol}_real_universe`)
+        .catch((error) => ({ type: 'blocked', row: { symbol, reason: sanitizeText(error?.message || error) } }))
+    )));
+    results.push(...resolved);
+  }
+
+  const ready = [];
+  const blocked = [];
+  for (const result of results) {
+    if (result?.type === 'ready' && ready.length < limit) ready.push(result.row);
+    else if (result?.row) blocked.push(result.row);
+  }
+  const checked = scanSymbols.length;
 
   return {
     ok: true,

@@ -3915,3 +3915,45 @@ html, body,
     grid-template-columns: 1fr;
   }
 }
+
+/* Chat completion and global-analysis ergonomics */
+.content {
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 460px);
+}
+
+.chat-dock {
+  grid-template-rows: auto minmax(520px, 1.6fr) auto auto minmax(120px, .35fr);
+  align-self: stretch;
+  max-height: 100%;
+}
+
+.chat-log {
+  min-height: 520px;
+  max-height: none;
+  overflow-y: auto;
+}
+
+.mini-pipeline {
+  max-height: clamp(120px, 24vh, 260px);
+}
+
+.quant-rich {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.quant-rich p,
+.quant-rich li {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-height: 860px) {
+  .chat-dock {
+    grid-template-rows: auto minmax(430px, 1.45fr) auto auto minmax(110px, .3fr);
+  }
+
+  .chat-log {
+    min-height: 430px;
+  }
+}

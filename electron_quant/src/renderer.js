@@ -1580,6 +1580,38 @@ function trainingContext() {
   ].join('\n');
 }
 
+function globalOpportunityContext() {
+  const formatPair = (pair) => {
+    const i = pair.indicators || {};
+    return `${pair.venue}:${pair.symbol} price=${fmtPrice(pair.price || 0)} bias=${i.bias || 'NEUTRAL'} conf=${i.confidence || 0} horizon=${i.horizon || 'n/a'} score=${pair.score || 0} strategy=${i.primaryStrategy?.id || 'n/a'} macro=${i.macroRisk || state.macroNews.risk || 'normal'}`;
+  };
+  const rankedPairs = state.training.activePairs
+    .slice()
+    .sort((a, b) => Number(b.indicators?.confidence || b.score || 0) - Number(a.indicators?.confidence || a.score || 0));
+  const binanceWatchlist = rankedPairs.filter((p) => p.venue === 'BINANCE').slice(0, 10).map(formatPair).join(' | ');
+  const mt5Watchlist = rankedPairs.filter((p) => p.venue === 'MT5').slice(0, 10).map(formatPair).join(' | ');
+  const open = state.training.positions.filter((p) => !p.exit_price);
+  const exposure = open.reduce((acc, p) => {
+    const key = `${p.venue}:${p.horizon || 'intraday'}`;
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const advice = (state.training.advice || [])
+    .slice()
+    .sort((a, b) => Number(b.confidence || 0) - Number(a.confidence || 0))
+    .slice(0, 8)
+    .map((a) => `${a.venue}:${a.symbol} ${a.action || a.side || 'WATCH'} conf=${a.confidence || 0} horizon=${a.horizon || 'n/a'} reason=${a.reason || a.setup || 'sin setup claro'}`)
+    .join(' | ');
+  return [
+    'Panorama global de oportunidades: No limites el analisis al activo seleccionado. Si el usuario pregunta por trading real, oportunidad, inversion o decision operativa, compara alternativas de Binance y MT5 antes de concluir.',
+    `binance_watchlist: ${binanceWatchlist || 'sin candidatos Binance activos'}`,
+    `mt5_watchlist: ${mt5Watchlist || 'sin candidatos MT5 activos'}`,
+    `open_exposure: ${Object.entries(exposure).map(([k, v]) => `${k}=${v}`).join(', ') || 'sin posiciones abiertas'}`,
+    `live_insights_10m: ${advice || 'sin insights vivos'}`,
+    `selected_pair_context: ${state.symbol}; usalo como foco si el usuario lo pide, no como unica opcion.`
+  ].join('\n');
+}
+
 async function runSelfAudit() {
   const findings = [];
   const add = (severity, area, issue, fix) => findings.push({ ts: new Date().toISOString(), severity, area, issue, fix });
@@ -3269,6 +3301,7 @@ async function askQuant(text, writeToAi) {
     const recentWarnings = state.pipeline.filter((e) => e.status === 'WARN' || e.status === 'ERR').slice(0, 8).map((e) => `${e.time} ${e.status}: ${e.message}`).join('\n') || 'sin warnings recientes';
     const operationalContext = [
       fullContext,
+      globalOpportunityContext(),
       'Trading real runtime: usar estado real actual; blockRealExecution solo protege el training paper y no bloquea el canal real autorizado.',
       mt5MarketScheduleContext(),
       `Rendimiento/warnings recientes:\n${recentWarnings}`

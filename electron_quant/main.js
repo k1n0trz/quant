@@ -2098,7 +2098,7 @@ ${memory || 'Aún no hay memoria registrada.'}`;
     model: route.model,
     messages: [{ role: 'system', content: finalSystem }, ...messages],
     temperature: 0.55,
-    max_tokens: 900
+    max_tokens: 2200
   };
   const data = await requestJson('POST', `${route.base}/chat/completions`, { Authorization: `Bearer ${route.apiKey}` }, payload);
   return data.choices?.[0]?.message?.content || 'No recibí contenido del modelo.';

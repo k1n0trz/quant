@@ -37,7 +37,9 @@ assert.ok(coreApi.includes('motor automatico en observacion'), 'El descriptor no
 assert.ok(html.includes('id="settingsAlertsMount"'), 'Alertas deben montarse dentro de Configuracion.');
 assert.ok(renderer.includes('mountAlertsIntoSettings(); loadAlerts();'), 'Configuracion debe cargar el panel de alertas integrado.');
 
-assert.ok(css.includes('.chat-dock') && css.includes('minmax(360px, 1.25fr)'), 'El chat debe tener mas altura util para conversacion.');
+assert.ok(css.includes('.chat-dock') && css.includes('minmax(520px, 1.6fr)'), 'El chat debe tener mas altura util para conversacion.');
+assert.ok(css.includes('max-height: clamp(120px, 24vh, 260px)'), 'El contexto activo debe ser compacto para no comerse la conversacion.');
+assert.ok(css.includes('.quant-rich') && css.includes('overflow-wrap: anywhere'), 'Las respuestas largas de Quant deben fluir completas sin cortar texto.');
 assert.ok(css.includes('.wallet-view-panel .wallet-grid') && css.includes('auto-fit'), 'Billeteras debe usar tarjetas responsivas y no layout de desarrollo.');
 
 console.log('ui_real_prep_static.test.js OK');

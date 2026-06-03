@@ -1342,6 +1342,21 @@ function readMt5RealBridgeStatus(env = ENV) {
   return readMt5BridgeStatus({ ...env, MT5_BRIDGE_STATUS_FILE: file });
 }
 
+function mt5BridgeSymbols(env = ENV) {
+  const symbols = [];
+  for (const bridge of [readMt5BridgeStatus(env), readMt5RealBridgeStatus(env)].filter(Boolean)) {
+    const result = bridgeSymbolsFromStatus(bridge);
+    if (!result?.ok || !Array.isArray(result.symbols)) continue;
+    for (const symbol of result.symbols) {
+      if (symbol && !symbols.some((item) => String(item).toUpperCase() === String(symbol).toUpperCase())) {
+        symbols.push(symbol);
+      }
+    }
+  }
+  if (!symbols.length) return { ok: false, symbols: [], source: 'mt5_bridge_status', reason: 'bridge_symbol_unavailable' };
+  return { ok: true, symbols, source: 'mt5_bridge_status' };
+}
+
 function mt5BridgeAccount(bridge) {
   if (!bridge?.ok || !bridge.bridgeFresh) return null;
   const server = String(bridge.server || '');
@@ -2021,7 +2036,21 @@ try:
 except Exception as e:
     print(json.dumps({"ok": False, "symbols": [], "error": str(e)}))
 `;
-  return runPythonJson(code, { ok: false, symbols: [] }, env);
+  return runPythonJson(code, { ok: false, symbols: [] }, env).then((result) => {
+    if (result?.ok && Array.isArray(result.symbols) && result.symbols.length) return result;
+    const fallback = mt5BridgeSymbols(env);
+    if (fallback.ok) {
+      return {
+        ...fallback,
+        python: {
+          ok: result?.ok === true,
+          error: result?.error || null,
+          timedOut: result?.timedOut === true
+        }
+      };
+    }
+    return result;
+  });
 }
 
 function mt5Rates(symbol, timeframe = 'M1', count = 180, env = ENV) {
@@ -2265,7 +2294,7 @@ async function handleApi(req, res, url) {
         getMt5Symbols: async () => {
           const result = await mt5Symbols(userEnv).catch((error) => ({ ok: false, symbols: [], error: error?.message || String(error) }));
           if (result?.ok && Array.isArray(result.symbols) && result.symbols.length) return result;
-          return bridgeSymbolsFromStatus(readMt5BridgeStatus(userEnv));
+          return mt5BridgeSymbols(userEnv);
         },
         getMt5Ticker: async (symbol) => {
           const result = await mt5Rates(symbol, 'M1', 120, userEnv).catch((error) => ({ ok: false, error: error?.message || String(error) }));

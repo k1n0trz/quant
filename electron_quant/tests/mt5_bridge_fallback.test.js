@@ -12,10 +12,16 @@ test('bridgeSymbolsFromStatus exposes current connected bridge symbol', () => {
   const result = bridgeSymbolsFromStatus({
     ok: true,
     connected: true,
-    symbol: 'EURUSD'
+    symbol: 'EURUSD',
+    rates: {
+      XAUUSD: { M1: { candles: [] } },
+      EURUSD: { M1: { candles: [] } },
+      AUDCAD: { M1: { candles: [] } }
+    },
+    positions: [{ symbol: 'USDJPY' }]
   });
 
-  assert.deepEqual(result, { ok: true, symbols: ['EURUSD'], source: 'mt5_bridge_status' });
+  assert.deepEqual(result, { ok: true, symbols: ['EURUSD', 'XAUUSD', 'AUDCAD', 'USDJPY'], source: 'mt5_bridge_status' });
 });
 
 test('bridgeTickerFromStatus exposes midpoint and spread for the matching symbol', () => {

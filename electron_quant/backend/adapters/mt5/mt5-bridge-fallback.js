@@ -51,11 +51,22 @@ function normalizeBridgeCandle(row = {}) {
 }
 
 function bridgeSymbolsFromStatus(status = {}) {
-  const symbol = textValue(status.symbol);
-  if (status.ok !== true || status.connected !== true || !symbol) {
+  if (status.ok !== true || status.connected !== true) {
     return { ok: false, symbols: [], source: 'mt5_bridge_status', reason: 'bridge_symbol_unavailable' };
   }
-  return { ok: true, symbols: [symbol], source: 'mt5_bridge_status' };
+  const symbols = [];
+  const add = (value) => {
+    const symbol = textValue(value);
+    if (symbol && !symbols.some((item) => sameText(item, symbol))) symbols.push(symbol);
+  };
+  add(status.symbol);
+  if (Array.isArray(status.symbols)) status.symbols.forEach(add);
+  if (status.rates && typeof status.rates === 'object') Object.keys(status.rates).forEach(add);
+  if (Array.isArray(status.positions)) status.positions.forEach((position) => add(position?.symbol));
+  if (!symbols.length) {
+    return { ok: false, symbols: [], source: 'mt5_bridge_status', reason: 'bridge_symbol_unavailable' };
+  }
+  return { ok: true, symbols, source: 'mt5_bridge_status' };
 }
 
 function bridgeRatesFromStatus(symbol, timeframe, status = {}) {

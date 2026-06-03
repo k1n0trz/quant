@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   isTrainingBackendDemoEntryEnabled,
+  buildBackendBootstrapPairs,
   evaluateTrainingDemoEntry,
   openTrainingDemoPosition,
   evaluateTrainingDemoEntries
@@ -289,4 +290,19 @@ test('entry evaluator can send MT5 demo order only when demo flags are armed', a
   assert.equal(result.nextState.positions[0].mt5_demo_execution.ok, true);
   assert.equal(result.nextState.positions[0].mt5_demo_execution.ticket, 777);
   assert.equal(result.nextState.positions[0].mt5_demo_execution.realTradingTouched, false);
+});
+
+test('backend bootstrap includes MT5 candidates when MT5 symbols and ticks are available', async () => {
+  const pairs = await buildBackendBootstrapPairs({
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z'),
+    deps: {
+      getBinanceSymbols: async () => ['BTCUSDT', 'ETHUSDT'],
+      getTicker: async (symbol) => ({ price: symbol === 'BTCUSDT' ? 100000 : 3000, changePct: 1.2, quoteVolume: 80000000 }),
+      getMt5Symbols: async () => ({ ok: true, symbols: ['XAUUSD', 'EURUSD'] }),
+      getMt5Ticker: async (symbol) => ({ price: symbol === 'XAUUSD' ? 2300 : 1.1, bid: 1, ask: 1.01, spread: 0.01 })
+    }
+  });
+
+  assert.equal(pairs.some((pair) => pair.venue === 'MT5' && pair.symbol === 'XAUUSD'), true);
+  assert.equal(pairs.some((pair) => pair.venue === 'BINANCE' && pair.symbol === 'BTCUSDT'), true);
 });

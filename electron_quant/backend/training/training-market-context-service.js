@@ -33,6 +33,7 @@ function parseTimeMs(...values) {
 function normalizeReadOnlyDeps(options = {}) {
   const deps = options.deps && typeof options.deps === 'object' ? { ...options.deps } : {};
   if (typeof deps.getTicker !== 'function' && typeof options.getTicker === 'function') deps.getTicker = options.getTicker;
+  if (typeof deps.getMt5Ticker !== 'function' && typeof options.getMt5Ticker === 'function') deps.getMt5Ticker = options.getMt5Ticker;
   if (typeof deps.readMt5Snapshot !== 'function' && typeof options.readMt5Snapshot === 'function') deps.readMt5Snapshot = options.readMt5Snapshot;
   if (typeof deps.readMemory !== 'function' && typeof options.readMemory === 'function') deps.readMemory = options.readMemory;
   return deps;
@@ -95,8 +96,36 @@ async function resolveTrainingMarketContext(symbol, options = {}) {
     return createUnavailableMarketContext(symbol, resolvedVenue, 'none', 'missing_symbol');
   }
 
+  if (sameText(resolvedVenue, 'MT5') && typeof deps.getMt5Ticker === 'function') {
+    try {
+      const tickerResult = await deps.getMt5Ticker(resolvedSymbol);
+      const tickerPrice = finiteNumber(
+        tickerResult?.price,
+        tickerResult?.lastPrice,
+        tickerResult?.bid && tickerResult?.ask ? (Number(tickerResult.bid) + Number(tickerResult.ask)) / 2 : null
+      );
+      if (tickerPrice !== null && tickerPrice > 0) {
+        return finalizeResolvedMarketContext(
+          resolvedSymbol,
+          'MT5',
+          'mt5_ticker',
+          tickerPrice,
+          parseTimeMs(tickerResult?.updatedAt, tickerResult?.ts) || nowMs,
+          nowMs,
+          staleAfterMs,
+          allowStale
+        );
+      }
+    } catch {}
+  }
+
   if (typeof deps.getTicker === 'function') {
-    const tickerResult = await deps.getTicker(resolvedSymbol);
+    let tickerResult = null;
+    try {
+      tickerResult = await deps.getTicker(resolvedSymbol);
+    } catch {
+      tickerResult = null;
+    }
     const tickerPrice = finiteNumber(
       tickerResult?.price,
       tickerResult?.lastPrice,

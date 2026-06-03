@@ -151,6 +151,7 @@ async function buildBackendBootstrapPairs(input = {}) {
   const deps = input.deps || {};
   const nowMs = Number.isFinite(Number(input.nowMs)) ? Number(input.nowMs) : Date.now();
   const preferred = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'ADAUSDT', 'DOGEUSDT', 'LINKUSDT', 'LTCUSDT', 'AVAXUSDT'];
+  const mt5Preferred = ['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'AUDCAD', 'USDCAD', 'GBPJPY', 'EURJPY', 'BTCUSD', 'ETHUSD', 'NAS100', 'US30', 'SPX500'];
   let symbols = [];
   if (typeof deps.getBinanceSymbols === 'function') {
     try {
@@ -167,6 +168,88 @@ async function buildBackendBootstrapPairs(input = {}) {
   const candidates = (universe.length ? universe : preferred).slice(0, 40);
   const pairs = [];
 
+  function buildPair({ venue, symbol, ticker, fallbackChangePct = 0 }) {
+    const price = finiteNumber(ticker?.price, ticker?.lastPrice, ticker?.bid && ticker?.ask ? (Number(ticker.bid) + Number(ticker.ask)) / 2 : null);
+    if (!price || price <= 0) return null;
+    const changePct = finiteNumber(ticker?.changePct, ticker?.priceChangePercent, fallbackChangePct) || 0;
+    const quoteVolume = finiteNumber(ticker?.quoteVolume, venue === 'MT5' ? 35000000 : 0) || 0;
+    const spread = finiteNumber(ticker?.spread, ticker?.ask && ticker?.bid ? Number(ticker.ask) - Number(ticker.bid) : 0) || 0;
+    const spreadPct = price ? Math.max(0, spread) / price : 0;
+    const direction = changePct >= 0 ? 'LONG' : 'SHORT';
+    const momentumScore = Math.min(1, Math.abs(changePct) / 2.5);
+    const volumeScore = Math.min(1, quoteVolume / 50000000);
+    const signalQuality = Math.max(0.62, Math.min(1, 0.62 + momentumScore * 0.22 + volumeScore * 0.16));
+    const confidence = Math.round(Math.max(venue === 'MT5' ? 72 : 76, Math.min(92, 76 + signalQuality * 12 + volumeScore * 4)));
+    const score = Math.round(Math.max(venue === 'MT5' ? 62 : 64, Math.min(94, 64 + signalQuality * 20 + volumeScore * 10 - spreadPct * 5000)));
+    const primaryStrategy = {
+      id: 'trendMomentum',
+      name: venue === 'MT5' ? 'Trend Momentum / MT5 Bootstrap' : 'Trend Momentum / Backend Bootstrap',
+      score: Math.round(Math.max(76, Math.min(96, confidence + 6))),
+      reason: `${venue} bootstrap ${direction}; 24h ${changePct.toFixed(2)}%; quoteVol ${Math.round(quoteVolume)}`
+    };
+    const indicators = {
+      bias: direction,
+      confidence,
+      setup: `${venue} perpetual bootstrap: ${direction} ${symbol} con cambio proxy ${changePct.toFixed(2)}%`,
+      momentum: changePct,
+      volatilityPct: Math.max(0.003, Math.min(0.04, Math.abs(changePct) / 100)),
+      volumeRatio: Math.max(1.05, Math.min(2.4, quoteVolume / 30000000)),
+      baseline: price,
+      rsi: direction === 'LONG' ? 58 : 42,
+      macd: { hist: direction === 'LONG' ? 1 : -1 },
+      atrPct: Math.max(0.004, Math.min(0.035, Math.abs(changePct) / 100 || spreadPct)),
+      m15: { bias: direction },
+      h1: { bias: direction },
+      h4: { bias: direction },
+      d1: { bias: direction },
+      htfAlignmentScore: venue === 'MT5' ? 0.72 : 0.78,
+      patternScore: venue === 'MT5' ? 0.58 : 0.66,
+      ictCrt: { score: venue === 'MT5' ? 58 : 62 },
+      strategyScores: [primaryStrategy],
+      primaryStrategy,
+      horizon: 'intraday',
+      signalQuality,
+      signal_id: trainingSignalId({ venue, symbol }, { ...primaryStrategy, bias: direction, horizon: 'intraday' }, new Date(nowMs).toISOString())
+    };
+    return {
+      venue,
+      symbol,
+      score,
+      price,
+      spreadPct,
+      indicators,
+      backendBootstrap: true
+    };
+  }
+
+  let mt5Symbols = [];
+  if (typeof deps.getMt5Symbols === 'function') {
+    try {
+      const result = await deps.getMt5Symbols();
+      mt5Symbols = Array.isArray(result) ? result : Array.isArray(result?.symbols) ? result.symbols : [];
+    } catch {
+      mt5Symbols = [];
+    }
+  }
+  const mt5Candidates = [
+    ...mt5Preferred.filter((symbol) => mt5Symbols.includes(symbol)),
+    ...mt5Symbols.filter((symbol) => typeof symbol === 'string' && !mt5Preferred.includes(symbol))
+  ].slice(0, 20);
+
+  for (const symbol of mt5Candidates) {
+    if (typeof deps.getMt5Ticker !== 'function') continue;
+    let ticker = null;
+    try {
+      ticker = await deps.getMt5Ticker(symbol);
+    } catch {
+      ticker = null;
+    }
+    const hash = parseInt(stableTraceHash(symbol), 36);
+    const fallbackChangePct = (hash % 2 === 0 ? 1 : -1) * (0.35 + (hash % 7) * 0.08);
+    const pair = buildPair({ venue: 'MT5', symbol, ticker, fallbackChangePct });
+    if (pair) pairs.push(pair);
+  }
+
   for (const symbol of candidates) {
     let ticker = null;
     if (typeof deps.getTicker === 'function') {
@@ -176,57 +259,8 @@ async function buildBackendBootstrapPairs(input = {}) {
         ticker = null;
       }
     }
-    const price = finiteNumber(ticker?.price, ticker?.lastPrice);
-    if (!price || price <= 0) continue;
-
-    const changePct = finiteNumber(ticker?.changePct, ticker?.priceChangePercent, 0) || 0;
-    const quoteVolume = finiteNumber(ticker?.quoteVolume, 0) || 0;
-    const spreadPct = price ? Math.max(0, finiteNumber(ticker?.spread, 0) || 0) / price : 0;
-    const direction = changePct >= 0 ? 'LONG' : 'SHORT';
-    const momentumScore = Math.min(1, Math.abs(changePct) / 2.5);
-    const volumeScore = Math.min(1, quoteVolume / 50000000);
-    const signalQuality = Math.max(0.62, Math.min(1, 0.62 + momentumScore * 0.22 + volumeScore * 0.16));
-    const confidence = Math.round(Math.max(76, Math.min(92, 76 + signalQuality * 12 + volumeScore * 4)));
-    const score = Math.round(Math.max(64, Math.min(94, 64 + signalQuality * 20 + volumeScore * 10 - spreadPct * 5000)));
-    const primaryStrategy = {
-      id: 'trendMomentum',
-      name: 'Trend Momentum / Backend Bootstrap',
-      score: Math.round(Math.max(78, Math.min(96, confidence + 6))),
-      reason: `Backend bootstrap ${direction}; 24h ${changePct.toFixed(2)}%; quoteVol ${Math.round(quoteVolume)}`
-    };
-    const indicators = {
-      bias: direction,
-      confidence,
-      setup: `Backend perpetual bootstrap: ${direction} ${symbol} con cambio 24h ${changePct.toFixed(2)}%`,
-      momentum: changePct,
-      volatilityPct: Math.max(0.003, Math.min(0.04, Math.abs(changePct) / 100)),
-      volumeRatio: Math.max(1.05, Math.min(2.4, quoteVolume / 30000000)),
-      baseline: price,
-      rsi: direction === 'LONG' ? 58 : 42,
-      macd: { hist: direction === 'LONG' ? 1 : -1 },
-      atrPct: Math.max(0.004, Math.min(0.035, Math.abs(changePct) / 100)),
-      m15: { bias: direction },
-      h1: { bias: direction },
-      h4: { bias: direction },
-      d1: { bias: direction },
-      htfAlignmentScore: 0.78,
-      patternScore: 0.66,
-      ictCrt: { score: 62 },
-      strategyScores: [primaryStrategy],
-      primaryStrategy,
-      horizon: 'intraday',
-      signalQuality,
-      signal_id: trainingSignalId({ venue: 'BINANCE', symbol }, { ...primaryStrategy, bias: direction, horizon: 'intraday' }, new Date(nowMs).toISOString())
-    };
-    pairs.push({
-      venue: 'BINANCE',
-      symbol,
-      score,
-      price,
-      spreadPct,
-      indicators,
-      backendBootstrap: true
-    });
+    const pair = buildPair({ venue: 'BINANCE', symbol, ticker });
+    if (pair) pairs.push(pair);
   }
 
   return pairs;
@@ -464,15 +498,23 @@ async function evaluateTrainingDemoEntries(input = {}) {
   const intradayNeeded = Math.max(0, resolveTargetCount(state, 'intraday') - openPositions.filter((position) => position.horizon !== 'swing').length);
   const swingNeeded = Math.max(0, resolveTargetCount(state, 'swing') - openPositions.filter((position) => position.horizon === 'swing').length);
   const mt5Open = openPositions.filter((position) => position.venue === 'MT5').length;
+  const hasMt5EntryPair = pairs.some((pair) => sameText(pair.venue, 'MT5'));
   const targetUniverseSize = Math.min(40, Math.max(
     resolveTargetCount(state, 'intraday'),
     resolveTargetCount(state, 'swing'),
     finiteNumber(state.targetOpenPositions, state.targets?.total, 40) || 40
   ));
-  const bootstrappedPairs = pairs.length < targetUniverseSize && (intradayNeeded > 0 || swingNeeded > 0)
+  const bootstrappedPairs = ((pairs.length < targetUniverseSize && (intradayNeeded > 0 || swingNeeded > 0)) || (!hasMt5EntryPair && String(env.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true'))
     ? await buildBackendBootstrapPairs({ deps, env, nowMs })
     : [];
-  if (bootstrappedPairs.length) pairs = mergeEntryPairs(pairs, bootstrappedPairs).slice(0, targetUniverseSize);
+  if (bootstrappedPairs.length) {
+    const mt5Bootstrapped = bootstrappedPairs.filter((pair) => sameText(pair.venue, 'MT5'));
+    const bootstrapFirst = !hasMt5EntryPair && mt5Bootstrapped.length;
+    pairs = (bootstrapFirst
+      ? mergeEntryPairs(mt5Bootstrapped, pairs.concat(bootstrappedPairs.filter((pair) => !sameText(pair.venue, 'MT5'))))
+      : mergeEntryPairs(pairs, bootstrappedPairs)
+    ).slice(0, targetUniverseSize);
+  }
   const ranked = pairs
     .filter((pair) => textValue(pair.symbol))
     .sort((left, right) => {

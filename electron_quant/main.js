@@ -2189,6 +2189,17 @@ async function handleApi(req, res, url) {
         writeTrainingState,
         getBinanceSymbols: () => binanceSymbols(),
         getTicker: (symbol) => ticker(symbol),
+        getMt5Symbols: () => mt5Symbols(userEnv),
+        getMt5Ticker: async (symbol) => {
+          const result = await mt5Rates(symbol, 'M1', 120, userEnv);
+          return {
+            symbol,
+            venue: 'MT5',
+            ...(result?.ticker || {}),
+            price: result?.ticker?.price,
+            updatedAt: new Date().toISOString()
+          };
+        },
         getSymbolFilters: (symbol) => getSymbolFilters(symbol),
         getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, userEnv),
         getBinanceEarnBalance: (asset) => getBinanceEarnBalance(asset, userEnv),

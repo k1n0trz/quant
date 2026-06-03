@@ -40,6 +40,26 @@ test('market context resolves price from ticker first', async () => {
   assert.equal(result.stale, false);
 });
 
+test('market context resolves MT5 price from MT5 ticker before Binance ticker', async () => {
+  let binanceCalls = 0;
+  const result = await resolveTrainingMarketContext('XAUUSD', {
+    venue: 'MT5',
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z'),
+    deps: {
+      getTicker: async () => {
+        binanceCalls += 1;
+        throw new Error('binance_symbol_not_found');
+      },
+      getMt5Ticker: async () => ({ symbol: 'XAUUSD', venue: 'MT5', price: 2315.5, bid: 2315.4, ask: 2315.6 })
+    }
+  });
+
+  assert.equal(result.available, true);
+  assert.equal(result.source, 'mt5_ticker');
+  assert.equal(result.price, 2315.5);
+  assert.equal(binanceCalls, 0);
+});
+
 test('market context falls back to mt5 snapshot when ticker is unavailable', async () => {
   const result = await resolveTrainingMarketContext('XAUUSD', {
     venue: 'MT5',

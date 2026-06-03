@@ -218,7 +218,8 @@ function compactOpenPosition(position = {}) {
     timestamp: position.timestamp,
     fees_simuladas: position.fees_simuladas,
     spread_estimado: position.spread_estimado,
-    slippage_estimado: position.slippage_estimado
+    slippage_estimado: position.slippage_estimado,
+    mt5_demo_execution: compactMt5DemoExecution(position.mt5_demo_execution || position.mt5DemoExecution)
   };
 }
 
@@ -240,7 +241,25 @@ function compactClosedTrade(trade = {}) {
     closed_timestamp: trade.closed_timestamp,
     closedAt: trade.closedAt,
     timestamp: trade.timestamp,
-    lesson_learned: trade.lesson_learned
+    lesson_learned: trade.lesson_learned,
+    mt5_demo_execution: compactMt5DemoExecution(trade.mt5_demo_execution || trade.mt5DemoExecution),
+    mt5_demo_close: compactMt5DemoExecution(trade.mt5_demo_close || trade.mt5DemoClose)
+  };
+}
+
+function compactMt5DemoExecution(execution = null) {
+  if (!execution || typeof execution !== 'object' || Array.isArray(execution)) return null;
+  return {
+    attempted: execution.attempted === true,
+    ok: execution.ok === true,
+    reason: execution.reason || null,
+    ticket: execution.ticket || null,
+    deal: execution.deal || null,
+    retcode: execution.retcode || null,
+    volume: execution.volume || null,
+    bridge: execution.bridge === true,
+    demoOnly: execution.demoOnly !== false,
+    realTradingTouched: execution.realTradingTouched === true
   };
 }
 

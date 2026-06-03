@@ -452,7 +452,14 @@ test('training demo live snapshot endpoint returns compact state with totals', a
     closedTrades,
     lessons,
     positions: [
-      { id: 'open-1', symbol: 'BTCUSDT', venue: 'BINANCE', direction: 'LONG', entry_price: 100 },
+      {
+        id: 'open-1',
+        symbol: 'XAUUSD',
+        venue: 'MT5',
+        direction: 'LONG',
+        entry_price: 100,
+        mt5_demo_execution: { attempted: true, ok: true, ticket: 987654, volume: 0.01, demoOnly: true, realTradingTouched: false }
+      },
       { id: 'closed-1', symbol: 'ETHUSDT', venue: 'BINANCE', direction: 'SHORT', entry_price: 100, exit_price: 99 }
     ]
   }));
@@ -469,6 +476,8 @@ test('training demo live snapshot endpoint returns compact state with totals', a
   assert.equal(res.body.state.closedTrades.length, 50);
   assert.equal(res.body.state.lessons.length, 50);
   assert.equal(res.body.state.positions.length, 1);
+  assert.equal(res.body.state.positions[0].mt5_demo_execution.ticket, 987654);
+  assert.equal(res.body.state.positions[0].mt5_demo_execution.realTradingTouched, false);
   assert.equal(res.body.state.totals.closedTrades, 150);
   assert.equal(res.body.state.totals.lessons, 140);
   assert.equal(res.body.state.totals.activePairs, 45);

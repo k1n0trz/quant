@@ -1505,10 +1505,29 @@ function trainingMt5DemoExecutionStatus() {
   const mt5Health = state.connectorHealth?.mt5 || {};
   const demoTrading = Boolean(state.env.mt5DemoTrading);
   const trainingOrderSend = Boolean(state.env.trainingMt5DemoOrderSend);
+  const mt5Positions = state.training.positions.filter((p) => p.venue === 'MT5' && !p.exit_price);
+  const attempted = mt5Positions.filter((p) => p.mt5_demo_execution?.attempted === true);
+  const sent = attempted.filter((p) => p.mt5_demo_execution?.ok === true);
+  const failed = attempted.filter((p) => p.mt5_demo_execution?.ok === false);
+  const openText = `MT5 abiertas ${mt5Positions.length}; order_send ok ${sent.length}/${attempted.length}; fallos ${failed.length}.`;
+  if (failed.length) {
+    const reason = failed[0]?.mt5_demo_execution?.reason || 'mt5_demo_order_failed';
+    return {
+      state: 'MT5 demo revisar',
+      detail: `${openText} Ultimo fallo: ${reason}. Cuenta real no tocada.`
+    };
+  }
+  if (sent.length) {
+    const tickets = sent.map((p) => p.mt5_demo_execution?.ticket).filter(Boolean).slice(0, 4).join(', ');
+    return {
+      state: 'MT5 demo activo',
+      detail: `${openText} Tickets demo: ${tickets || 'pendiente bridge'}. Cuenta real no tocada.`
+    };
+  }
   if (state.executionAdapters.mt5 && mt5Health.ok && demoTrading && trainingOrderSend) {
     return {
       state: 'MT5 demo armado',
-      detail: 'MT5 demo order_send habilitado por MT5_DEMO_TRADING_ENABLED y TRAINING_MT5_DEMO_ORDER_SEND_ENABLED; solo cuenta demo MT5_ACCOUNT2.'
+      detail: `${openText} MT5 demo order_send habilitado por MT5_DEMO_TRADING_ENABLED y TRAINING_MT5_DEMO_ORDER_SEND_ENABLED; solo cuenta demo MT5_ACCOUNT2.`
     };
   }
   if (state.executionAdapters.mt5 && mt5Health.ok) {
@@ -1673,6 +1692,14 @@ function renderNewsFromState(source) {
     $('newsList').innerHTML = html || '<div class="empty-state">Sin noticias Finnhub.</div>';
     $('newsFinnhubPage').innerHTML = html || '<div class="empty-state">Sin noticias Finnhub.</div>';
   }
+}
+
+function mt5DemoPositionExecutionLabel(position = {}) {
+  if (position.venue !== 'MT5') return '';
+  const execution = position.mt5_demo_execution || position.mt5DemoExecution;
+  if (!execution || execution.attempted !== true) return 'paper interno';
+  if (execution.ok === true) return `demo order_send #${execution.ticket || 'sin ticket'}`;
+  return `demo fallo: ${String(execution.reason || 'sin detalle').slice(0, 42)}`;
 }
 
 function macroContext() {
@@ -3187,7 +3214,8 @@ function renderTrainingPositions() {
     const mark = pair?.price || p.entry_price;
     const pnl = markToMarketPnl(p, pair);
     const ageH = ((Date.now() - Number(p.opened_tick || Date.now())) / 3600000).toFixed(1);
-    return `<div class="train-row"><b>${p.symbol}<small>${ageH}h</small></b><span>${p.venue}</span><span class="${p.direction === 'LONG' ? 'train-status' : 'train-bad'}">${p.direction}</span><span>${p.size_demo.toFixed(5)}</span><span>${fmtPrice(p.entry_price)}</span><span class="${pnl >= 0 ? 'train-status' : 'train-bad'}">${pnl.toFixed(2)}</span><span>${p.confidence}%</span></div>`;
+    const mt5Exec = mt5DemoPositionExecutionLabel(p);
+    return `<div class="train-row"><b>${p.symbol}<small>${ageH}h${mt5Exec ? ` · ${escapeHtml(mt5Exec)}` : ''}</small></b><span>${p.venue}</span><span class="${p.direction === 'LONG' ? 'train-status' : 'train-bad'}">${p.direction}</span><span>${p.size_demo.toFixed(5)}</span><span>${fmtPrice(p.entry_price)}</span><span class="${pnl >= 0 ? 'train-status' : 'train-bad'}">${pnl.toFixed(2)}</span><span>${p.confidence}%</span></div>`;
   }).join('');
   const head = '<div class="train-head"><span>PAR</span><span>VENUE</span><span>DIR</span><span>TAMANO</span><span>ENTRADA</span><span>P&L</span><span>CONF.</span></div>';
   const shortRows = renderGroup(state.training.positions.filter((p) => p.horizon !== 'swing'));
@@ -3270,7 +3298,7 @@ function renderChatContextPanel() {
   el.innerHTML =
     `<div class="pipe-item"><span>Modo</span><b class="pipe-ok">${state.training.mode}</b><span>${state.env.realTrading ? 'REAL' : 'SAFE'}</span><small>${state.symbol}</small></div>` +
     `<div class="pipe-item"><span>Train</span><b class="pipe-ok">${state.training.positions.filter((p) => !p.exit_price).length}</b><span>${Number(state.training.totals?.closedTrades || state.training.closedTrades.length)}</span><small>${Number(state.training.totals?.lessons || state.training.lessons.length)} lessons</small></div>` +
-    `<div class="pipe-item"><span>MT5 demo</span><b class="pipe-warn">${escapeHtml(mt5DemoExecution.state).slice(0, 12)}</b><span>paper</span><small>sin order_send</small></div>` +
+    `<div class="pipe-item"><span>MT5 demo</span><b class="${mt5DemoExecution.state.includes('activo') ? 'pipe-ok' : mt5DemoExecution.state.includes('revisar') ? 'pipe-error' : 'pipe-warn'}">${escapeHtml(mt5DemoExecution.state).slice(0, 12)}</b><span>${state.env.trainingMt5DemoOrderSend ? 'demo' : 'paper'}</span><small>${state.env.trainingMt5DemoOrderSend ? 'order_send ON' : 'sin order_send'}</small></div>` +
     `<div class="pipe-item"><span>Macro</span><b class="${state.macroNews.risk === 'high' ? 'pipe-error' : state.macroNews.risk === 'medium' ? 'pipe-warn' : 'pipe-ok'}">${state.macroNews.risk}</b><span>${state.macroNews.finnhub.length}</span><small>news</small></div>` +
     topStrategies;
 }

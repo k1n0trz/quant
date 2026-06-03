@@ -135,6 +135,32 @@ assert.equal(isMt5DemoTradingEnabled({ ...demoEnv, MT5_ACCOUNT2_SERVER: 'FBS-REA
   assert.equal(bridgeOrder.realTradingTouched, false);
   assert.equal(fs.existsSync(path.join(bridgeDir, 'quant_bridge_command.txt')), false, 'order command file debe consumirse una sola vez');
 
+  const realBridgeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'quant-mt5-real-bridge-'));
+  const realStatusFile = path.join(realBridgeDir, 'quant_bridge_status.json');
+  fs.writeFileSync(realStatusFile, JSON.stringify({
+    ok: true,
+    ts: Math.floor(Date.now() / 1000),
+    connected: true,
+    tradeMode: 0,
+    server: 'FBS-Real'
+  }));
+  let pythonFallbackUsed = false;
+  const realBridgeOrder = await placeMt5DemoOrder({
+    symbol: 'XAUUSD',
+    side: 'BUY',
+    volume: 0.01,
+    trainingPositionId: 'real_bridge_must_not_send'
+  }, {
+    env: { ...demoEnv, MT5_BRIDGE_STATUS_FILE: realStatusFile },
+    executePython: async () => {
+      pythonFallbackUsed = true;
+      return { ok: true, ticket: 111222, retcode: 10009 };
+    }
+  });
+  assert.equal(pythonFallbackUsed, true, 'bridge con server real no debe recibir comandos demo.');
+  assert.equal(realBridgeOrder.bridge, undefined);
+  assert.equal(fs.existsSync(path.join(realBridgeDir, 'quant_bridge_command.txt')), false, 'no debe escribir command file contra bridge real.');
+
   const closeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'quant-mt5-close-'));
   const closeStatusFile = path.join(closeDir, 'quant_bridge_status.json');
   fs.writeFileSync(closeStatusFile, JSON.stringify({

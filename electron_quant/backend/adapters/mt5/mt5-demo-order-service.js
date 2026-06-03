@@ -62,7 +62,7 @@ function bridgeStatus(env = {}) {
 function bridgeCanSendDemoOrder(status) {
   if (!status?.fresh || !status.connected) return false;
   const server = String(status.server || '');
-  return Number(status.tradeMode) === 0 || /\bdemo\b/i.test(server);
+  return demoServerLooksSafe(server);
 }
 
 function demoServerLooksSafe(server) {

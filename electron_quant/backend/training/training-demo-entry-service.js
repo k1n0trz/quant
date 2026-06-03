@@ -311,6 +311,7 @@ function evaluateTrainingDemoEntry(input = {}) {
   const forcedHorizon = textValue(input.horizon) || 'intraday';
   const allowDefensive = isTrainingBackendDemoEntryAllowDefensiveSignalEnabled(env) || isGuardedPaperTrainingState(state);
   const mergedSignal = mergeSignalForEntry(pair, rawSignal, forcedHorizon);
+  const defensiveFallback = rawSignal.missing_signal === true || rawSignal.defensive === true || rawSignal.source === 'defensive_fallback';
   const key = `${pair.venue}:${pair.symbol}:${forcedHorizon}`;
   const cooldownUntil = Number(state.pairCooldowns?.[key] || 0);
   const duplicatePosition = (Array.isArray(state.positions) ? state.positions : []).some((position) => (
@@ -343,6 +344,20 @@ function evaluateTrainingDemoEntry(input = {}) {
   }
   if (mergedSignal.bias === 'NEUTRAL') {
     return { ok: true, shouldOpen: false, reason: 'neutral_bias', signal: mergedSignal };
+  }
+  if (defensiveFallback && allowDefensive && mergedSignal.learning_mode === 'exploration_paper') {
+    return {
+      ok: true,
+      shouldOpen: true,
+      reason: null,
+      signal: {
+        ...mergedSignal,
+        source: rawSignal.source || mergedSignal.source || 'backend.training.signal',
+        signal_id: rawSignal.signal_id || rawSignal.signalId || mergedSignal.signal_id || null,
+        strategy_id: rawSignal.strategy_id || mergedSignal.strategy_id || mergedSignal.primaryStrategy?.id || 'unknown',
+        strategy_name: rawSignal.strategy_name || mergedSignal.strategy_name || mergedSignal.primaryStrategy?.name || 'Estrategia no clasificada'
+      }
+    };
   }
   if (Number(mergedSignal.htfAlignmentScore || 0) < 0.5) {
     return { ok: true, shouldOpen: false, reason: 'htf_alignment_below_threshold', signal: mergedSignal };

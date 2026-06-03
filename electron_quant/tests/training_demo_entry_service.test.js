@@ -134,6 +134,34 @@ test('defensive fallback opens only inside guarded paper training', () => {
   assert.equal(unguarded.reason, 'defensive_signal_not_allowed');
 });
 
+test('defensive fallback does not require professional scoring inside guarded paper training', () => {
+  const result = evaluateTrainingDemoEntry({
+    state: createState(),
+    pair: createPair({
+      score: 20,
+      indicators: {
+        bias: 'LONG',
+        confidence: 55,
+        primaryStrategy: { id: 'exploration', name: 'Exploration', score: 55 }
+      }
+    }),
+    marketContext: createMarketContext(),
+    signalContext: createSignalContext({
+      defensive: true,
+      missing_signal: true,
+      source: 'defensive_fallback',
+      htfAlignmentScore: null,
+      patternScore: null,
+      volumeRatio: null
+    }),
+    env: { TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true' }
+  });
+
+  assert.equal(result.shouldOpen, true);
+  assert.equal(result.reason, null);
+  assert.equal(result.signal.learning_mode, 'exploration_paper');
+});
+
 test('low confidence does not open', () => {
   const result = evaluateTrainingDemoEntry({
     state: createState(),

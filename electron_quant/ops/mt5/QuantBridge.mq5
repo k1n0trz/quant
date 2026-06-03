@@ -12,6 +12,7 @@ input bool AllowBridgeCommands = true;
 input bool AllowDemoOrderSend = true;
 input bool AllowRealOrderSend = false;
 input bool AllowRealOrderCheck = true;
+input string RealOrderFlagFile = "quant_bridge_real_order_enabled.flag";
 input string BridgeRatesSymbols = "XAUUSD,EURUSD,GBPUSD,USDJPY,AUDCAD,USDCAD,AUDUSD,NZDUSD,USDCHF,BTCUSD,ETHUSD";
 input string BridgeRatesTimeframes = "M1,M5,M15,H1,H4,D1";
 input int BridgeRatesBars = 120;
@@ -193,9 +194,40 @@ bool DemoAccount()
    return AccountInfoInteger(ACCOUNT_TRADE_MODE) == ACCOUNT_TRADE_MODE_DEMO || StringFind(lower, "demo") >= 0;
 }
 
+bool TextTruthy(string value)
+{
+   string v = value;
+   StringTrimLeft(v);
+   StringTrimRight(v);
+   StringToLower(v);
+   return v == "1" || v == "true" || v == "yes" || v == "on" || v == "enabled";
+}
+
+bool RuntimeBoolFlag(string fileName)
+{
+   if(fileName == "")
+      return false;
+   int handle = FileOpen(fileName, FILE_READ | FILE_TXT | FILE_ANSI);
+   if(handle == INVALID_HANDLE)
+      return false;
+   string value = FileReadString(handle);
+   FileClose(handle);
+   return TextTruthy(value);
+}
+
+bool EffectiveRealOrderSend()
+{
+   return AllowRealOrderSend || RuntimeBoolFlag(RealOrderFlagFile);
+}
+
+bool EffectiveRealOrderCheck()
+{
+   return AllowRealOrderCheck || EffectiveRealOrderSend();
+}
+
 bool BridgeCommandsEnabled()
 {
-   return AllowBridgeCommands && (DemoAccount() || AllowRealOrderSend || AllowRealOrderCheck);
+   return AllowBridgeCommands && (DemoAccount() || EffectiveRealOrderSend() || EffectiveRealOrderCheck());
 }
 
 bool CommandAllowed(string action)
@@ -203,8 +235,8 @@ bool CommandAllowed(string action)
    if(DemoAccount())
       return AllowDemoOrderSend;
    if(action == "CHECK")
-      return AllowRealOrderCheck || AllowRealOrderSend;
-   return AllowRealOrderSend;
+      return EffectiveRealOrderCheck();
+   return EffectiveRealOrderSend();
 }
 
 string PositionJson(int index)
@@ -252,7 +284,7 @@ void WriteStatus()
    positions += "]";
    string rates = RatesBookJson();
    string json = StringFormat("{\"ok\":true,\"source\":\"QuantBridge.mq5\",\"ts\":%I64d,\"symbol\":\"%s\",\"period\":%d,\"connected\":%s,\"tradeAllowed\":%s,\"mqlTradeAllowed\":%s,\"allowDemoOrderSend\":%s,\"allowRealOrderSend\":%s,\"allowRealOrderCheck\":%s,\"login\":%I64d,\"server\":\"%s\",\"currency\":\"%s\",\"tradeMode\":%I64d,\"balance\":%.8f,\"equity\":%.8f,\"margin\":%.8f,\"marginFree\":%.8f,\"profit\":%.8f,\"bid\":%.8f,\"ask\":%.8f,\"positionsTotal\":%d,\"positions\":%s,\"rates\":%s}",
-      TimeCurrent(), Esc(_Symbol), Period(), BoolJson(connected), BoolJson(tradeAllowed), BoolJson(mqlTradeAllowed), BoolJson(AllowDemoOrderSend), BoolJson(AllowRealOrderSend), BoolJson(AllowRealOrderCheck), login, Esc(server), Esc(currency), tradeMode, balance, equity, margin, marginFree, profit, bid, ask, total, positions, rates);
+      TimeCurrent(), Esc(_Symbol), Period(), BoolJson(connected), BoolJson(tradeAllowed), BoolJson(mqlTradeAllowed), BoolJson(AllowDemoOrderSend), BoolJson(EffectiveRealOrderSend()), BoolJson(EffectiveRealOrderCheck()), login, Esc(server), Esc(currency), tradeMode, balance, equity, margin, marginFree, profit, bid, ask, total, positions, rates);
    WriteTextFile(BridgeStatusFile, json);
 }
 
@@ -296,7 +328,7 @@ void ProcessCommand()
    if(!CommandAllowed(action))
    {
       string reason = DemoAccount() ? "demo_order_not_allowed" : "real_order_not_allowed";
-      WriteResult(id, StringFormat("{\"ok\":false,\"reason\":\"%s\",\"commandId\":\"%s\",\"demo\":%s,\"allowRealOrderSend\":%s}", reason, Esc(id), BoolJson(DemoAccount()), BoolJson(AllowRealOrderSend)));
+      WriteResult(id, StringFormat("{\"ok\":false,\"reason\":\"%s\",\"commandId\":\"%s\",\"demo\":%s,\"allowRealOrderSend\":%s}", reason, Esc(id), BoolJson(DemoAccount()), BoolJson(EffectiveRealOrderSend())));
       return;
    }
    if(!TerminalInfoInteger(TERMINAL_CONNECTED) || !TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !MQLInfoInteger(MQL_TRADE_ALLOWED))

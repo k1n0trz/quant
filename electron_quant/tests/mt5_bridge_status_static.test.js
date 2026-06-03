@@ -46,8 +46,10 @@ assert.ok(/return env\.MT5_PYTHON_COMMAND \|\| env\.PYTHON_BIN/.test(demoOrderSe
 assert.ok(quantBridge.includes('input bool AllowBridgeCommands = true;'), 'QuantBridge debe tener switch explicito para comandos.');
 assert.ok(quantBridge.includes('bool BridgeCommandsEnabled()'), 'QuantBridge debe calcular permisos de comandos en una funcion dedicada.');
 assert.ok(quantBridge.includes('input bool AllowRealOrderSend = false;'), 'QuantBridge debe bloquear trading real por defecto.');
+assert.ok(quantBridge.includes('input string RealOrderFlagFile = "quant_bridge_real_order_enabled.flag";'), 'QuantBridge debe poder activar trading real por flag runtime controlado por VPS.');
+assert.ok(quantBridge.includes('bool EffectiveRealOrderSend()'), 'QuantBridge debe calcular permiso real efectivo desde input o flag runtime.');
 assert.ok(quantBridge.includes('real_order_not_allowed'), 'QuantBridge debe rechazar orden real si AllowRealOrderSend=false.');
-assert.ok(quantBridge.includes('return AllowBridgeCommands && (DemoAccount() || AllowRealOrderSend || AllowRealOrderCheck);'), 'QuantBridge debe permitir comandos reales solo con flags explicitos.');
+assert.ok(quantBridge.includes('return AllowBridgeCommands && (DemoAccount() || EffectiveRealOrderSend() || EffectiveRealOrderCheck());'), 'QuantBridge debe permitir comandos reales solo con flags efectivos explicitos.');
 assert.ok(quantBridge.includes('if(BridgeCommandsEnabled()) ProcessCommand();'), 'QuantBridge solo debe procesar comandos cuando BridgeCommandsEnabled este activo.');
 assert.ok(quantBridge.includes('input string BridgeRatesSymbols'), 'QuantBridge debe permitir configurar simbolos para exportar velas.');
 assert.ok(quantBridge.includes('input string BridgeRatesTimeframes'), 'QuantBridge debe permitir configurar timeframes para exportar velas.');

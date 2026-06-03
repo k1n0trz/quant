@@ -21,7 +21,10 @@ function finiteNumber(...values) {
 
 function parseTimeMs(...values) {
   for (const value of values) {
-    if (Number.isFinite(Number(value))) return Number(value);
+    if (Number.isFinite(Number(value))) {
+      const numeric = Number(value);
+      return Math.abs(numeric) < 1000000000000 ? numeric * 1000 : numeric;
+    }
     if (typeof value === 'string' && value.trim()) {
       const timeMs = Date.parse(value);
       if (Number.isFinite(timeMs)) return timeMs;

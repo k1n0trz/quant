@@ -60,6 +60,26 @@ test('market context resolves MT5 price from MT5 ticker before Binance ticker', 
   assert.equal(binanceCalls, 0);
 });
 
+test('market context accepts MT5 bridge timestamps expressed as Unix seconds', async () => {
+  const nowMs = Date.parse('2026-06-03T21:40:00.000Z');
+  const result = await resolveTrainingMarketContext('XAUUSD', {
+    venue: 'MT5',
+    nowMs,
+    deps: {
+      getMt5Ticker: async () => ({
+        price: 4434.65,
+        updatedAt: Math.floor(nowMs / 1000) - 30,
+        source: 'mt5_bridge_rates'
+      })
+    }
+  });
+
+  assert.equal(result.available, true);
+  assert.equal(result.reason, null);
+  assert.equal(result.stale, false);
+  assert.equal(result.ageMs, 30000);
+});
+
 test('market context falls back to mt5 snapshot when ticker is unavailable', async () => {
   const result = await resolveTrainingMarketContext('XAUUSD', {
     venue: 'MT5',

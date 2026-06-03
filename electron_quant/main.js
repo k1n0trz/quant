@@ -42,6 +42,7 @@ const { normalizeTrainingStateTraceability } = require('./backend/training/train
 const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
 const { getTrainingDemoLoopSchedulerStatus } = require('./backend/training/training-loop-scheduler');
 const { placeMt5DemoOrder, closeMt5DemoPosition } = require('./backend/adapters/mt5/mt5-demo-order-service');
+const { bridgeSymbolsFromStatus, bridgeTickerFromStatus } = require('./backend/adapters/mt5/mt5-bridge-fallback');
 const { getMt5MarketSession } = require('./backend/market/mt5-market-hours');
 const { createSystemSelfAuditSchedulerController } = require('./backend/system/system-self-audit-scheduler');
 const {
@@ -2189,16 +2190,23 @@ async function handleApi(req, res, url) {
         writeTrainingState,
         getBinanceSymbols: () => binanceSymbols(),
         getTicker: (symbol) => ticker(symbol),
-        getMt5Symbols: () => mt5Symbols(userEnv),
+        getMt5Symbols: async () => {
+          const result = await mt5Symbols(userEnv).catch((error) => ({ ok: false, symbols: [], error: error?.message || String(error) }));
+          if (result?.ok && Array.isArray(result.symbols) && result.symbols.length) return result;
+          return bridgeSymbolsFromStatus(readMt5BridgeStatus(userEnv));
+        },
         getMt5Ticker: async (symbol) => {
-          const result = await mt5Rates(symbol, 'M1', 120, userEnv);
-          return {
-            symbol,
-            venue: 'MT5',
-            ...(result?.ticker || {}),
-            price: result?.ticker?.price,
-            updatedAt: new Date().toISOString()
-          };
+          const result = await mt5Rates(symbol, 'M1', 120, userEnv).catch((error) => ({ ok: false, error: error?.message || String(error) }));
+          if (result?.ok && result?.ticker?.price) {
+            return {
+              symbol,
+              venue: 'MT5',
+              ...(result.ticker || {}),
+              price: result.ticker.price,
+              updatedAt: new Date().toISOString()
+            };
+          }
+          return bridgeTickerFromStatus(symbol, readMt5BridgeStatus(userEnv));
         },
         getSymbolFilters: (symbol) => getSymbolFilters(symbol),
         getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, userEnv),

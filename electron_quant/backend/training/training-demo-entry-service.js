@@ -127,9 +127,29 @@ function normalizeEntryPair(candidate) {
 function collectTrainingEntryPairs(state = {}) {
   const sources = [];
   if (Array.isArray(state.activePairs)) sources.push(...state.activePairs);
-  else if (Array.isArray(state.pairs)) sources.push(...state.pairs);
-  else if (Array.isArray(state.configuredSymbols)) sources.push(...state.configuredSymbols);
-  else if (Array.isArray(state.symbols)) sources.push(...state.symbols);
+  if (Array.isArray(state.pairs)) sources.push(...state.pairs);
+  if (Array.isArray(state.configuredSymbols)) sources.push(...state.configuredSymbols);
+  if (Array.isArray(state.symbols)) sources.push(...state.symbols);
+  if (Array.isArray(state.positions)) {
+    sources.push(...state.positions
+      .filter((position) => position && !position.exit_price)
+      .map((position) => ({
+        venue: position.venue,
+        symbol: position.symbol,
+        score: finiteNumber(position.score, position.confidence_at_entry, position.confidence, 70) || 70,
+        price: finiteNumber(position.price, position.current_price, position.price_current, position.entry_price),
+        indicators: {
+          bias: position.direction,
+          confidence: finiteNumber(position.confidence_at_entry, position.confidence, 74) || 74,
+          horizon: position.horizon,
+          primaryStrategy: position.strategy_id ? {
+            id: position.strategy_id,
+            name: position.strategy_name || position.strategy_id,
+            score: finiteNumber(position.strategy_score, 75) || 75
+          } : null
+        }
+      })));
+  }
   return sources.map(normalizeEntryPair).filter(Boolean);
 }
 
@@ -570,10 +590,15 @@ async function evaluateTrainingDemoEntries(input = {}) {
   if (bootstrappedPairs.length) {
     const mt5Bootstrapped = bootstrappedPairs.filter((pair) => sameText(pair.venue, 'MT5'));
     const bootstrapFirst = needsIndicatorRefresh || (!hasMt5EntryPair && mt5Bootstrapped.length);
-    pairs = (bootstrapFirst
+    const mergedPairs = (bootstrapFirst
       ? mergeEntryPairs(bootstrappedPairs, pairs)
       : mergeEntryPairs(pairs, bootstrappedPairs)
-    ).slice(0, targetUniverseSize);
+    );
+    pairs = balancedTrainingBootstrapPairs(
+      mergedPairs.filter((pair) => sameText(pair.venue, 'MT5')),
+      mergedPairs.filter((pair) => !sameText(pair.venue, 'MT5')),
+      targetUniverseSize
+    );
   }
   const ranked = pairs
     .filter((pair) => textValue(pair.symbol))

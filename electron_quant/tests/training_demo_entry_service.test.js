@@ -419,3 +419,45 @@ test('entry evaluator rebalances a full Binance-only universe when MT5 source is
   assert.equal(result.nextState.activePairs.filter((pair) => pair.venue === 'MT5').length, 20);
   assert.equal(result.nextState.activePairs.filter((pair) => pair.venue === 'BINANCE').length, 20);
 });
+
+test('entry evaluator keeps open MT5 positions visible in active pairs even when bootstrap has no MT5 tickers', async () => {
+  const binanceSymbols = Array.from({ length: 40 }, (_, index) => `B${index + 1}USDT`);
+  const activePairs = binanceSymbols.map((symbol) => createPair({ symbol, venue: 'BINANCE' }));
+  const positions = [
+    ...binanceSymbols.slice(0, 38).map((symbol, index) => ({
+      id: `pos-${symbol}`,
+      venue: 'BINANCE',
+      symbol,
+      horizon: index < 19 ? 'intraday' : 'swing',
+      direction: 'LONG',
+      entry_price: 100
+    })),
+    { id: 'pos-eurusd', venue: 'MT5', symbol: 'EURUSD', horizon: 'intraday', direction: 'LONG', entry_price: 1.16 },
+    { id: 'pos-xauusd', venue: 'MT5', symbol: 'XAUUSD', horizon: 'swing', direction: 'SHORT', entry_price: 4430 }
+  ];
+
+  const result = await evaluateTrainingDemoEntries({
+    state: createState({
+      activePairs,
+      positions,
+      targets: { total: 40, intraday: 20, swing: 20 },
+      targetOpenPositions: 40,
+      targetIntradayPositions: 20,
+      targetSwingPositions: 20
+    }),
+    env: { TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true' },
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z'),
+    deps: {
+      getBinanceSymbols: async () => binanceSymbols,
+      getTicker: async () => ({ price: 100, changePct: 1.2, quoteVolume: 80000000 }),
+      getMt5Symbols: async () => ({ ok: true, symbols: ['EURUSD', 'XAUUSD'] }),
+      getMt5Ticker: async () => null
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.openedEntries.length, 0);
+  assert.equal(result.nextState.activePairs.length, 40);
+  assert.equal(result.nextState.activePairs.some((pair) => pair.venue === 'MT5' && pair.symbol === 'EURUSD'), true);
+  assert.equal(result.nextState.activePairs.some((pair) => pair.venue === 'MT5' && pair.symbol === 'XAUUSD'), true);
+});

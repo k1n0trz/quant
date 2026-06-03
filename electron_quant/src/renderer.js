@@ -18,6 +18,7 @@ if (!window.quant) {
     memoryClear:           ()                          => apiPost('memory-clear'),
     trainingStateRead:     ()                          => apiGet('training-state-read'),
     trainingStateWrite:    (payload)                   => apiPost('training-state-write', payload),
+    trainingLiveSnapshot:  (options = {})              => apiGet(`training/demo/live-snapshot?limit=${options.limit || 80}`),
     trainingLoopStatus:    ()                          => apiGet('training/demo/loop/status'),
     trainingLoopStart:     ()                          => apiPost('training/demo/loop/start', {}),
     trainingBotsStatus:    ()                          => apiGet('training/bots/status'),
@@ -113,6 +114,7 @@ const state = {
     positions: [],
     closedTrades: [],
     lessons: [],
+    totals: { positions: 0, openPositions: 0, closedTrades: 0, lessons: 0, activePairs: 0 },
     advice: [],
     insights: [],
     botsStatus: null,
@@ -1551,7 +1553,7 @@ function trainingContext() {
     `Estrategias activas y comparadas: ${Object.values(state.strategies).map((s) => `${s.name} minScore=${s.minScore || 'n/a'} RR=${s.rrMin || 'n/a'}`).join('; ')}.`,
     `Scoreboard estrategias: ${strategyLines || 'sin datos aun'}.`,
     `Pares activos reales: ${tr.activePairs.map((p) => `${p.venue}:${p.symbol}@${fmtPrice(p.price)} conf ${p.indicators?.confidence || 0} strategy=${p.indicators?.primaryStrategy?.id || 'n/a'}`).join('; ') || 'validando'}.`,
-    `Posiciones demo abiertas: ${open.length}; MT5 abiertas: ${mt5Open}; P&L demo total: ${realized.toFixed(2)}; trades cerrados: ${tr.closedTrades.length}; lecciones: ${tr.lessons.length}.`,
+    `Posiciones demo abiertas: ${open.length}; MT5 abiertas: ${mt5Open}; P&L demo total: ${realized.toFixed(2)}; trades cerrados: ${Number(tr.totals?.closedTrades || tr.closedTrades.length)}; lecciones: ${Number(tr.totals?.lessons || tr.lessons.length)}.`,
     `Walk-Forward OOS (sesion): ${state.wfCalibration.label}; ratio x${state.wfCalibration.ratio.toFixed(2)}.`,
     `Calibracion nocturna (JSONL): ${state.nightCalibration.ok ? state.nightCalibration.label : 'pendiente'}; ratio nocturno x${(state.nightCalibration.ratio || 1).toFixed(2)}.`,
     `Macro/news aplicado al Training: risk=${state.macroNews.risk}; Finnhub=${state.macroNews.finnhub.length}; Alpha=${state.macroNews.alphaFeed.length}; Economic=${state.macroNews.economic.length}.`,
@@ -1856,6 +1858,25 @@ function applyBackendTrainingStateRefresh(refreshedState) {
   }
   state.training.closedTrades = Array.isArray(refreshedState.closedTrades) ? refreshedState.closedTrades : state.training.closedTrades;
   state.training.lessons = Array.isArray(refreshedState.lessons) ? refreshedState.lessons : state.training.lessons;
+  if (refreshedState.totals && typeof refreshedState.totals === 'object') {
+    state.training.totals = {
+      ...state.training.totals,
+      positions: Number(refreshedState.totals.positions || state.training.positions.length),
+      openPositions: Number(refreshedState.totals.openPositions || state.training.positions.filter((p) => !p.exit_price).length),
+      closedTrades: Number(refreshedState.totals.closedTrades || state.training.closedTrades.length),
+      lessons: Number(refreshedState.totals.lessons || state.training.lessons.length),
+      activePairs: Number(refreshedState.totals.activePairs || state.training.activePairs.length)
+    };
+  } else {
+    state.training.totals = {
+      ...state.training.totals,
+      positions: state.training.positions.length,
+      openPositions: state.training.positions.filter((p) => !p.exit_price).length,
+      closedTrades: state.training.closedTrades.length,
+      lessons: state.training.lessons.length,
+      activePairs: state.training.activePairs.length
+    };
+  }
   state.training.strategyStats = refreshedState.strategyStats || state.training.strategyStats;
   state.training.pairCooldowns = refreshedState.pairCooldowns || state.training.pairCooldowns;
   state.training.xp = Number(refreshedState.xp || state.training.xp || 0);
@@ -2916,7 +2937,12 @@ async function loadTrainingLiveSnapshot(manual = false) {
   if (state.training.liveSnapshotLoading) return;
   state.training.liveSnapshotLoading = true;
   try {
-    const saved = await window.quant.trainingStateRead();
+    let saved = null;
+    if (window.quant.trainingLiveSnapshot) {
+      const live = await window.quant.trainingLiveSnapshot({ limit: 80 }).catch((err) => ({ ok: false, error: err.message }));
+      if (live?.ok && live?.state) saved = live.state;
+    }
+    if (!saved) saved = await window.quant.trainingStateRead();
     if (saved) applyBackendTrainingStateRefresh(saved);
     if (window.quant.trainingBotsStatus) {
       const bots = await window.quant.trainingBotsStatus().catch((err) => ({ ok: false, error: err.message }));
@@ -2988,15 +3014,17 @@ function renderTraining() {
     .reduce((s, t) => s + Number(t.pnl_demo || 0), 0);
   const today = todayClosed + unrealized;
   const wins = tr.closedTrades.filter((t) => Number(t.pnl_demo || 0) >= 0).length;
+  const closedTotal = Number(tr.totals?.closedTrades || tr.closedTrades.length);
+  const lessonsTotal = Number(tr.totals?.lessons || tr.lessons.length);
   const mt5DemoExecution = trainingMt5DemoExecutionStatus();
   setText('trainBalance', `$${equity.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
   setText('trainTotalPnl', `${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}`);
   setText('trainTotalPct', `${(totalPnl / tr.balanceStart * 100).toFixed(2)}% · realizado ${realized >= 0 ? '+' : ''}$${realized.toFixed(2)}`);
   setText('trainTodayPnl', `${today >= 0 ? '+' : ''}$${today.toFixed(2)}`);
-  setText('trainOps', String(tr.closedTrades.length));
+  setText('trainOps', String(closedTotal));
   setText('trainWinrate', `${tr.closedTrades.length ? Math.round(wins / tr.closedTrades.length * 100) : 0}% winrate`);
   setText('trainPairCount', `${tr.activePairs.length} / ${tr.maxPairs}`);
-  setText('trainLessons', String(tr.lessons.length));
+  setText('trainLessons', String(lessonsTotal));
   setText('trainLastLesson', tr.lessons[0]?.lesson || 'Aun no hay trades cerrados.');
   setText('trainDemoExecutionState', mt5DemoExecution.state);
   setText('trainDemoExecutionDetail', mt5DemoExecution.detail);
@@ -3108,7 +3136,7 @@ function drawTrainingEquityCurve() {
 }
 
 function trainingLevel() {
-  const xp = state.training.xp + state.training.lessons.length * 8 + state.training.closedTrades.length * 3;
+  const xp = state.training.xp + Number(state.training.totals?.lessons || state.training.lessons.length) * 8 + Number(state.training.totals?.closedTrades || state.training.closedTrades.length) * 3;
   const levels = trainingLevels();
   let current = levels[0];
   for (const level of levels) if (xp >= level.xp) current = level;
@@ -3241,7 +3269,7 @@ function renderChatContextPanel() {
     .join('');
   el.innerHTML =
     `<div class="pipe-item"><span>Modo</span><b class="pipe-ok">${state.training.mode}</b><span>${state.env.realTrading ? 'REAL' : 'SAFE'}</span><small>${state.symbol}</small></div>` +
-    `<div class="pipe-item"><span>Train</span><b class="pipe-ok">${state.training.positions.filter((p) => !p.exit_price).length}</b><span>${state.training.closedTrades.length}</span><small>${state.training.lessons.length} lessons</small></div>` +
+    `<div class="pipe-item"><span>Train</span><b class="pipe-ok">${state.training.positions.filter((p) => !p.exit_price).length}</b><span>${Number(state.training.totals?.closedTrades || state.training.closedTrades.length)}</span><small>${Number(state.training.totals?.lessons || state.training.lessons.length)} lessons</small></div>` +
     `<div class="pipe-item"><span>MT5 demo</span><b class="pipe-warn">${escapeHtml(mt5DemoExecution.state).slice(0, 12)}</b><span>paper</span><small>sin order_send</small></div>` +
     `<div class="pipe-item"><span>Macro</span><b class="${state.macroNews.risk === 'high' ? 'pipe-error' : state.macroNews.risk === 'medium' ? 'pipe-warn' : 'pipe-ok'}">${state.macroNews.risk}</b><span>${state.macroNews.finnhub.length}</span><small>news</small></div>` +
     topStrategies;

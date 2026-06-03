@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('quant', {
   memoryClear: () => ipcRenderer.invoke('memory-clear'),
   trainingStateRead: () => ipcRenderer.invoke('training-state-read'),
   trainingStateWrite: (payload) => ipcRenderer.invoke('training-state-write', payload),
+  trainingLiveSnapshot: (options) => ipcRenderer.invoke('training-live-snapshot', options || undefined),
   finnhub: () => ipcRenderer.invoke('news-finnhub'),
   finnhubEconomic: () => ipcRenderer.invoke('calendar-finnhub-economic'),
   alpha: () => ipcRenderer.invoke('news-alpha'),

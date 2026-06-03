@@ -12,12 +12,14 @@ assert.ok(main.includes('MT5_BRIDGE_STATUS_FILE'), 'main debe aceptar MT5_BRIDGE
 assert.ok(main.includes('MT5_BRIDGE_STATUS_TTL_MS'), 'bridge MT5 debe tener TTL defensivo.');
 assert.ok(main.includes('function readMt5BridgeStatus'), 'debe existir lector del bridge MT5.');
 assert.ok(main.includes('function mt5BridgeAccount'), 'debe existir normalizador de cuenta MT5 bridge.');
+assert.ok(main.includes('function mt5BridgeAccounts'), 'debe existir agregador de bridge MT5 demo + real.');
+assert.ok(main.includes('readMt5RealBridgeStatus(env)'), 'mt5BridgeAccounts debe leer bridge real separado.');
 assert.ok(main.includes("source: 'mt5_bridge'"), 'mt5MultiAccounts debe identificar fuente mt5_bridge.');
 
 const mt5MultiIdx = main.indexOf('async function mt5MultiAccounts');
-const bridgeMultiIdx = main.indexOf('mt5BridgeAccount(readMt5BridgeStatus(env))', mt5MultiIdx);
+const bridgeMultiIdx = main.indexOf('mt5BridgeAccounts(env, usdCop)', mt5MultiIdx);
 const pythonMultiIdx = main.indexOf('_mt5MultiAccountsImpl', mt5MultiIdx);
-assert.ok(bridgeMultiIdx > mt5MultiIdx && bridgeMultiIdx < pythonMultiIdx, 'mt5MultiAccounts debe leer bridge antes de invocar Python.');
+assert.ok(bridgeMultiIdx > mt5MultiIdx && bridgeMultiIdx < pythonMultiIdx, 'mt5MultiAccounts debe leer bridges demo/real antes de invocar Python.');
 
 const mt5InfoIdx = main.indexOf('async function mt5Info');
 const bridgeInfoIdx = main.indexOf('mt5BridgeAccount(readMt5BridgeStatus(env))', mt5InfoIdx);

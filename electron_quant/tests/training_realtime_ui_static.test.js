@@ -7,6 +7,8 @@ const html = fs.readFileSync(path.join(root, 'src', 'index.html'), 'utf8');
 const renderer = fs.readFileSync(path.join(root, 'src', 'renderer.js'), 'utf8');
 const css = fs.readFileSync(path.join(root, 'src', 'styles.css'), 'utf8');
 const apiRouter = fs.readFileSync(path.join(root, 'backend', 'routes', 'api-router.js'), 'utf8');
+const preload = fs.readFileSync(path.join(root, 'preload.js'), 'utf8');
+const monitoring = fs.readFileSync(path.join(root, 'backend', 'training', 'training-monitoring-service.js'), 'utf8');
 
 for (const id of [
   'trainingOpenGauge',
@@ -21,6 +23,12 @@ for (const id of [
 
 assert.ok(renderer.includes('loadTrainingLiveSnapshot'), 'Renderer debe tener polling live del snapshot de training.');
 assert.ok(renderer.includes('setInterval(() => loadTrainingLiveSnapshot(false), 5000)'), 'Training debe refrescar en vivo cada 5s sin actualizar la pagina.');
+assert.ok(renderer.includes('trainingLiveSnapshot'), 'Training live debe usar snapshot compacto antes de leer el estado completo.');
+assert.ok(preload.includes('trainingLiveSnapshot'), 'Preload debe exponer trainingLiveSnapshot para Electron.');
+assert.ok(apiRouter.includes('/api/training/demo/live-snapshot'), 'Backend debe exponer snapshot compacto de training.');
+assert.ok(monitoring.includes('function getTrainingDemoLiveSnapshot'), 'Monitoring debe construir snapshot compacto.');
+assert.ok(monitoring.includes('closedTrades: allTrades.length'), 'Snapshot compacto debe preservar total de trades cerrados.');
+assert.ok(monitoring.includes('lessons: allLessons.length'), 'Snapshot compacto debe preservar total de lecciones.');
 assert.ok(renderer.includes('applyBackendTrainingStateRefresh(saved)'), 'loadTrainingState debe hidratar activePairs/targets desde disco backend.');
 assert.ok(renderer.includes('renderTrainingInsights'), 'Renderer debe renderizar insights temporales.');
 assert.ok(renderer.includes('Date.now() - Date.parse'), 'Insights deben expirar por edad.');

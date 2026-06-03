@@ -15,7 +15,8 @@ const {
   getTrainingDemoOpenPositions,
   getTrainingDemoRecentTrades,
   getTrainingDemoRecentLessons,
-  getTrainingDemoPerformanceSummary
+  getTrainingDemoPerformanceSummary,
+  getTrainingDemoLiveSnapshot
 } = require('../training/training-monitoring-service');
 const { registerTrainingDemoClosedTrade } = require('../training/training-demo-writer-service');
 const { isTrainingBackendLoopEnabled, runTrainingDemoTick } = require('../training/training-loop-service');
@@ -321,6 +322,15 @@ function createApiRouter(context) {
             realTradingTouched: false
           }
         });
+      }
+
+      if (method === 'GET' && pathname === '/api/training/demo/live-snapshot') {
+        const schedulerStatus = loopScheduler.getTrainingDemoLoopSchedulerStatus({
+          env,
+          deps,
+          logger: context.logger || null
+        });
+        return response(200, getTrainingDemoLiveSnapshot(deps, body, schedulerStatus));
       }
 
       if (method === 'GET' && pathname === '/api/training/demo/positions/open') {

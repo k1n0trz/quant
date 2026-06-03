@@ -17,6 +17,9 @@ assert.ok(main.includes('readMt5RealBridgeStatus'), 'env-status debe leer el bri
 assert.ok(main.includes('demoRuntimeMt5Account') && main.includes('realRuntimeMt5Account'), 'env-status debe normalizar runtimes demo y real por separado.');
 assert.ok(main.includes('buildMt5AccountStatus(userEnv, demoRuntimeMt5Account, realRuntimeMt5Account)'), 'HTTP env-status debe pasar ambos runtimes MT5.');
 assert.ok(main.includes('buildMt5AccountStatus(ENV, demoRuntimeMt5Account, realRuntimeMt5Account)'), 'IPC env-status debe pasar ambos runtimes MT5.');
+assert.ok(main.includes('balance: Number.isFinite(Number(runtimeAccount.balance))'), 'runtime MT5 debe exponer balance para Demo/Real.');
+assert.ok(main.includes('equity: Number.isFinite(Number(runtimeAccount.equity))'), 'runtime MT5 debe exponer equity para Demo/Real.');
+assert.ok(main.includes('mt5BridgeAccounts(env, usdCop)'), 'wallet MT5 debe agregar cuentas Demo y Real desde bridge.');
 assert.equal(/Number\(bridge\.tradeMode\)\s*===\s*0\s*\|\|/.test(main), false, 'trade_mode=0 no debe clasificar MT5 como demo.');
 assert.ok(/is_demo:\s*\/\\b(?:demo)\\b\/i\.test\(server\)/.test(main), 'demo debe clasificarse por servidor demo.');
 

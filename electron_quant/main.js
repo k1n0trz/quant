@@ -39,6 +39,7 @@ const {
 } = require('./backend/execution/binance-real-order-service');
 const { createReadOnlyTrainingStateReader, normalizeTrainingState } = require('./backend/training/training-state');
 const { normalizeTrainingStateTraceability } = require('./backend/training/training-traceability');
+const { getTrainingDemoLiveSnapshot } = require('./backend/training/training-monitoring-service');
 const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
 const { getTrainingDemoLoopSchedulerStatus } = require('./backend/training/training-loop-scheduler');
 const { placeMt5DemoOrder, closeMt5DemoPosition } = require('./backend/adapters/mt5/mt5-demo-order-service');
@@ -1394,6 +1395,13 @@ function mt5RuntimeSummary(runtimeAccount = null) {
     isDemo: Boolean(runtimeAccount.is_demo),
     login: runtimeAccount.login ? Number(runtimeAccount.login) : null,
     server: runtimeAccount.server || '',
+    currency: runtimeAccount.currency || 'USD',
+    balance: Number.isFinite(Number(runtimeAccount.balance)) ? Number(runtimeAccount.balance) : 0,
+    equity: Number.isFinite(Number(runtimeAccount.equity)) ? Number(runtimeAccount.equity) : 0,
+    margin: Number.isFinite(Number(runtimeAccount.margin)) ? Number(runtimeAccount.margin) : 0,
+    marginFree: Number.isFinite(Number(runtimeAccount.margin_free ?? runtimeAccount.marginFree)) ? Number(runtimeAccount.margin_free ?? runtimeAccount.marginFree) : 0,
+    profit: Number.isFinite(Number(runtimeAccount.profit)) ? Number(runtimeAccount.profit) : 0,
+    tradeAllowed: Boolean(runtimeAccount.trade_allowed),
     source: runtimeAccount.source || '',
     ageSec: Number.isFinite(Number(runtimeAccount.ageSec)) ? Number(runtimeAccount.ageSec) : null,
     positionsTotal: Array.isArray(runtimeAccount.positions) ? runtimeAccount.positions.length : 0
@@ -1481,14 +1489,9 @@ function runPythonJson(code, fallback, env = ENV, timeoutMs = MT5_PYTHON_TIMEOUT
 }
 
 async function mt5MultiAccounts(usdCop = 0, env = ENV, passive = false) {
-  const bridgeAccount = mt5BridgeAccount(readMt5BridgeStatus(env));
-  if (bridgeAccount?.available) {
-    const account = {
-      ...bridgeAccount,
-      balanceCop: usdCop ? Math.round(bridgeAccount.balance * usdCop * 100) / 100 : 0,
-      equityCop: usdCop ? Math.round(bridgeAccount.equity * usdCop * 100) / 100 : 0
-    };
-    return { ok: true, source: 'mt5_bridge', accounts: [account] };
+  const bridgeAccounts = mt5BridgeAccounts(env, usdCop);
+  if (bridgeAccounts.length) {
+    return { ok: true, source: 'mt5_bridge', accounts: bridgeAccounts };
   }
   const now = Date.now();
   // Non-passive = manual user action → always get fresh data, bypass cache
@@ -1499,6 +1502,29 @@ async function mt5MultiAccounts(usdCop = 0, env = ENV, passive = false) {
     _mt5AccountsCache.ts = Date.now(); _mt5AccountsCache.data = r; _mt5AccountsCache.inFlight = null; return r;
   }).catch(e => { _mt5AccountsCache.inFlight = null; throw e; });
   return _mt5AccountsCache.inFlight;
+}
+
+function mt5BridgeAccounts(env = ENV, usdCop = 0) {
+  const accounts = [];
+  const seen = new Set();
+  for (const account of [
+    mt5BridgeAccount(readMt5BridgeStatus(env)),
+    mt5BridgeAccount(readMt5RealBridgeStatus(env))
+  ]) {
+    if (!account?.available) continue;
+    const key = `${account.login || ''}:${account.server || ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    accounts.push({
+      ...account,
+      balanceCop: usdCop ? Math.round(account.balance * usdCop * 100) / 100 : 0,
+      equityCop: usdCop ? Math.round(account.equity * usdCop * 100) / 100 : 0
+    });
+  }
+  return accounts.sort((left, right) => {
+    if (left.is_demo === right.is_demo) return 0;
+    return left.is_demo ? 1 : -1;
+  });
 }
 
 function _mt5MultiAccountsImpl(usdCop = 0, env = ENV, passive = false) {
@@ -3012,6 +3038,15 @@ ipcMain.handle('memory-stats', () => memoryStats());
 ipcMain.handle('memory-clear', () => clearMemory());
 ipcMain.handle('training-state-read', () => readTrainingState());
 ipcMain.handle('training-state-write', (_e, payload) => writeTrainingState(payload));
+ipcMain.handle('training-live-snapshot', (_e, options = {}) => getTrainingDemoLiveSnapshot(
+  { readTrainingStateSnapshot },
+  options || {},
+  getTrainingDemoLoopSchedulerStatus({
+    env: ENV,
+    deps: { readTrainingStateSnapshot },
+    logger
+  })
+));
 ipcMain.handle('custom-instructions-read', () => readCustomInstructions());
 ipcMain.handle('custom-instructions-write', (_e, text) => writeCustomInstructions(text));
 ipcMain.handle('calibration-read',    () => readCalibration());

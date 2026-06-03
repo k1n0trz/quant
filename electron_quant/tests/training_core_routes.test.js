@@ -427,6 +427,54 @@ test('training demo state endpoint returns read-only backend snapshot', async ()
   assert.equal(res.body.safety.writesPerformed, false);
 });
 
+test('training demo live snapshot endpoint returns compact state with totals', async () => {
+  const closedTrades = Array.from({ length: 150 }, (_, index) => ({
+    symbol: `T${index}USDT`,
+    strategy_id: 'trendMomentum',
+    pnl_demo: index % 2 ? -1 : 2,
+    closed_timestamp: new Date(Date.UTC(2026, 4, 1, 0, index)).toISOString()
+  }));
+  const lessons = Array.from({ length: 140 }, (_, index) => ({
+    symbol: `L${index}USDT`,
+    lesson: `lesson ${index}`,
+    recorded_at: new Date(Date.UTC(2026, 4, 1, 0, index)).toISOString()
+  }));
+  const activePairs = Array.from({ length: 45 }, (_, index) => ({
+    venue: index % 2 ? 'MT5' : 'BINANCE',
+    symbol: `P${index}USDT`,
+    price: 100 + index,
+    score: 70,
+    indicators: { bias: 'LONG', confidence: 80, horizon: index % 2 ? 'swing' : 'intraday' }
+  }));
+  const router = createRouterWithTrainingSnapshot(createTrainingStateSnapshot({
+    ...sampleTrainingState,
+    activePairs,
+    closedTrades,
+    lessons,
+    positions: [
+      { id: 'open-1', symbol: 'BTCUSDT', venue: 'BINANCE', direction: 'LONG', entry_price: 100 },
+      { id: 'closed-1', symbol: 'ETHUSDT', venue: 'BINANCE', direction: 'SHORT', entry_price: 100, exit_price: 99 }
+    ]
+  }));
+
+  const res = await router.dispatch({
+    method: 'GET',
+    pathname: '/api/training/demo/live-snapshot',
+    body: { limit: 50 }
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+  assert.equal(res.body.compact, true);
+  assert.equal(res.body.state.closedTrades.length, 50);
+  assert.equal(res.body.state.lessons.length, 50);
+  assert.equal(res.body.state.positions.length, 1);
+  assert.equal(res.body.state.totals.closedTrades, 150);
+  assert.equal(res.body.state.totals.lessons, 140);
+  assert.equal(res.body.state.totals.activePairs, 45);
+  assert.equal(res.body.safety.readOnly, true);
+});
+
 test('training demo tick endpoint is disabled by default and does not execute', async () => {
   const { router, writes } = createRouterWithTrainingLoop(sampleTrainingState);
 

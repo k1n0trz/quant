@@ -166,9 +166,111 @@ function getTrainingDemoPerformanceSummary(deps = {}, schedulerStatus = null) {
   };
 }
 
+function clampLimit(value, fallback, max) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(max, Math.floor(parsed)));
+}
+
+function compactActivePair(pair = {}) {
+  const indicators = pair.indicators && typeof pair.indicators === 'object' ? pair.indicators : {};
+  const primaryStrategy = indicators.primaryStrategy && typeof indicators.primaryStrategy === 'object'
+    ? {
+        id: indicators.primaryStrategy.id,
+        name: indicators.primaryStrategy.name,
+        score: indicators.primaryStrategy.score
+      }
+    : null;
+  return {
+    venue: pair.venue,
+    symbol: pair.symbol,
+    score: pair.score,
+    price: pair.price,
+    spreadPct: pair.spreadPct,
+    bias: indicators.bias,
+    confidence: indicators.confidence,
+    horizon: indicators.horizon,
+    signalQuality: indicators.signalQuality,
+    primaryStrategy,
+    macroRisk: indicators.macroRisk,
+    macroReasons: indicators.macroReasons
+  };
+}
+
+function getTrainingDemoLiveSnapshot(deps = {}, options = {}, schedulerStatus = null) {
+  const snapshot = readMonitoringState(deps);
+  const state = snapshot.state;
+  const tradeLimit = clampLimit(options.tradeLimit || options.limit, 80, 120);
+  const lessonLimit = clampLimit(options.lessonLimit || options.limit, 80, 120);
+  const pairLimit = clampLimit(options.pairLimit, Number(state.targets?.total || 40), 80);
+  const positions = (Array.isArray(state.positions) ? state.positions : []).filter((position) => !position.exit_price);
+  const allTrades = Array.isArray(state.closedTrades) ? state.closedTrades : [];
+  const allLessons = Array.isArray(state.lessons) ? state.lessons : [];
+  const activePairs = (Array.isArray(state.activePairs) ? state.activePairs : [])
+    .slice(0, pairLimit)
+    .map(compactActivePair);
+  const closedTrades = sortRecent(
+    allTrades,
+    (trade) => parseTimeMs(trade?.closed_timestamp, trade?.closedAt, trade?.timestamp)
+  ).slice(0, tradeLimit);
+  const lessons = sortRecent(
+    allLessons,
+    (lesson) => parseTimeMs(lesson?.recorded_at, lesson?.created_at, lesson?.timestamp)
+  ).slice(0, lessonLimit);
+  const metrics = computeTrainingMetrics({
+    balanceStart: state.balanceStart,
+    closedTrades: allTrades
+  });
+
+  return {
+    ok: true,
+    available: snapshot.available,
+    reason: snapshot.reason,
+    compact: true,
+    state: {
+      version: state.version,
+      mode: state.mode,
+      simulated: state.simulated,
+      blockRealExecution: state.blockRealExecution,
+      backendManaged: state.backendManaged,
+      shadowModeReady: state.shadowModeReady,
+      balanceStart: state.balanceStart,
+      balance: state.balance,
+      activePairs,
+      positions,
+      closedTrades,
+      lessons,
+      strategyStats: state.strategyStats,
+      pairCooldowns: state.pairCooldowns,
+      xp: state.xp,
+      targets: state.targets,
+      persistedAt: state.persistedAt,
+      totals: {
+        positions: Array.isArray(state.positions) ? state.positions.length : positions.length,
+        openPositions: positions.length,
+        closedTrades: allTrades.length,
+        lessons: allLessons.length,
+        activePairs: Array.isArray(state.activePairs) ? state.activePairs.length : activePairs.length
+      },
+      metrics
+    },
+    source: snapshot.source,
+    schedulerStatus: schedulerStatus || {
+      active: false,
+      enabled: false,
+      loopEnabled: false,
+      ticksRun: 0,
+      ticksSkipped: 0,
+      realTradingTouched: false
+    },
+    safety: safety()
+  };
+}
+
 module.exports = {
   getTrainingDemoOpenPositions,
   getTrainingDemoRecentTrades,
   getTrainingDemoRecentLessons,
-  getTrainingDemoPerformanceSummary
+  getTrainingDemoPerformanceSummary,
+  getTrainingDemoLiveSnapshot
 };

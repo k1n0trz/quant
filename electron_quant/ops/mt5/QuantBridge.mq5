@@ -1,6 +1,6 @@
 #property strict
-#property version   "1.11"
-#property description "Quant VPS bridge for MT5 account status and controlled demo order commands"
+#property version   "1.12"
+#property description "Quant VPS bridge for MT5 account status, rates and controlled demo order commands"
 
 #include <Trade/Trade.mqh>
 
@@ -10,6 +10,9 @@ input string BridgeLastResultFile = "quant_bridge_last_result.json";
 input int PollSeconds = 5;
 input bool AllowBridgeCommands = true;
 input bool AllowDemoOrderSend = true;
+input string BridgeRatesSymbols = "XAUUSD,EURUSD,GBPUSD,USDJPY,AUDCAD,USDCAD,AUDUSD,NZDUSD,USDCHF,BTCUSD,ETHUSD";
+input string BridgeRatesTimeframes = "M1,M5,M15,H1,H4,D1";
+input int BridgeRatesBars = 120;
 
 CTrade Trade;
 string LastCommandId = "";
@@ -24,6 +27,112 @@ string Esc(string value)
 }
 
 string BoolJson(bool value) { return value ? "true" : "false"; }
+
+string TrimCopy(string value)
+{
+   StringTrimLeft(value);
+   StringTrimRight(value);
+   return value;
+}
+
+ENUM_TIMEFRAMES TfFromName(string name)
+{
+   string tf = TrimCopy(name);
+   StringToUpper(tf);
+   if(tf == "M1") return PERIOD_M1;
+   if(tf == "M5") return PERIOD_M5;
+   if(tf == "M15") return PERIOD_M15;
+   if(tf == "M30") return PERIOD_M30;
+   if(tf == "H1") return PERIOD_H1;
+   if(tf == "H4") return PERIOD_H4;
+   if(tf == "D1") return PERIOD_D1;
+   if(tf == "W1") return PERIOD_W1;
+   if(tf == "MN1" || tf == "MONTH1") return PERIOD_MN1;
+   return PERIOD_M1;
+}
+
+int TfPeriodMinutes(string name)
+{
+   string tf = TrimCopy(name);
+   StringToUpper(tf);
+   if(tf == "M1") return 1;
+   if(tf == "M5") return 5;
+   if(tf == "M15") return 15;
+   if(tf == "M30") return 30;
+   if(tf == "H1") return 60;
+   if(tf == "H4") return 240;
+   if(tf == "D1") return 1440;
+   if(tf == "W1") return 10080;
+   if(tf == "MN1" || tf == "MONTH1") return 43200;
+   return 1;
+}
+
+string RatesPacketJson(string symbol, string tfName)
+{
+   string sym = TrimCopy(symbol);
+   string tf = TrimCopy(tfName);
+   StringToUpper(tf);
+   int period = TfPeriodMinutes(tf);
+   if(StringLen(sym) <= 0)
+      return StringFormat("{\"timeframe\":\"%s\",\"period\":%d,\"error\":\"empty_symbol\",\"candles\":[]}", Esc(tf), period);
+
+   if(!SymbolSelect(sym, true))
+      return StringFormat("{\"timeframe\":\"%s\",\"period\":%d,\"error\":\"symbol_select_failed_%d\",\"candles\":[]}", Esc(tf), period, GetLastError());
+
+   int bars = MathMax(1, MathMin(BridgeRatesBars, 300));
+   MqlRates rates[];
+   ArraySetAsSeries(rates, true);
+   int copied = CopyRates(sym, TfFromName(tf), 0, bars, rates);
+   if(copied <= 0)
+      return StringFormat("{\"timeframe\":\"%s\",\"period\":%d,\"error\":\"copy_rates_failed_%d\",\"candles\":[]}", Esc(tf), period, GetLastError());
+
+   string candles = "[";
+   bool first = true;
+   for(int i = copied - 1; i >= 0; i--)
+   {
+      if(!first) candles += ",";
+      first = false;
+      candles += StringFormat("{\"t\":%I64d,\"o\":%.8f,\"h\":%.8f,\"l\":%.8f,\"c\":%.8f,\"v\":%I64d}",
+         rates[i].time, rates[i].open, rates[i].high, rates[i].low, rates[i].close, rates[i].tick_volume);
+   }
+   candles += "]";
+   return StringFormat("{\"timeframe\":\"%s\",\"period\":%d,\"candles\":%s}", Esc(tf), period, candles);
+}
+
+string RatesBookJson()
+{
+   string symbols[];
+   string timeframes[];
+   int symbolCount = StringSplit(BridgeRatesSymbols, ',', symbols);
+   int tfCount = StringSplit(BridgeRatesTimeframes, ',', timeframes);
+   if(symbolCount <= 0 || tfCount <= 0) return "{}";
+
+   string book = "{";
+   bool firstSymbol = true;
+   int maxSymbols = MathMin(symbolCount, 40);
+   int maxTfs = MathMin(tfCount, 9);
+   for(int i = 0; i < maxSymbols; i++)
+   {
+      string sym = TrimCopy(symbols[i]);
+      if(StringLen(sym) <= 0) continue;
+      if(!firstSymbol) book += ",";
+      firstSymbol = false;
+      book += StringFormat("\"%s\":{", Esc(sym));
+      bool firstTf = true;
+      for(int j = 0; j < maxTfs; j++)
+      {
+         string tf = TrimCopy(timeframes[j]);
+         StringToUpper(tf);
+         if(StringLen(tf) <= 0) continue;
+         if(!firstTf) book += ",";
+         firstTf = false;
+         book += StringFormat("\"%s\":%s", Esc(tf), RatesPacketJson(sym, tf));
+      }
+      book += "}";
+   }
+   book += "}";
+   return book;
+}
 
 void WriteTextFile(string name, string text)
 {
@@ -130,8 +239,9 @@ void WriteStatus()
       positions += PositionJson(i);
    }
    positions += "]";
-   string json = StringFormat("{\"ok\":true,\"source\":\"QuantBridge.mq5\",\"ts\":%I64d,\"symbol\":\"%s\",\"period\":%d,\"connected\":%s,\"tradeAllowed\":%s,\"mqlTradeAllowed\":%s,\"login\":%I64d,\"server\":\"%s\",\"currency\":\"%s\",\"tradeMode\":%I64d,\"balance\":%.8f,\"equity\":%.8f,\"margin\":%.8f,\"marginFree\":%.8f,\"profit\":%.8f,\"bid\":%.8f,\"ask\":%.8f,\"positionsTotal\":%d,\"positions\":%s}",
-      TimeCurrent(), Esc(_Symbol), Period(), BoolJson(connected), BoolJson(tradeAllowed), BoolJson(mqlTradeAllowed), login, Esc(server), Esc(currency), tradeMode, balance, equity, margin, marginFree, profit, bid, ask, total, positions);
+   string rates = RatesBookJson();
+   string json = StringFormat("{\"ok\":true,\"source\":\"QuantBridge.mq5\",\"ts\":%I64d,\"symbol\":\"%s\",\"period\":%d,\"connected\":%s,\"tradeAllowed\":%s,\"mqlTradeAllowed\":%s,\"login\":%I64d,\"server\":\"%s\",\"currency\":\"%s\",\"tradeMode\":%I64d,\"balance\":%.8f,\"equity\":%.8f,\"margin\":%.8f,\"marginFree\":%.8f,\"profit\":%.8f,\"bid\":%.8f,\"ask\":%.8f,\"positionsTotal\":%d,\"positions\":%s,\"rates\":%s}",
+      TimeCurrent(), Esc(_Symbol), Period(), BoolJson(connected), BoolJson(tradeAllowed), BoolJson(mqlTradeAllowed), login, Esc(server), Esc(currency), tradeMode, balance, equity, margin, marginFree, profit, bid, ask, total, positions, rates);
    WriteTextFile(BridgeStatusFile, json);
 }
 

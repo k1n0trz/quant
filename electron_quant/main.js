@@ -43,7 +43,12 @@ const { getTrainingDemoLiveSnapshot } = require('./backend/training/training-mon
 const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
 const { getTrainingDemoLoopSchedulerStatus } = require('./backend/training/training-loop-scheduler');
 const { placeMt5DemoOrder, closeMt5DemoPosition } = require('./backend/adapters/mt5/mt5-demo-order-service');
-const { bridgeSymbolsFromStatus, bridgeTickerFromStatus } = require('./backend/adapters/mt5/mt5-bridge-fallback');
+const {
+  bridgeSymbolsFromStatus,
+  bridgeTickerFromStatus,
+  bridgeRatesFromStatus,
+  bridgeTickCandlesFromStatus
+} = require('./backend/adapters/mt5/mt5-bridge-fallback');
 const { getMt5MarketSession } = require('./backend/market/mt5-market-hours');
 const { createSystemSelfAuditSchedulerController } = require('./backend/system/system-self-audit-scheduler');
 const {
@@ -1996,6 +2001,11 @@ except Exception as e:
 }
 
 function mt5Rates(symbol, timeframe = 'M1', count = 180, env = ENV) {
+  const bridgeStatuses = [readMt5BridgeStatus(env), readMt5RealBridgeStatus(env)].filter(Boolean);
+  for (const bridge of bridgeStatuses) {
+    const bridgeRates = bridgeRatesFromStatus(symbol, timeframe, bridge);
+    if (bridgeRates.ok) return bridgeRates;
+  }
   const tfMap = { M1: 'TIMEFRAME_M1', M5: 'TIMEFRAME_M5', M15: 'TIMEFRAME_M15', H1: 'TIMEFRAME_H1', H4: 'TIMEFRAME_H4', D1: 'TIMEFRAME_D1', W1: 'TIMEFRAME_W1' };
   const tf = tfMap[timeframe] || 'TIMEFRAME_M1';
   const code = `
@@ -2022,7 +2032,19 @@ try:
 except Exception as e:
     print(json.dumps({"ok": False, "error": str(e), "candles": []}))
 `;
-  return runPythonJson(code, { ok: false, candles: [] }, env);
+  return runPythonJson(code, { ok: false, candles: [] }, env).then((result) => {
+    if (result?.ok !== false && Array.isArray(result?.candles) && result.candles.length) return result;
+    for (const bridge of bridgeStatuses) {
+      const tickFallback = bridgeTickCandlesFromStatus(symbol, timeframe, bridge, Math.min(Number(count) || 60, 120));
+      if (tickFallback.ok) {
+        return {
+          ...tickFallback,
+          pythonError: result?.error || null
+        };
+      }
+    }
+    return result;
+  });
 }
 
 async function chat(messages, context = '', env = ENV) {

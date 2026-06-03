@@ -15,6 +15,8 @@ assert.ok(main.includes('function mt5BridgeAccount'), 'debe existir normalizador
 assert.ok(main.includes('function mt5BridgeAccounts'), 'debe existir agregador de bridge MT5 demo + real.');
 assert.ok(main.includes('readMt5RealBridgeStatus(env)'), 'mt5BridgeAccounts debe leer bridge real separado.');
 assert.ok(main.includes("source: 'mt5_bridge'"), 'mt5MultiAccounts debe identificar fuente mt5_bridge.');
+assert.ok(main.includes('bridgeRatesFromStatus'), 'mt5Rates debe poder leer velas OHLC desde el bridge antes de Python.');
+assert.ok(main.includes('bridgeTickCandlesFromStatus'), 'mt5Rates debe tener fallback visible por tick si OHLC no esta disponible.');
 
 const mt5MultiIdx = main.indexOf('async function mt5MultiAccounts');
 const bridgeMultiIdx = main.indexOf('mt5BridgeAccounts(env, usdCop)', mt5MultiIdx);
@@ -31,6 +33,13 @@ const bridgePositionsIdx = main.indexOf('mt5BridgeAccount(readMt5BridgeStatus(en
 const pythonPositionsIdx = main.indexOf('runPythonJson(code', mt5PositionsIdx);
 assert.ok(bridgePositionsIdx > mt5PositionsIdx && bridgePositionsIdx < pythonPositionsIdx, 'mt5Positions debe leer bridge antes del fallback Python.');
 
+const mt5RatesIdx = main.indexOf('function mt5Rates');
+const bridgeRatesIdx = main.indexOf('bridgeRatesFromStatus(symbol, timeframe', mt5RatesIdx);
+const pythonRatesIdx = main.indexOf('runPythonJson(code', mt5RatesIdx);
+const tickFallbackIdx = main.indexOf('bridgeTickCandlesFromStatus(symbol, timeframe', mt5RatesIdx);
+assert.ok(bridgeRatesIdx > mt5RatesIdx && bridgeRatesIdx < pythonRatesIdx, 'mt5Rates debe priorizar rates del bridge antes del fallback Python lento.');
+assert.ok(tickFallbackIdx > pythonRatesIdx, 'mt5Rates debe intentar tick fallback si Python no entrega velas.');
+
 assert.ok(envExample.includes('MT5_BRIDGE_STATUS_FILE='), 'ENV_EXAMPLE debe documentar MT5_BRIDGE_STATUS_FILE.');
 assert.ok(envExample.includes('MT5_PYTHON_COMMAND='), 'ENV_EXAMPLE debe documentar MT5_PYTHON_COMMAND.');
 assert.ok(/return env\.MT5_PYTHON_COMMAND \|\| env\.PYTHON_BIN/.test(demoOrderService), 'mt5-demo-order-service debe respetar MT5_PYTHON_COMMAND.');
@@ -38,5 +47,9 @@ assert.ok(quantBridge.includes('input bool AllowBridgeCommands = true;'), 'Quant
 assert.ok(quantBridge.includes('bool BridgeCommandsEnabled()'), 'QuantBridge debe calcular permisos de comandos en una funcion dedicada.');
 assert.ok(quantBridge.includes('return AllowBridgeCommands && DemoAccount();'), 'QuantBridge solo debe permitir comandos en cuentas demo.');
 assert.ok(quantBridge.includes('if(BridgeCommandsEnabled()) ProcessCommand();'), 'QuantBridge solo debe procesar comandos cuando BridgeCommandsEnabled este activo.');
+assert.ok(quantBridge.includes('input string BridgeRatesSymbols'), 'QuantBridge debe permitir configurar simbolos para exportar velas.');
+assert.ok(quantBridge.includes('input string BridgeRatesTimeframes'), 'QuantBridge debe permitir configurar timeframes para exportar velas.');
+assert.ok(quantBridge.includes('CopyRates(sym, TfFromName(tf)'), 'QuantBridge debe exportar velas OHLC desde CopyRates.');
+assert.ok(quantBridge.includes('\\\"rates\\\":%s'), 'QuantBridge debe persistir un objeto rates dentro del status JSON.');
 
 console.log('mt5_bridge_status_static.test.js OK');

@@ -19,6 +19,11 @@ assert.equal(/id="killSwitchConfirm"/.test(html), false, 'El modal de kill switc
 assert.ok(html.includes('id="chartRefreshBtn"'), 'El dashboard debe tener boton de refresco de grafica sin recargar pagina.');
 assert.ok(renderer.includes("$('chartRefreshBtn').addEventListener('click', () => refreshMarket(true))"), 'El refresco de chart debe llamar refreshMarket(true).');
 assert.ok(renderer.includes('chartRequestId'), 'El renderer debe aislar respuestas tardias de velas por request id.');
+assert.ok(renderer.includes('candleRefreshInFlight'), 'El renderer debe impedir requests simultaneos para una misma grafica.');
+assert.ok(renderer.includes('lastCandleRefreshAt'), 'El renderer debe aplicar throttle de velas para MT5/Binance.');
+assert.ok(renderer.includes('MT5 tick fallback'), 'La grafica debe indicar claramente cuando usa fallback de tick MT5.');
+assert.ok(renderer.includes('refreshCandles({ force: forceCandles })'), 'refreshMarket debe llamar refreshCandles con opciones de force.');
+assert.ok(renderer.includes("Date.now() - state.lastCandleRefreshAt > 30000"), 'MT5 no debe relanzar carga de velas cada 2.2s.');
 assert.ok(renderer.includes('state.candles = []') && renderer.includes('state.chartStatus'), 'Cambiar simbolo/timeframe debe limpiar velas viejas antes de cargar nuevas.');
 
 assert.ok(html.includes('id="cryptoNewsBtn"') && html.includes('id="newsCryptoPage"'), 'Noticias debe exponer seccion crypto.');

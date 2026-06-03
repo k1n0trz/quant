@@ -83,6 +83,10 @@ const state = {
   ticker: null,
   chartStatus: 'Esperando velas reales...',
   chartRequestId: 0,
+  candleRefreshInFlight: null,
+  lastCandleRefreshAt: 0,
+  chartSource: '',
+  chartDegraded: false,
   wallet: null,
   messages: [],
   pipeline: [],
@@ -359,9 +363,13 @@ function setTf(tf) {
   $('chartTitle').textContent = `GRÁFICO EN TIEMPO REAL · ${state.symbol} · ${tf}`;
   setText('chartTitle', `GRAFICO EN TIEMPO REAL - ${state.symbol} - ${tf}`);
   state.candles = [];
+  state.candleRefreshInFlight = null;
+  state.lastCandleRefreshAt = 0;
+  state.chartSource = '';
+  state.chartDegraded = false;
   state.chartStatus = `Cargando velas de ${state.symbol} ${tf}...`;
   drawChart();
-  refreshCandles();
+  refreshCandles({ force: true });
 }
 
 async function boot() {
@@ -749,7 +757,11 @@ function setSymbol(symbol) {
   setText('chartTitle', `GRAFICO EN TIEMPO REAL - ${symbol} - ${state.tf}`);
   state.chartRequestId += 1;
   state.candles = [];
+  state.candleRefreshInFlight = null;
+  state.lastCandleRefreshAt = 0;
   state.ticker = null;
+  state.chartSource = '';
+  state.chartDegraded = false;
   state.chartOffset = 0;
   state.chartStatus = `Cargando velas de ${symbol} en ${state.platform}...`;
   renderTicker();
@@ -798,7 +810,7 @@ async function refreshAll() {
   pushCloudData(false);      // push training + memoria + conversaciones al cloud
 }
 
-async function refreshCandles() {
+async function refreshCandlesLegacy() {
   const requestId = ++state.chartRequestId;
   const symbol = state.symbol;
   const platform = state.platform;
@@ -835,19 +847,86 @@ async function refreshCandles() {
   }
 }
 
+async function refreshCandles(options = {}) {
+  const force = Boolean(options.force);
+  const symbol = state.symbol;
+  const platform = state.platform;
+  const tf = state.tf;
+  const interval = state.interval;
+  const key = `${platform}:${symbol}:${tf}`;
+  const now = Date.now();
+  const minGapMs = platform === 'MT5' ? 30000 : 10000;
+
+  if (!force && state.candles.length && state.lastCandleRefreshAt && now - state.lastCandleRefreshAt < minGapMs) return;
+  if (state.candleRefreshInFlight?.key === key) return state.candleRefreshInFlight.promise;
+
+  const requestId = ++state.chartRequestId;
+  state.chartStatus = `Cargando velas de ${symbol} ${tf}...`;
+  drawChart();
+
+  const promise = (async () => {
+    try {
+      if (platform === 'MT5') {
+        const data = await window.quant.mt5Rates(symbol, tf, 180);
+        if (requestId !== state.chartRequestId || symbol !== state.symbol || platform !== state.platform || tf !== state.tf) return;
+        if (!data.ok) throw new Error(data.error || data.reason || 'MT5 no devolvio velas');
+        state.candles = data.candles || [];
+        state.ticker = data.ticker || state.ticker;
+        state.chartSource = data.source || 'mt5_rates';
+        state.chartDegraded = Boolean(data.degraded);
+        renderTicker();
+      } else {
+        const candles = await window.quant.klines(symbol, interval, 180);
+        if (requestId !== state.chartRequestId || symbol !== state.symbol || platform !== state.platform || tf !== state.tf) return;
+        state.candles = candles || [];
+        state.chartSource = 'binance_klines';
+        state.chartDegraded = false;
+      }
+      state.lastCandleRefreshAt = Date.now();
+      state.chartStatus = state.candles.length
+        ? (state.chartDegraded ? 'MT5 tick fallback: OHLC no disponible; bridge mantiene grafica visible.' : '')
+        : `Sin velas para ${symbol}`;
+      drawChart();
+      updateSignal();
+      logEvent(state.chartDegraded ? 'WARN' : 'OK', `${symbol} ${tf}: ${state.candles.length} velas actualizadas${state.chartDegraded ? ' (fallback tick MT5)' : ''}`);
+      await window.quant.memoryWrite('observation', { type: 'candles_refreshed', symbol, timeframe: tf, bars: state.candles.length, source: state.chartSource, degraded: state.chartDegraded, lastClose: state.candles.at(-1)?.close });
+      await loadMemoryStats();
+    } catch (err) {
+      if (requestId === state.chartRequestId && symbol === state.symbol && platform === state.platform && tf === state.tf) {
+        state.candles = [];
+        state.chartSource = '';
+        state.chartDegraded = false;
+        state.chartStatus = `Sin velas para ${symbol}: ${compactLogMessage(err.message)}`;
+        drawChart();
+      }
+      logEvent('WARN', `Velas: ${err.message}`);
+    } finally {
+      if (state.candleRefreshInFlight?.key === key) state.candleRefreshInFlight = null;
+    }
+  })();
+
+  state.candleRefreshInFlight = { key, promise };
+  return promise;
+}
+
 async function refreshMarket(forceCandles) {
   const symbol = state.symbol;
   const platform = state.platform;
   try {
     if (platform === 'MT5') {
-      await refreshCandles();
+      if (forceCandles || !state.candles.length || Date.now() - state.lastCandleRefreshAt > 30000) {
+        await refreshCandles({ force: forceCandles });
+      } else {
+        drawChart();
+        updateSignal();
+      }
       return;
     }
     const ticker = await window.quant.ticker(symbol);
     if (symbol !== state.symbol || platform !== state.platform) return;
     state.ticker = ticker;
     renderTicker();
-    if (forceCandles || !state.candles.length) await refreshCandles();
+    if (forceCandles || !state.candles.length) await refreshCandles({ force: forceCandles });
     else {
       const last = state.candles[state.candles.length - 1];
       if (last && state.ticker.price) {
@@ -991,7 +1070,8 @@ function drawChart() {
   }
   ctx.fillStyle = '#607d9e'; ctx.textAlign = 'right'; ctx.font = '10px Consolas';
   ctx.fillText(`zoom ${visibleCount} velas`, w - 10, h - 10);
-  $('ohlcLine').textContent = `O ${fmtPrice(last.open)}   H ${fmtPrice(last.high)}   L ${fmtPrice(last.low)}   C ${fmtPrice(last.close)}   Vol. ${last.volume.toFixed(3)}`;
+  const sourceLabel = state.chartDegraded ? ' · MT5 tick fallback' : (state.chartSource ? ` · ${state.chartSource}` : '');
+  $('ohlcLine').textContent = `O ${fmtPrice(last.open)}   H ${fmtPrice(last.high)}   L ${fmtPrice(last.low)}   C ${fmtPrice(last.close)}   Vol. ${last.volume.toFixed(3)}${sourceLabel}`;
 }
 
 function smaAt(values, idx, period) {

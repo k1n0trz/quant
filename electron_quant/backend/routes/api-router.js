@@ -29,6 +29,7 @@ const { placeMt5DemoOrder, closeMt5DemoPosition } = require('../adapters/mt5/mt5
 const {
   executeBinanceRealOrder,
   preflightBinanceRealOrder,
+  discoverBinanceRealSpotUniverse,
   summarizeBinanceRealOrderAudit,
   appendBinanceRealOrderAudit,
   readBinanceRealOrderAudit
@@ -282,6 +283,22 @@ function createApiRouter(context) {
           deps
         });
         return response(result.ok === true ? 200 : 409, result);
+      }
+
+      if (method === 'GET' && pathname === '/api/binance-real-universe') {
+        const symbols = typeof deps.getBinanceSymbols === 'function'
+          ? await deps.getBinanceSymbols()
+          : [];
+        const result = await discoverBinanceRealSpotUniverse({
+          symbols,
+          env,
+          botState: context.getBotState(),
+          riskConfig: context.getRiskConfig(),
+          deps,
+          limit: body.limit,
+          maxChecks: body.maxChecks
+        });
+        return response(200, result);
       }
 
       if (method === 'GET' && pathname === '/api/binance-real-order-audit') {

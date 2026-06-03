@@ -11,10 +11,13 @@ const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 
 assert.match(renderer, /binanceRealOrderPreflight:\s*\([^)]*\)\s*=>\s*apiPost\('binance-real-order-preflight'/, 'renderer debe exponer binanceRealOrderPreflight.');
 assert.match(renderer, /binanceRealOrderAudit:\s*\([^)]*\)\s*=>\s*apiGet\(`binance-real-order-audit\?limit=\$\{/, 'renderer debe exponer binanceRealOrderAudit.');
+assert.match(renderer, /binanceRealUniverse:\s*\([^)]*\)\s*=>\s*apiGet\(`binance-real-universe\?limit=\$\{/, 'renderer web debe exponer binanceRealUniverse.');
 assert.ok(preload.includes("binanceRealOrderPreflight: (payload) => ipcRenderer.invoke('binance-real-order-preflight', payload)"), 'preload debe exponer preflight Binance real.');
 assert.ok(preload.includes("binanceRealOrderAudit: (limit) => ipcRenderer.invoke('binance-real-order-audit', limit)"), 'preload debe exponer audit Binance real.');
+assert.ok(preload.includes("binanceRealUniverse: (options) => ipcRenderer.invoke('binance-real-universe', options || undefined)"), 'preload debe exponer universo real Binance.');
 assert.ok(main.includes("ipcMain.handle('binance-real-order-preflight'"), 'main debe registrar IPC de preflight.');
 assert.ok(main.includes("ipcMain.handle('binance-real-order-audit'"), 'main debe registrar IPC de audit.');
+assert.ok(main.includes("ipcMain.handle('binance-real-universe'"), 'main debe registrar IPC de universo real Binance.');
 
 const submitBody = renderer.match(/async function submitOrder\(side\) \{([\s\S]*?)\r?\n\}\r?\n\r?\nfunction updateClock/)?.[1] || '';
 assert.ok(submitBody.includes('window.quant.binanceRealOrderPreflight'), 'submitOrder debe ejecutar preflight real Binance.');

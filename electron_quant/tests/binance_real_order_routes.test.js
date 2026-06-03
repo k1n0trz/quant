@@ -220,3 +220,42 @@ test('POST /api/place-order uses preflight to block insufficient balance before 
   assert.equal(audit.body.entries[0].status, 'blocked');
   assert.equal(audit.body.entries[0].realTradingTouched, false);
 });
+
+test('GET /api/binance-real-universe discovers executable Spot pairs across all configured quotes', async () => {
+  const router = createApiRouter(armedContext({
+    deps: {
+      getBinanceSymbols: async () => ['BTCUSDC', 'ALLOUSDC', 'ACXUSDC', 'ETHUSDT'],
+      getSymbolFilters: async (symbol) => ({
+        BTCUSDC: { minQty: 0.00001, stepSize: 0.00001, minNotional: 5, status: 'TRADING', quoteAsset: 'USDC' },
+        ALLOUSDC: { minQty: 1, stepSize: 1, minNotional: 5, status: 'TRADING', quoteAsset: 'USDC' },
+        ACXUSDC: { minQty: 1, stepSize: 1, minNotional: 5, status: 'TRADING', quoteAsset: 'USDC' },
+        ETHUSDT: { minQty: 0.0001, stepSize: 0.0001, minNotional: 5, status: 'TRADING', quoteAsset: 'USDT' }
+      }[symbol]),
+      getTicker: async (symbol) => ({
+        BTCUSDC: { price: 68000 },
+        ALLOUSDC: { price: 0.17 },
+        ACXUSDC: { price: 0.041 },
+        ETHUSDT: { price: 3000 }
+      }[symbol]),
+      getBinanceSpotBalance: async (asset) => ({ asset, free: asset === 'USDC' ? 30 : 0, locked: 0 }),
+      testOrderBinance: async (_side, symbol) => (
+        symbol === 'ALLOUSDC'
+          ? { ok: false, error: 'Symbol not whitelisted for API key.' }
+          : { ok: true }
+      )
+    }
+  }));
+
+  const res = await router.dispatch({
+    method: 'GET',
+    pathname: '/api/binance-real-universe',
+    body: { limit: 10 }
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+  assert.deepEqual(res.body.ready.map((item) => item.symbol), ['BTCUSDC', 'ACXUSDC']);
+  assert.equal(res.body.ready.every((item) => item.quoteAsset === 'USDC'), true);
+  assert.equal(res.body.blocked.some((item) => item.symbol === 'ALLOUSDC' && /whitelisted/i.test(item.reason)), true);
+  assert.equal(res.body.safety.realTradingTouched, false);
+});

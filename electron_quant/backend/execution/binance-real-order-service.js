@@ -55,6 +55,11 @@ function normalizeType(type) {
   return upper === 'MARKET' || upper === 'LIMIT' ? upper : null;
 }
 
+function quoteAssetFromSymbol(symbol) {
+  const normalized = String(symbol || '').trim().toUpperCase();
+  return SUPPORTED_SPOT_QUOTES.find((quote) => normalized.endsWith(quote)) || null;
+}
+
 function buildBlockedResult(error, request = null, details = []) {
   return {
     ok: false,
@@ -297,6 +302,132 @@ async function executeBinanceRealOrder({ input = {}, env = {}, botState = {}, ri
   }
 }
 
+function clampDiscoveryLimit(limit) {
+  const n = Number(limit);
+  if (!Number.isFinite(n)) return 80;
+  return Math.max(1, Math.min(500, Math.floor(n)));
+}
+
+async function discoverBinanceRealSpotUniverse(input = {}) {
+  const symbols = Array.isArray(input.symbols) ? input.symbols : [];
+  const env = input.env || {};
+  const botState = input.botState || {};
+  const riskConfig = input.riskConfig || {};
+  const deps = input.deps || {};
+  const limit = clampDiscoveryLimit(input.limit);
+  const maxChecks = clampDiscoveryLimit(input.maxChecks || limit);
+  const quoteAssets = Array.isArray(input.quoteAssets) && input.quoteAssets.length
+    ? input.quoteAssets.map((quote) => String(quote).trim().toUpperCase()).filter((quote) => SUPPORTED_SPOT_QUOTES.includes(quote))
+    : SUPPORTED_SPOT_QUOTES;
+
+  const balances = {};
+  for (const asset of quoteAssets) {
+    let spot = { asset, free: 0, locked: 0 };
+    let earn = { asset, total: 0, redeemable: 0, positions: [], error: '' };
+    try {
+      if (typeof deps.getBinanceSpotBalance === 'function') spot = await deps.getBinanceSpotBalance(asset);
+    } catch (error) {
+      spot = { asset, free: 0, locked: 0, error: sanitizeText(error?.message || error) };
+    }
+    try {
+      if (typeof deps.getBinanceEarnBalance === 'function') earn = summarizeEarnBalance(await deps.getBinanceEarnBalance(asset), asset);
+    } catch (error) {
+      earn = { asset, total: 0, redeemable: 0, positions: [], error: sanitizeText(error?.message || error) };
+    }
+    balances[asset] = {
+      asset,
+      free: roundedNumber(finiteNumber(spot?.free ?? spot?.available ?? spot) || 0, 8),
+      locked: roundedNumber(finiteNumber(spot?.locked) || 0, 8),
+      earn
+    };
+  }
+
+  const unique = [];
+  const seen = new Set();
+  for (const raw of symbols) {
+    const symbol = normalizeSymbol(raw);
+    if (!symbol || seen.has(symbol)) continue;
+    seen.add(symbol);
+    const quoteAsset = quoteAssetFromSymbol(symbol);
+    if (!quoteAsset || !quoteAssets.includes(quoteAsset)) continue;
+    const quoteFree = balances[quoteAsset]?.free || 0;
+    if (quoteFree <= 0) continue;
+    unique.push(symbol);
+  }
+
+  const ready = [];
+  const blocked = [];
+  let checked = 0;
+  for (const symbol of unique) {
+    if (checked >= maxChecks || ready.length >= limit) break;
+    checked += 1;
+    let filters = null;
+    let market = null;
+    try {
+      filters = typeof deps.getSymbolFilters === 'function' ? await deps.getSymbolFilters(symbol) : null;
+      market = typeof deps.getTicker === 'function' ? await deps.getTicker(symbol) : null;
+      const quoteAsset = String(filters?.quoteAsset || quoteAssetFromSymbol(symbol) || 'USDT').toUpperCase();
+      const price = finiteNumber(market?.price ?? market?.lastPrice ?? market);
+      const quoteFree = balances[quoteAsset]?.free || 0;
+      const minNotional = finiteNumber(filters?.minNotional) || 5;
+      const stepSize = finiteNumber(filters?.stepSize) || 0;
+      const minQty = finiteNumber(filters?.minQty) || 0;
+      if (!price || price <= 0 || quoteFree < minNotional) {
+        blocked.push({ symbol, quoteAsset, reason: quoteFree < minNotional ? 'quote_balance_below_min_notional' : 'price_unavailable' });
+        continue;
+      }
+      const requestedNotional = Math.min(quoteFree, Math.max(minNotional, Math.min(quoteFree, Number(input.targetNotional || minNotional * 2))));
+      const qty = floorToStep(requestedNotional / price, stepSize);
+      if (!qty || qty < minQty) {
+        blocked.push({ symbol, quoteAsset, reason: 'qty_below_min_after_sizing' });
+        continue;
+      }
+      const preflight = await preflightBinanceRealOrder({
+        input: { venue: 'BINANCE', side: 'BUY', symbol, qty, type: 'MARKET' },
+        env,
+        botState,
+        riskConfig,
+        deps
+      });
+      const row = {
+        symbol,
+        venue: 'BINANCE',
+        side: 'BUY',
+        type: 'MARKET',
+        quoteAsset: preflight.quoteAsset || quoteAsset,
+        qty: roundedNumber(qty, 8),
+        price: preflight.effectivePrice || roundedNumber(price, 8),
+        requestedNotional: preflight.requestedNotional,
+        quoteFree: preflight.quoteFree,
+        minNotional: preflight.minNotional,
+        orderTestOk: preflight.checks?.orderTestOk === true,
+        status: preflight.status,
+        reasons: preflight.reasons || []
+      };
+      if (preflight.ok) ready.push(row);
+      else blocked.push({ ...row, reason: row.reasons[0] || preflight.error || 'preflight_blocked' });
+    } catch (error) {
+      blocked.push({ symbol, reason: sanitizeText(error?.message || error) });
+    }
+  }
+
+  return {
+    ok: true,
+    checked,
+    totalSymbols: unique.length,
+    readyCount: ready.length,
+    blockedCount: blocked.length,
+    balances,
+    ready,
+    blocked: blocked.slice(0, Math.max(limit, 20)),
+    safety: {
+      readOnly: true,
+      realTradingTouched: false,
+      orderTestOnly: true
+    }
+  };
+}
+
 function summarizeBinanceRealOrderAudit({ request = {}, result = {}, now = () => new Date() } = {}) {
   const req = result.request || request || {};
   const order = result.order || {};
@@ -360,6 +491,7 @@ function readBinanceRealOrderAudit(filePath, limit = DEFAULT_LIMIT) {
 module.exports = {
   executeBinanceRealOrder,
   preflightBinanceRealOrder,
+  discoverBinanceRealSpotUniverse,
   summarizeBinanceRealOrderAudit,
   appendBinanceRealOrderAudit,
   readBinanceRealOrderAudit

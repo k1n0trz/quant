@@ -23,6 +23,10 @@ assert(renderer.includes('ICT/CRT no es requisito global para operar real'), 'El
 assert(renderer.includes('Panorama global de oportunidades'), 'Quant debe recibir un panorama global y no limitarse al simbolo seleccionado.');
 assert(renderer.includes('binance_watchlist') && renderer.includes('mt5_watchlist'), 'El contexto debe incluir candidatos Binance y MT5 para sugerencias alternativas.');
 assert(renderer.includes('No limites el analisis al activo seleccionado'), 'El prompt operativo debe pedir explicitamente comparar alternativas.');
+assert(renderer.includes('realExecutionUniverseContext'), 'El chat debe consultar el universo real ejecutable antes del LLM.');
+assert(renderer.includes('binance_real_ready_pairs'), 'El contexto debe incluir pares Binance Spot que pasan saldo/minNotional/order-test.');
+assert(renderer.includes('NO asumir BTC como unico activo'), 'El prompt debe impedir sesgo operativo hacia BTC.');
+assert(renderer.includes('binance_api_whitelist_blocked_sample'), 'El contexto debe exponer muestras bloqueadas por whitelist API.');
 assert(!renderer.includes('No lo voy a activar a ciegas'), 'El UI no debe presentar trading real como negativa absoluta cuando el backend ya esta armado.');
 
 console.log('chat_operational_context_static.test.js OK');

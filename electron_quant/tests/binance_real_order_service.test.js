@@ -221,3 +221,49 @@ test('binance real order audit is compact append-only and sanitized', () => {
   assert.equal(/Bearer abc|sk-test|token=abc/.test(raw), false);
   assert.equal(JSON.stringify(entry).includes('fills'), false);
 });
+
+test('discovers executable Binance Spot universe from balances filters and order-test instead of preferring BTC only', async () => {
+  const {
+    discoverBinanceRealSpotUniverse
+  } = require('../backend/execution/binance-real-order-service');
+  const tested = [];
+  const result = await discoverBinanceRealSpotUniverse({
+    symbols: ['BTCUSDC', 'ALLOUSDC', 'ACXUSDC', 'ETHUSDT', 'BADBTC'],
+    env: { REAL_TRADING: 'true', BINANCE_API_KEY: 'k', BINANCE_SECRET: 's' },
+    botState: { tradingRealEnabled: true, killSwitch: false },
+    riskConfig: createDefaultRiskConfig(),
+    deps: {
+      getSymbolFilters: async (symbol) => {
+        const filters = {
+          BTCUSDC: { minQty: 0.00001, stepSize: 0.00001, minNotional: 5, status: 'TRADING', quoteAsset: 'USDC' },
+          ALLOUSDC: { minQty: 1, stepSize: 1, minNotional: 5, status: 'TRADING', quoteAsset: 'USDC' },
+          ACXUSDC: { minQty: 1, stepSize: 1, minNotional: 5, status: 'TRADING', quoteAsset: 'USDC' },
+          ETHUSDT: { minQty: 0.0001, stepSize: 0.0001, minNotional: 5, status: 'TRADING', quoteAsset: 'USDT' }
+        };
+        return filters[symbol] || { minQty: 1, stepSize: 1, minNotional: 5, status: 'BREAK', quoteAsset: 'BTC' };
+      },
+      getTicker: async (symbol) => ({
+        BTCUSDC: { price: 68000 },
+        ALLOUSDC: { price: 0.17 },
+        ACXUSDC: { price: 0.041 },
+        ETHUSDT: { price: 3000 }
+      }[symbol] || { price: 0 }),
+      getBinanceSpotBalance: async (asset) => ({ asset, free: asset === 'USDC' ? 30 : 0, locked: 0 }),
+      testOrderBinance: async (side, symbol, qty) => {
+        tested.push({ side, symbol, qty });
+        return symbol === 'ALLOUSDC'
+          ? { ok: false, error: 'Symbol not whitelisted for API key.' }
+          : { ok: true };
+      }
+    },
+    limit: 10
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.readyCount, 2);
+  assert.deepEqual(result.ready.map((item) => item.symbol), ['BTCUSDC', 'ACXUSDC']);
+  assert.equal(result.ready.every((item) => item.quoteAsset === 'USDC'), true);
+  assert.equal(result.blocked.some((item) => item.symbol === 'ALLOUSDC' && /whitelisted/i.test(item.reason)), true);
+  assert.equal(tested.some((item) => item.symbol === 'ETHUSDT'), false);
+  assert.equal(result.balances.USDC.free, 30);
+});

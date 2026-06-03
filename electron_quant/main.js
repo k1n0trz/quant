@@ -33,6 +33,7 @@ const { createApiRouter } = require('./backend/routes/api-router');
 const {
   executeBinanceRealOrder,
   preflightBinanceRealOrder,
+  discoverBinanceRealSpotUniverse,
   summarizeBinanceRealOrderAudit,
   appendBinanceRealOrderAudit,
   readBinanceRealOrderAudit
@@ -3134,6 +3135,25 @@ ipcMain.handle('binance-real-order-preflight', (_e, payload) =>
 );
 ipcMain.handle('binance-real-order-audit', (_e, limit) =>
   readBinanceRealOrderAudit(binanceRealOrderAuditFile, limit)
+);
+ipcMain.handle('binance-real-universe', (_e, options = {}) =>
+  binanceSymbols()
+    .then((symbols) => discoverBinanceRealSpotUniverse({
+      symbols,
+      env: ENV,
+      botState: readBotState(),
+      riskConfig: readRiskConfig(),
+      deps: {
+        getTicker: (symbol) => ticker(symbol),
+        getSymbolFilters: (symbol) => getSymbolFilters(symbol),
+        getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, ENV),
+        getBinanceEarnBalance: (asset) => getBinanceEarnBalance(asset, ENV),
+        testOrderBinance: (side, symbol, qty, type, price) => testOrderBinance(side, symbol, qty, type, price, ENV)
+      },
+      limit: options?.limit,
+      maxChecks: options?.maxChecks
+    }))
+    .catch((err) => ({ ok: false, error: err.message, ready: [], blocked: [] }))
 );
 ipcMain.handle('place-order', (_e, side, symbol, qty, type, price) =>
   executeAndAuditBinanceRealOrder({ venue: 'BINANCE', side, symbol, qty, type, price }, ENV)

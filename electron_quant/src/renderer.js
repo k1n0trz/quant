@@ -51,6 +51,7 @@ if (!window.quant) {
     calcPositionSize:      (sym, riskPct, entry, stop) => apiPost('calc-position-size', { symbol: sym, riskPct, entryPrice: entry, stopPrice: stop }),
     binanceRealOrderPreflight: (payload)                => apiPost('binance-real-order-preflight', payload),
     binanceRealOrderAudit: (limit = 50)                 => apiGet(`binance-real-order-audit?limit=${limit || 50}`),
+    binanceRealUniverse:   (options = {})               => apiGet(`binance-real-universe?limit=${options.limit || 80}&maxChecks=${options.maxChecks || 80}`),
     placeOrder:            (side, sym, qty, type, price) => apiPost('place-order', { side, symbol: sym, qty, type, price }),
     cancelOrder:           (sym, orderId)              => apiPost('cancel-order', { symbol: sym, orderId }),
     mt5DemoOrder:          (payload)                   => apiPost('mt5-demo/order', payload),
@@ -1689,6 +1690,38 @@ function globalOpportunityContext() {
     `open_exposure: ${Object.entries(exposure).map(([k, v]) => `${k}=${v}`).join(', ') || 'sin posiciones abiertas'}`,
     `live_insights_10m: ${advice || 'sin insights vivos'}`,
     `selected_pair_context: ${state.symbol}; usalo como foco si el usuario lo pide, no como unica opcion.`
+  ].join('\n');
+}
+
+async function realExecutionUniverseContext() {
+  let universe = null;
+  try {
+    if (window.quant.binanceRealUniverse) {
+      universe = await window.quant.binanceRealUniverse({ limit: 40, maxChecks: 120 });
+    }
+  } catch (error) {
+    universe = { ok: false, error: error?.message || String(error), ready: [], blocked: [] };
+  }
+  const ready = Array.isArray(universe?.ready) ? universe.ready : [];
+  const blocked = Array.isArray(universe?.blocked) ? universe.blocked : [];
+  const readyLines = ready.slice(0, 20).map((item) => (
+    `${item.symbol} ${item.side || 'BUY'} qty=${item.qty} notional=${item.requestedNotional}${item.quoteAsset || ''} orderTest=${item.orderTestOk ? 'ok' : 'n/a'}`
+  )).join(' | ');
+  const whitelistBlocked = blocked
+    .filter((item) => /whitelist|whitelisted/i.test(String(item.reason || item.reasons?.[0] || '')))
+    .slice(0, 12)
+    .map((item) => item.symbol)
+    .join(', ');
+  const balances = universe?.balances
+    ? Object.values(universe.balances).map((b) => `${b.asset}:spot=${b.free || 0},earn=${b.earn?.redeemable || 0}`).join(' | ')
+    : 'sin lectura';
+  const mt5Symbols = (state.mt5Symbols || []).slice(0, 40).join(', ') || 'sin simbolos MT5 visibles';
+  return [
+    'Universo real ejecutable: NO asumir BTC como unico activo. Para Binance Spot prioriza pares que pasen saldo, minNotional y order/test; para MT5 compara todos los simbolos visibles y respeta horario de mercado.',
+    `binance_real_ready_count=${universe?.readyCount ?? 0}; checked=${universe?.checked ?? 0}; balances=${balances}`,
+    `binance_real_ready_pairs: ${readyLines || 'sin pares Spot ejecutables ahora'}`,
+    `binance_api_whitelist_blocked_sample: ${whitelistBlocked || 'sin bloqueos whitelist detectados en muestra'}`,
+    `mt5_visible_symbols: ${mt5Symbols}`
   ].join('\n');
 }
 
@@ -3379,9 +3412,11 @@ async function askQuant(text, writeToAi) {
     const context = `Símbolo: ${state.symbol}\nTicker: ${JSON.stringify(state.ticker)}\nVelas: ${state.candles.length}\nSeñal: ${$('signalMessage').textContent}\nTrading real: ${state.env.realTrading ? 'activo' : 'bloqueado'}`;
     const fullContext = context + '\n\nWallet actual:\n' + walletContext() + '\n\nMacro/news actual:\n' + macroContext() + '\n\nTraining actual:\n' + trainingContext();
     const recentWarnings = state.pipeline.filter((e) => e.status === 'WARN' || e.status === 'ERR').slice(0, 8).map((e) => `${e.time} ${e.status}: ${e.message}`).join('\n') || 'sin warnings recientes';
+    const realUniverseContext = await realExecutionUniverseContext();
     const operationalContext = [
       fullContext,
       globalOpportunityContext(),
+      realUniverseContext,
       'Trading real runtime: usar estado real actual; blockRealExecution solo protege el training paper y no bloquea el canal real autorizado.',
       mt5MarketScheduleContext(),
       `Rendimiento/warnings recientes:\n${recentWarnings}`

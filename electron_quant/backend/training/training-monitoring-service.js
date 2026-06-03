@@ -197,13 +197,75 @@ function compactActivePair(pair = {}) {
   };
 }
 
+function compactOpenPosition(position = {}) {
+  return {
+    id: position.id,
+    signal_id: position.signal_id,
+    strategy_id: position.strategy_id,
+    strategy_name: position.strategy_name,
+    symbol: position.symbol,
+    venue: position.venue,
+    direction: position.direction,
+    bias: position.bias,
+    horizon: position.horizon,
+    entry_price: position.entry_price,
+    mark_price: position.mark_price,
+    size_demo: position.size_demo,
+    confidence: position.confidence,
+    strategy_score: position.strategy_score,
+    opened_tick: position.opened_tick,
+    opened_at: position.opened_at,
+    timestamp: position.timestamp,
+    fees_simuladas: position.fees_simuladas,
+    spread_estimado: position.spread_estimado,
+    slippage_estimado: position.slippage_estimado
+  };
+}
+
+function compactClosedTrade(trade = {}) {
+  return {
+    id: trade.id,
+    signal_id: trade.signal_id,
+    strategy_id: trade.strategy_id,
+    strategy_name: trade.strategy_name,
+    symbol: trade.symbol,
+    venue: trade.venue,
+    direction: trade.direction,
+    horizon: trade.horizon,
+    entry_price: trade.entry_price,
+    exit_price: trade.exit_price,
+    size_demo: trade.size_demo,
+    pnl_demo: trade.pnl_demo,
+    confidence: trade.confidence,
+    closed_timestamp: trade.closed_timestamp,
+    closedAt: trade.closedAt,
+    timestamp: trade.timestamp,
+    lesson_learned: trade.lesson_learned
+  };
+}
+
+function compactLesson(lesson = {}) {
+  return {
+    symbol: lesson.symbol,
+    venue: lesson.venue,
+    outcome: lesson.outcome,
+    lesson: lesson.lesson,
+    summary: lesson.summary,
+    created_at: lesson.created_at,
+    recorded_at: lesson.recorded_at,
+    timestamp: lesson.timestamp
+  };
+}
+
 function getTrainingDemoLiveSnapshot(deps = {}, options = {}, schedulerStatus = null) {
   const snapshot = readMonitoringState(deps);
   const state = snapshot.state;
   const tradeLimit = clampLimit(options.tradeLimit || options.limit, 80, 120);
   const lessonLimit = clampLimit(options.lessonLimit || options.limit, 80, 120);
   const pairLimit = clampLimit(options.pairLimit, Number(state.targets?.total || 40), 80);
-  const positions = (Array.isArray(state.positions) ? state.positions : []).filter((position) => !position.exit_price);
+  const positions = (Array.isArray(state.positions) ? state.positions : [])
+    .filter((position) => !position.exit_price)
+    .map(compactOpenPosition);
   const allTrades = Array.isArray(state.closedTrades) ? state.closedTrades : [];
   const allLessons = Array.isArray(state.lessons) ? state.lessons : [];
   const activePairs = (Array.isArray(state.activePairs) ? state.activePairs : [])
@@ -212,11 +274,11 @@ function getTrainingDemoLiveSnapshot(deps = {}, options = {}, schedulerStatus = 
   const closedTrades = sortRecent(
     allTrades,
     (trade) => parseTimeMs(trade?.closed_timestamp, trade?.closedAt, trade?.timestamp)
-  ).slice(0, tradeLimit);
+  ).slice(0, tradeLimit).map(compactClosedTrade);
   const lessons = sortRecent(
     allLessons,
     (lesson) => parseTimeMs(lesson?.recorded_at, lesson?.created_at, lesson?.timestamp)
-  ).slice(0, lessonLimit);
+  ).slice(0, lessonLimit).map(compactLesson);
   const metrics = computeTrainingMetrics({
     balanceStart: state.balanceStart,
     closedTrades: allTrades

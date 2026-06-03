@@ -27,6 +27,9 @@ assert.ok(renderer.includes('trainingLiveSnapshot'), 'Training live debe usar sn
 assert.ok(preload.includes('trainingLiveSnapshot'), 'Preload debe exponer trainingLiveSnapshot para Electron.');
 assert.ok(apiRouter.includes('/api/training/demo/live-snapshot'), 'Backend debe exponer snapshot compacto de training.');
 assert.ok(monitoring.includes('function getTrainingDemoLiveSnapshot'), 'Monitoring debe construir snapshot compacto.');
+assert.ok(monitoring.includes('function compactOpenPosition'), 'Snapshot compacto debe reducir posiciones abiertas a campos UI.');
+assert.ok(monitoring.includes('function compactClosedTrade'), 'Snapshot compacto debe reducir trades cerrados recientes.');
+assert.ok(monitoring.includes('function compactLesson'), 'Snapshot compacto debe reducir lecciones recientes.');
 assert.ok(monitoring.includes('closedTrades: allTrades.length'), 'Snapshot compacto debe preservar total de trades cerrados.');
 assert.ok(monitoring.includes('lessons: allLessons.length'), 'Snapshot compacto debe preservar total de lecciones.');
 assert.ok(renderer.includes('applyBackendTrainingStateRefresh(saved)'), 'loadTrainingState debe hidratar activePairs/targets desde disco backend.');

@@ -6,6 +6,10 @@ const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 200;
 const TAIL_READ_BYTES = 64 * 1024;
 const SUPPORTED_SPOT_QUOTES = ['USDT', 'USDC', 'FDUSD'];
+const REAL_UNIVERSE_BASE_PRIORITY = [
+  'BTC', 'ETH', 'SOL', 'BNB', 'XRP', 'ADA', 'DOGE', 'LINK', 'LTC', 'AVAX',
+  'TRX', 'DOT', 'ATOM', 'NEAR', 'ARB', 'OP', 'APT', 'SUI', 'AAVE', 'UNI'
+];
 
 function boolFlag(value) {
   return String(value || 'false').trim().toLowerCase() === 'true';
@@ -354,6 +358,24 @@ async function discoverBinanceRealSpotUniverse(input = {}) {
     if (quoteFree <= 0) continue;
     unique.push(symbol);
   }
+  const priorityRank = (symbol) => {
+    const quote = quoteAssetFromSymbol(symbol) || '';
+    const base = quote ? symbol.slice(0, -quote.length) : symbol;
+    const baseRank = REAL_UNIVERSE_BASE_PRIORITY.indexOf(base);
+    const quoteRank = quoteAssets.indexOf(quote);
+    return [
+      baseRank === -1 ? REAL_UNIVERSE_BASE_PRIORITY.length + 1 : baseRank,
+      quoteRank === -1 ? quoteAssets.length + 1 : quoteRank,
+      symbol
+    ];
+  };
+  unique.sort((left, right) => {
+    const a = priorityRank(left);
+    const b = priorityRank(right);
+    if (a[0] !== b[0]) return a[0] - b[0];
+    if (a[1] !== b[1]) return a[1] - b[1];
+    return a[2].localeCompare(b[2]);
+  });
 
   const perCandidateTimeoutMs = Math.max(25, Math.min(15000, Number(input.perCandidateTimeoutMs || 4500)));
   const concurrency = Math.max(1, Math.min(10, Math.floor(Number(input.concurrency || 5))));

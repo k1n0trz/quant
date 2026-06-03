@@ -297,3 +297,30 @@ test('real Spot universe discovery times out slow symbols instead of blocking th
   assert.equal(result.blocked.some((item) => item.symbol === 'SLOWUSDC' && /timeout/i.test(item.reason)), true);
   assert.equal(Date.now() - startedAt < 75, true);
 });
+
+test('real Spot universe discovery prioritizes liquid quote pairs before alphabetical altcoins', async () => {
+  const {
+    discoverBinanceRealSpotUniverse
+  } = require('../backend/execution/binance-real-order-service');
+  const tested = [];
+  const result = await discoverBinanceRealSpotUniverse({
+    symbols: ['0GUSDC', '1000SATSUSDC', 'BTCUSDC'],
+    env: { REAL_TRADING: 'true', BINANCE_API_KEY: 'k', BINANCE_SECRET: 's' },
+    botState: { tradingRealEnabled: true, killSwitch: false },
+    riskConfig: createDefaultRiskConfig(),
+    deps: {
+      getSymbolFilters: async (symbol) => ({ minQty: 0.00001, stepSize: 0.00001, minNotional: 5, status: 'TRADING', quoteAsset: symbol.endsWith('USDC') ? 'USDC' : 'USDT' }),
+      getTicker: async (symbol) => ({ price: symbol === 'BTCUSDC' ? 68000 : 1 }),
+      getBinanceSpotBalance: async (asset) => ({ asset, free: asset === 'USDC' ? 30 : 0, locked: 0 }),
+      testOrderBinance: async (_side, symbol) => {
+        tested.push(symbol);
+        return { ok: true };
+      }
+    },
+    limit: 1,
+    maxChecks: 1
+  });
+
+  assert.deepEqual(tested, ['BTCUSDC']);
+  assert.deepEqual(result.ready.map((item) => item.symbol), ['BTCUSDC']);
+});

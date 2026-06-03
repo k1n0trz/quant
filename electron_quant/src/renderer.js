@@ -51,7 +51,7 @@ if (!window.quant) {
     calcPositionSize:      (sym, riskPct, entry, stop) => apiPost('calc-position-size', { symbol: sym, riskPct, entryPrice: entry, stopPrice: stop }),
     binanceRealOrderPreflight: (payload)                => apiPost('binance-real-order-preflight', payload),
     binanceRealOrderAudit: (limit = 50)                 => apiGet(`binance-real-order-audit?limit=${limit || 50}`),
-    binanceRealUniverse:   (options = {})               => apiGet(`binance-real-universe?limit=${options.limit || 80}&maxChecks=${options.maxChecks || 80}`),
+    binanceRealUniverse:   (options = {})               => apiGet(`binance-real-universe?limit=${options.limit || 40}&maxChecks=${options.maxChecks || 40}`),
     placeOrder:            (side, sym, qty, type, price) => apiPost('place-order', { side, symbol: sym, qty, type, price }),
     cancelOrder:           (sym, orderId)              => apiPost('cancel-order', { symbol: sym, orderId }),
     mt5DemoOrder:          (payload)                   => apiPost('mt5-demo/order', payload),
@@ -1697,7 +1697,7 @@ async function realExecutionUniverseContext() {
   let universe = null;
   try {
     if (window.quant.binanceRealUniverse) {
-      universe = await window.quant.binanceRealUniverse({ limit: 40, maxChecks: 120 });
+      universe = await window.quant.binanceRealUniverse({ limit: 20, maxChecks: 40 });
     }
   } catch (error) {
     universe = { ok: false, error: error?.message || String(error), ready: [], blocked: [] };

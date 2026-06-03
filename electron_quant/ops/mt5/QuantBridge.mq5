@@ -1,6 +1,6 @@
 #property strict
 #property version   "1.12"
-#property description "Quant VPS bridge for MT5 account status, rates and controlled demo order commands"
+#property description "Quant VPS bridge for MT5 account status, rates and controlled order commands"
 
 #include <Trade/Trade.mqh>
 
@@ -10,6 +10,8 @@ input string BridgeLastResultFile = "quant_bridge_last_result.json";
 input int PollSeconds = 5;
 input bool AllowBridgeCommands = true;
 input bool AllowDemoOrderSend = true;
+input bool AllowRealOrderSend = false;
+input bool AllowRealOrderCheck = true;
 input string BridgeRatesSymbols = "XAUUSD,EURUSD,GBPUSD,USDJPY,AUDCAD,USDCAD,AUDUSD,NZDUSD,USDCHF,BTCUSD,ETHUSD";
 input string BridgeRatesTimeframes = "M1,M5,M15,H1,H4,D1";
 input int BridgeRatesBars = 120;
@@ -193,7 +195,16 @@ bool DemoAccount()
 
 bool BridgeCommandsEnabled()
 {
-   return AllowBridgeCommands && DemoAccount();
+   return AllowBridgeCommands && (DemoAccount() || AllowRealOrderSend || AllowRealOrderCheck);
+}
+
+bool CommandAllowed(string action)
+{
+   if(DemoAccount())
+      return AllowDemoOrderSend;
+   if(action == "CHECK")
+      return AllowRealOrderCheck || AllowRealOrderSend;
+   return AllowRealOrderSend;
 }
 
 string PositionJson(int index)
@@ -240,8 +251,8 @@ void WriteStatus()
    }
    positions += "]";
    string rates = RatesBookJson();
-   string json = StringFormat("{\"ok\":true,\"source\":\"QuantBridge.mq5\",\"ts\":%I64d,\"symbol\":\"%s\",\"period\":%d,\"connected\":%s,\"tradeAllowed\":%s,\"mqlTradeAllowed\":%s,\"login\":%I64d,\"server\":\"%s\",\"currency\":\"%s\",\"tradeMode\":%I64d,\"balance\":%.8f,\"equity\":%.8f,\"margin\":%.8f,\"marginFree\":%.8f,\"profit\":%.8f,\"bid\":%.8f,\"ask\":%.8f,\"positionsTotal\":%d,\"positions\":%s,\"rates\":%s}",
-      TimeCurrent(), Esc(_Symbol), Period(), BoolJson(connected), BoolJson(tradeAllowed), BoolJson(mqlTradeAllowed), login, Esc(server), Esc(currency), tradeMode, balance, equity, margin, marginFree, profit, bid, ask, total, positions, rates);
+   string json = StringFormat("{\"ok\":true,\"source\":\"QuantBridge.mq5\",\"ts\":%I64d,\"symbol\":\"%s\",\"period\":%d,\"connected\":%s,\"tradeAllowed\":%s,\"mqlTradeAllowed\":%s,\"allowDemoOrderSend\":%s,\"allowRealOrderSend\":%s,\"allowRealOrderCheck\":%s,\"login\":%I64d,\"server\":\"%s\",\"currency\":\"%s\",\"tradeMode\":%I64d,\"balance\":%.8f,\"equity\":%.8f,\"margin\":%.8f,\"marginFree\":%.8f,\"profit\":%.8f,\"bid\":%.8f,\"ask\":%.8f,\"positionsTotal\":%d,\"positions\":%s,\"rates\":%s}",
+      TimeCurrent(), Esc(_Symbol), Period(), BoolJson(connected), BoolJson(tradeAllowed), BoolJson(mqlTradeAllowed), BoolJson(AllowDemoOrderSend), BoolJson(AllowRealOrderSend), BoolJson(AllowRealOrderCheck), login, Esc(server), Esc(currency), tradeMode, balance, equity, margin, marginFree, profit, bid, ask, total, positions, rates);
    WriteTextFile(BridgeStatusFile, json);
 }
 
@@ -267,7 +278,7 @@ void ProcessCommand()
    FileDelete(BridgeCommandFile);
 
    string action = Kv(text, "action");
-   if(action != "ORDER" && action != "CLOSE")
+   if(action != "ORDER" && action != "CLOSE" && action != "CHECK")
    {
       WriteResult(id, StringFormat("{\"ok\":false,\"reason\":\"unsupported_action\",\"commandId\":\"%s\"}", Esc(id)));
       return;
@@ -282,9 +293,10 @@ void ProcessCommand()
    long magic = IntNum(Kv(text, "magic"), 260530);
    string comment = Kv(text, "comment");
 
-   if(!AllowDemoOrderSend || !DemoAccount())
+   if(!CommandAllowed(action))
    {
-      WriteResult(id, StringFormat("{\"ok\":false,\"reason\":\"demo_order_not_allowed\",\"commandId\":\"%s\",\"demo\":%s}", Esc(id), BoolJson(DemoAccount())));
+      string reason = DemoAccount() ? "demo_order_not_allowed" : "real_order_not_allowed";
+      WriteResult(id, StringFormat("{\"ok\":false,\"reason\":\"%s\",\"commandId\":\"%s\",\"demo\":%s,\"allowRealOrderSend\":%s}", reason, Esc(id), BoolJson(DemoAccount()), BoolJson(AllowRealOrderSend)));
       return;
    }
    if(!TerminalInfoInteger(TERMINAL_CONNECTED) || !TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !MQLInfoInteger(MQL_TRADE_ALLOWED))
@@ -328,6 +340,34 @@ void ProcessCommand()
    }
 
    SymbolSelect(symbol, true);
+   double ask = SymbolInfoDouble(symbol, SYMBOL_ASK);
+   double bid = SymbolInfoDouble(symbol, SYMBOL_BID);
+   double marketPrice = side == "BUY" ? ask : bid;
+   if(action == "CHECK")
+   {
+      MqlTradeRequest request;
+      MqlTradeCheckResult check;
+      ZeroMemory(request);
+      ZeroMemory(check);
+      request.action = type == "LIMIT" ? TRADE_ACTION_PENDING : TRADE_ACTION_DEAL;
+      request.symbol = symbol;
+      request.volume = volume;
+      request.type = side == "BUY" ? ORDER_TYPE_BUY : ORDER_TYPE_SELL;
+      request.deviation = deviation;
+      request.magic = magic;
+      request.comment = comment;
+      request.type_time = ORDER_TIME_GTC;
+      request.type_filling = ORDER_FILLING_IOC;
+      request.price = type == "LIMIT" ? price : marketPrice;
+      if(type == "LIMIT")
+         request.type = side == "BUY" ? ORDER_TYPE_BUY_LIMIT : ORDER_TYPE_SELL_LIMIT;
+      bool checkOk = OrderCheck(request, check);
+      string checkResult = StringFormat("{\"ok\":%s,\"commandId\":\"%s\",\"action\":\"CHECK\",\"retcode\":%I64d,\"comment\":\"%s\",\"symbol\":\"%s\",\"side\":\"%s\",\"volume\":%.8f,\"type\":\"%s\",\"balance\":%.8f,\"equity\":%.8f,\"margin\":%.8f,\"marginFree\":%.8f,\"account\":{\"login\":%I64d,\"server\":\"%s\",\"tradeMode\":%I64d}}",
+         BoolJson(checkOk), Esc(id), check.retcode, Esc(check.comment), Esc(symbol), side, volume, type, check.balance, check.equity, check.margin, check.margin_free, AccountInfoInteger(ACCOUNT_LOGIN), Esc(AccountInfoString(ACCOUNT_SERVER)), AccountInfoInteger(ACCOUNT_TRADE_MODE));
+      WriteResult(id, checkResult);
+      return;
+   }
+
    Trade.SetExpertMagicNumber(magic);
    Trade.SetDeviationInPoints(deviation);
    bool ok = false;

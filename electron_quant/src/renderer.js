@@ -55,6 +55,8 @@ if (!window.quant) {
     placeOrder:            (side, sym, qty, type, price) => apiPost('place-order', { side, symbol: sym, qty, type, price }),
     cancelOrder:           (sym, orderId)              => apiPost('cancel-order', { symbol: sym, orderId }),
     mt5DemoOrder:          (payload)                   => apiPost('mt5-demo/order', payload),
+    mt5RealOrderPreflight: (payload)                   => apiPost('mt5-real/preflight', payload),
+    mt5RealOrder:          (payload)                   => apiPost('mt5-real/order', payload),
     syncMt5:               (manual = false)            => apiPost('sync-mt5', { manual }),
     mt5Snapshot:           ()                          => apiGet('mt5-snapshot'),
     pushCloudData:         ()                          => apiPost('push-cloud-data', {}),
@@ -4347,7 +4349,7 @@ async function calcSizeFromRisk() {
 }
 
 // ── Envío de orden (real o bloqueada) ────────────────────────────────────────
-async function submitOrder(side) {
+async function submitOrderLegacyUnused(side) {
   const symbol      = state.symbol;
   const venue       = state.platform;
   const qty         = parseFloat($('qtyInput').value);
@@ -4367,8 +4369,8 @@ async function submitOrder(side) {
   }
 
   // ── Candado 2: venue distinto de BINANCE ───────────────────────────────
-  if (venue !== 'BINANCE') {
-    if (rb) { rb.style.display = 'block'; rb.style.color = '#e09a3a'; rb.textContent = `⚠ Ejecución real actualmente solo disponible en BINANCE. Cambia el venue.`; }
+  if (venue !== 'BINANCE' && venue !== 'MT5') {
+    if (rb) { rb.style.display = 'block'; rb.style.color = '#e09a3a'; rb.textContent = `Venue no soportado para ejecucion real: ${venue}.`; }
     return;
   }
 
@@ -4399,11 +4401,21 @@ async function submitOrder(side) {
     if (rb) {
       rb.style.display = 'block';
       rb.style.color = '#8fa3c0';
-      rb.textContent = 'Preflight Binance: validando saldo, minimo y filtros del exchange...';
+      rb.textContent = venue === 'MT5'
+        ? 'Preflight MT5 Real: validando bridge, permisos del terminal y order_check...'
+        : 'Preflight Binance: validando saldo, minimo y filtros del exchange...';
     }
-    preflight = await window.quant.binanceRealOrderPreflight({ venue, side, symbol, qty, type: orderType, price: limitPrice });
+    preflight = venue === 'MT5'
+      ? await window.quant.mt5RealOrderPreflight({ symbol, side, volume: qty, type: orderType, price: limitPrice, reason: 'manual-real-order' })
+      : await window.quant.binanceRealOrderPreflight({ venue, side, symbol, qty, type: orderType, price: limitPrice });
     if (!preflight.ok) {
-      const detail = [
+      const detail = venue === 'MT5' ? [
+        `Preflight MT5 Real bloqueado: ${preflight.reason || preflight.error || preflight.comment || 'orden no viable'}`,
+        preflight.terminal?.server ? `Servidor: ${preflight.terminal.server}` : '',
+        preflight.terminal?.tradeAllowed === false ? 'Terminal trading desactivado' : '',
+        preflight.terminal?.mqlTradeAllowed === false ? 'EA sin permiso de trading algoritmico' : '',
+        preflight.order?.symbol ? `Orden: ${preflight.order.side} ${preflight.order.symbol} ${preflight.order.volume} lots` : ''
+      ].filter(Boolean).join(' · ') : [
         `Preflight Binance bloqueado: ${preflight.error || 'orden no viable'}`,
         preflight.quoteAsset ? `Saldo libre: ${Number(preflight.quoteFree || 0).toFixed(8)} ${preflight.quoteAsset}` : '',
         preflight.requestedNotional ? `Requerido: ${Number(preflight.requestedNotional).toFixed(4)} ${preflight.quoteAsset || 'USDT'}` : '',
@@ -4481,6 +4493,137 @@ async function submitOrder(side) {
     }
   } catch (err) {
     if (rb) { rb.style.display='block'; rb.style.color='#e05a5a'; rb.textContent=`❌ ${err.message}`; }
+    logEvent('ERR', `Orden fallida: ${err.message}`);
+    await window.quant.memoryWrite('trade', { status: 'error', reason: err.message, side, symbol, qty, venue, ts: new Date().toISOString() });
+    loadMemoryStats();
+    loadOrders();
+  }
+}
+
+async function submitOrder(side) {
+  const symbol = state.symbol;
+  const venue = state.platform;
+  const qty = parseFloat($('qtyInput').value);
+  const orderType = $('orderType').value || 'MARKET';
+  const limitPrice = parseFloat($('limitPriceInput').value) || null;
+  const stopPrice = parseFloat($('stopLossInput').value) || null;
+  const confirmation = $('confirmInput').value.trim().toUpperCase();
+  const expected = `CONFIRMO ${side} ${symbol}`.toUpperCase();
+  const rb = $('orderResultBox');
+
+  if (!state.env.realTrading) {
+    logEvent('WARN', `Orden ${side} ${symbol} bloqueada: REAL_TRADING=false`);
+    window.quant.memoryWrite('trade', { status: 'blocked', reason: 'REAL_TRADING=false', side, symbol, qty, venue, stopPrice, macro_context: currentNewsContext(symbol) }).then(loadMemoryStats);
+    if (rb) { rb.style.display = 'block'; rb.style.color = '#e05a5a'; rb.textContent = 'Bloqueada: REAL_TRADING=false en .env.'; }
+    return;
+  }
+  if (venue !== 'BINANCE' && venue !== 'MT5') {
+    if (rb) { rb.style.display = 'block'; rb.style.color = '#e09a3a'; rb.textContent = `Venue no soportado para ejecucion real: ${venue}.`; }
+    return;
+  }
+  if (!qty || qty <= 0) { if (rb) { rb.style.display = 'block'; rb.style.color = '#e05a5a'; rb.textContent = 'Cantidad invalida.'; } return; }
+  if (orderType === 'LIMIT' && (!limitPrice || limitPrice <= 0)) {
+    if (rb) { rb.style.display = 'block'; rb.style.color = '#e05a5a'; rb.textContent = 'Ingresa un precio limite.'; }
+    return;
+  }
+  if (confirmation !== expected) {
+    logEvent('WARN', `Orden ${side} ${symbol} bloqueada: confirmacion incorrecta`);
+    if (rb) { rb.style.display = 'block'; rb.style.color = '#e09a3a'; rb.textContent = `Escribe exactamente: ${expected}`; }
+    return;
+  }
+
+  const macro = macroRiskLevel(symbol);
+  if (macro.risk === 'high') {
+    const ok = confirm(`Riesgo macro ALTO: ${macro.reasons.join(', ')}.\nConfirmas igualmente la orden ${side} ${qty} ${symbol}?`);
+    if (!ok) { if (rb) { rb.style.display = 'block'; rb.style.color = '#e09a3a'; rb.textContent = 'Orden cancelada por riesgo macro.'; } return; }
+  }
+
+  if (rb) { rb.style.display = 'block'; rb.style.color = '#8fa3c0'; rb.textContent = `Preflight ${venue}: validando orden...`; }
+  let preflight = null;
+  try {
+    preflight = venue === 'MT5'
+      ? await window.quant.mt5RealOrderPreflight({ symbol, side, volume: qty, type: orderType, price: limitPrice, reason: 'manual-real-order' })
+      : await window.quant.binanceRealOrderPreflight({ venue, side, symbol, qty, type: orderType, price: limitPrice });
+    if (!preflight.ok) {
+      const detail = venue === 'MT5'
+        ? [
+          `Preflight MT5 Real bloqueado: ${preflight.reason || preflight.error || preflight.comment || 'orden no viable'}`,
+          preflight.terminal?.server ? `Servidor: ${preflight.terminal.server}` : '',
+          preflight.terminal?.tradeAllowed === false ? 'Terminal trading desactivado' : '',
+          preflight.terminal?.mqlTradeAllowed === false ? 'EA sin permiso de trading algoritmico' : '',
+          preflight.order?.symbol ? `Orden: ${preflight.order.side} ${preflight.order.symbol} ${preflight.order.volume} lots` : ''
+        ].filter(Boolean).join(' - ')
+        : [
+          `Preflight Binance bloqueado: ${preflight.error || 'orden no viable'}`,
+          preflight.quoteAsset ? `Saldo libre: ${Number(preflight.quoteFree || 0).toFixed(8)} ${preflight.quoteAsset}` : '',
+          preflight.requestedNotional ? `Requerido: ${Number(preflight.requestedNotional).toFixed(4)} ${preflight.quoteAsset || 'USDT'}` : '',
+          preflight.spotShortfall ? `Faltante Spot: ${Number(preflight.spotShortfall).toFixed(4)} ${preflight.quoteAsset || 'USDT'}` : '',
+          preflight.earn?.redeemable ? `Earn Flexible detectado: ${Number(preflight.earn.redeemable).toFixed(4)} ${preflight.quoteAsset || 'USDT'} (requiere redimir a Spot)` : '',
+          preflight.canCoverWithEarn ? 'Earn cubre el faltante, pero no es usable directo para Spot' : '',
+          preflight.minNotional ? `Minimo exchange: ${Number(preflight.minNotional).toFixed(4)} ${preflight.quoteAsset || 'USDT'}` : '',
+          preflight.suggestedQty ? `Qty maxima sugerida: ${preflight.suggestedQty}` : ''
+        ].filter(Boolean).join(' - ');
+      if (rb) { rb.style.display = 'block'; rb.style.color = '#e09a3a'; rb.textContent = detail; }
+      logEvent('WARN', detail);
+      await window.quant.memoryWrite('trade', { status: 'blocked', reason: preflight.reason || preflight.error || `${venue}_preflight_blocked`, side, symbol, qty, venue, type: orderType, preflight, ts: new Date().toISOString() });
+      loadMemoryStats();
+      loadOrders();
+      return;
+    }
+    if (rb) {
+      rb.style.color = '#4caf7d';
+      rb.textContent = venue === 'MT5'
+        ? `Preflight MT5 Real OK - ${side} ${symbol} ${qty} lots - retcode ${preflight.retcode || '--'}`
+        : `Preflight Binance OK - ${Number(preflight.requestedNotional || 0).toFixed(4)} ${preflight.quoteAsset || 'USDT'} - saldo libre ${Number(preflight.quoteFree || 0).toFixed(4)}`;
+    }
+  } catch (err) {
+    if (rb) { rb.style.display = 'block'; rb.style.color = '#e05a5a'; rb.textContent = `Preflight ${venue} fallido: ${err.message}`; }
+    logEvent('ERR', `Preflight ${venue} fallido: ${err.message}`);
+    return;
+  }
+
+  logEvent('OK', `Enviando orden real ${venue}: ${orderType} ${side} ${qty} ${symbol}`);
+  try {
+    const res = venue === 'MT5'
+      ? await window.quant.mt5RealOrder({ symbol, side, volume: qty, type: orderType, price: limitPrice, reason: 'manual-real-order' })
+      : await window.quant.placeOrder(side, symbol, qty, orderType, limitPrice);
+    if (!res.ok) throw new Error(res.error || res.reason || 'Error desconocido');
+
+    const msg = venue === 'MT5'
+      ? `MT5 Real ${res.action || 'ORDER'} - ticket ${res.ticket || 'sin ticket'} - ${side} ${symbol} ${qty} lots - retcode ${res.retcode || '--'}`
+      : `${res.status} - ID ${res.orderId} - ${res.qty} ${symbol.replace(/USDT$/, '')} @ ${fmtPrice(res.price)} - ${fmtPrice(res.notional)} USDT`;
+    if (rb) { rb.style.display = 'block'; rb.style.color = '#4caf7d'; rb.textContent = msg; }
+    logEvent('OK', `Orden ejecutada: ${msg}`);
+
+    await window.quant.memoryWrite('trade', {
+      status: 'executed',
+      orderId: res.orderId || null,
+      ticket: res.ticket || null,
+      retcode: res.retcode || null,
+      side,
+      symbol,
+      qty: venue === 'MT5' ? qty : res.qty,
+      price: res.price || null,
+      notional: res.notional || null,
+      type: orderType,
+      venue,
+      stopPrice: stopPrice || null,
+      macro_risk: macro.risk,
+      fills: res.fills || null,
+      ts: new Date().toISOString()
+    });
+    loadMemoryStats();
+    loadOrders();
+    $('confirmInput').value = '';
+
+    if (_alertConfig?.enabled) {
+      window.quant.sendAlert(
+        `Orden ejecutada: ${side} ${symbol}`,
+        `${venue} ${orderType} ${side} ${qty} ${symbol} ejecutada.\n${msg}\nStop configurado: ${stopPrice ? fmtPrice(stopPrice) : 'no especificado'}`
+      ).catch(() => {});
+    }
+  } catch (err) {
+    if (rb) { rb.style.display = 'block'; rb.style.color = '#e05a5a'; rb.textContent = err.message; }
     logEvent('ERR', `Orden fallida: ${err.message}`);
     await window.quant.memoryWrite('trade', { status: 'error', reason: err.message, side, symbol, qty, venue, ts: new Date().toISOString() });
     loadMemoryStats();

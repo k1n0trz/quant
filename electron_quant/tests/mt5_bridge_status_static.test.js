@@ -45,7 +45,9 @@ assert.ok(envExample.includes('MT5_PYTHON_COMMAND='), 'ENV_EXAMPLE debe document
 assert.ok(/return env\.MT5_PYTHON_COMMAND \|\| env\.PYTHON_BIN/.test(demoOrderService), 'mt5-demo-order-service debe respetar MT5_PYTHON_COMMAND.');
 assert.ok(quantBridge.includes('input bool AllowBridgeCommands = true;'), 'QuantBridge debe tener switch explicito para comandos.');
 assert.ok(quantBridge.includes('bool BridgeCommandsEnabled()'), 'QuantBridge debe calcular permisos de comandos en una funcion dedicada.');
-assert.ok(quantBridge.includes('return AllowBridgeCommands && DemoAccount();'), 'QuantBridge solo debe permitir comandos en cuentas demo.');
+assert.ok(quantBridge.includes('input bool AllowRealOrderSend = false;'), 'QuantBridge debe bloquear trading real por defecto.');
+assert.ok(quantBridge.includes('real_order_not_allowed'), 'QuantBridge debe rechazar orden real si AllowRealOrderSend=false.');
+assert.ok(quantBridge.includes('return AllowBridgeCommands && (DemoAccount() || AllowRealOrderSend || AllowRealOrderCheck);'), 'QuantBridge debe permitir comandos reales solo con flags explicitos.');
 assert.ok(quantBridge.includes('if(BridgeCommandsEnabled()) ProcessCommand();'), 'QuantBridge solo debe procesar comandos cuando BridgeCommandsEnabled este activo.');
 assert.ok(quantBridge.includes('input string BridgeRatesSymbols'), 'QuantBridge debe permitir configurar simbolos para exportar velas.');
 assert.ok(quantBridge.includes('input string BridgeRatesTimeframes'), 'QuantBridge debe permitir configurar timeframes para exportar velas.');

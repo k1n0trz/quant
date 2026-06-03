@@ -44,6 +44,7 @@ const { getTrainingDemoLiveSnapshot } = require('./backend/training/training-mon
 const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
 const { getTrainingDemoLoopSchedulerStatus } = require('./backend/training/training-loop-scheduler');
 const { placeMt5DemoOrder, closeMt5DemoPosition } = require('./backend/adapters/mt5/mt5-demo-order-service');
+const { checkMt5RealOrder, placeMt5RealOrder } = require('./backend/adapters/mt5/mt5-real-order-service');
 const {
   bridgeSymbolsFromStatus,
   bridgeTickerFromStatus,
@@ -73,6 +74,7 @@ const CLOUD_ENV_KEYS = [
   'MT5_ACCOUNT1_LOGIN','MT5_ACCOUNT1_PASSWORD','MT5_ACCOUNT1_SERVER',
   'MT5_ACCOUNT2_LOGIN','MT5_ACCOUNT2_PASSWORD','MT5_ACCOUNT2_SERVER',
   'MT5_PYTHON_COMMAND','MT5_BRIDGE_STATUS_FILE','MT5_REAL_BRIDGE_STATUS_FILE',
+  'MT5_REAL_TRADING_ENABLED','MT5_REAL_MAX_LOTS','MT5_REAL_DEVIATION','MT5_REAL_MAGIC','MT5_REAL_ORDER_TIMEOUT_MS',
   'MT5_DEMO_TRADING_ENABLED','MT5_DEMO_MAX_LOTS','MT5_DEMO_DEVIATION','MT5_DEMO_MAGIC',
   'WEB_AUTH_ENABLED','WEB_AUTH_EMAIL','WEB_AUTH_PASSWORD',
   'TRAINING_BACKEND_WRITER_ENABLED',
@@ -3133,6 +3135,14 @@ ipcMain.handle('pull-cloud-data',     () => pullDataFromCloud(ENV));
 ipcMain.handle('mt5-snapshot',        () => readMt5Snapshot());
 ipcMain.handle('mt5-demo-order',      (_e, payload) => placeMt5DemoOrder(payload, { env: ENV }));
 ipcMain.handle('mt5-demo-close',      (_e, payload) => closeMt5DemoPosition(payload, { env: ENV }));
+ipcMain.handle('mt5-real-order-preflight', (_e, payload) =>
+  checkMt5RealOrder(payload || {}, { env: ENV })
+    .catch((err) => ({ ok: false, reason: 'mt5_real_preflight_error', error: err.message, realTradingTouched: false }))
+);
+ipcMain.handle('mt5-real-order', (_e, payload) =>
+  placeMt5RealOrder(payload || {}, { env: ENV })
+    .catch((err) => ({ ok: false, reason: 'mt5_real_order_error', error: err.message, realTradingTouched: false }))
+);
 ipcMain.handle('conversations-list',              () => listConversations());
 ipcMain.handle('conversation-load',   (_e, id)   => loadConversation(id));
 ipcMain.handle('conversation-save',   (_e, id, name, messages) => saveConversation(id, name, messages));

@@ -147,6 +147,20 @@ function mergeEntryPairs(primary = [], fallback = []) {
   return out;
 }
 
+function hasActionableEntryIndicators(pair = {}) {
+  const indicators = isObject(pair.indicators) ? pair.indicators : {};
+  return Boolean(
+    textValue(pair.symbol)
+    && textValue(pair.venue)
+    && finiteNumber(pair.score) !== null
+    && textValue(indicators.bias)
+    && finiteNumber(indicators.confidence) !== null
+    && finiteNumber(indicators.htfAlignmentScore, indicators.htf_alignment_score) !== null
+    && finiteNumber(indicators.patternScore, indicators.pattern_score) !== null
+    && finiteNumber(indicators.volumeRatio, indicators.volume_ratio) !== null
+  );
+}
+
 async function buildBackendBootstrapPairs(input = {}) {
   const deps = input.deps || {};
   const nowMs = Number.isFinite(Number(input.nowMs)) ? Number(input.nowMs) : Date.now();
@@ -504,14 +518,19 @@ async function evaluateTrainingDemoEntries(input = {}) {
     resolveTargetCount(state, 'swing'),
     finiteNumber(state.targetOpenPositions, state.targets?.total, 40) || 40
   ));
-  const bootstrappedPairs = ((pairs.length < targetUniverseSize && (intradayNeeded > 0 || swingNeeded > 0)) || (!hasMt5EntryPair && String(env.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true'))
+  const needsIndicatorRefresh = pairs.some((pair) => !hasActionableEntryIndicators(pair));
+  const bootstrappedPairs = (
+    (pairs.length < targetUniverseSize && (intradayNeeded > 0 || swingNeeded > 0))
+    || needsIndicatorRefresh
+    || (!hasMt5EntryPair && String(env.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true')
+  )
     ? await buildBackendBootstrapPairs({ deps, env, nowMs })
     : [];
   if (bootstrappedPairs.length) {
     const mt5Bootstrapped = bootstrappedPairs.filter((pair) => sameText(pair.venue, 'MT5'));
-    const bootstrapFirst = !hasMt5EntryPair && mt5Bootstrapped.length;
+    const bootstrapFirst = needsIndicatorRefresh || (!hasMt5EntryPair && mt5Bootstrapped.length);
     pairs = (bootstrapFirst
-      ? mergeEntryPairs(mt5Bootstrapped, pairs.concat(bootstrappedPairs.filter((pair) => !sameText(pair.venue, 'MT5'))))
+      ? mergeEntryPairs(bootstrappedPairs, pairs)
       : mergeEntryPairs(pairs, bootstrappedPairs)
     ).slice(0, targetUniverseSize);
   }

@@ -306,3 +306,41 @@ test('backend bootstrap includes MT5 candidates when MT5 symbols and ticks are a
   assert.equal(pairs.some((pair) => pair.venue === 'MT5' && pair.symbol === 'XAUUSD'), true);
   assert.equal(pairs.some((pair) => pair.venue === 'BINANCE' && pair.symbol === 'BTCUSDT'), true);
 });
+
+test('entry evaluator refreshes stale active pairs that no longer carry actionable indicators', async () => {
+  const state = createState({
+    activePairs: [
+      { venue: 'BINANCE', symbol: 'BTCUSDT', price: 100 },
+      { venue: 'BINANCE', symbol: 'ETHUSDT', price: 10 }
+    ],
+    positions: [
+      { id: 'pos-i', venue: 'BINANCE', symbol: 'BTCUSDT', horizon: 'intraday', direction: 'LONG', entry_price: 100 },
+      { id: 'pos-s', venue: 'BINANCE', symbol: 'ETHUSDT', horizon: 'swing', direction: 'LONG', entry_price: 10 }
+    ],
+    targets: { total: 2, intraday: 1, swing: 1 },
+    targetOpenPositions: 2,
+    targetIntradayPositions: 1,
+    targetSwingPositions: 1
+  });
+
+  const result = await evaluateTrainingDemoEntries({
+    state,
+    env: { TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true' },
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z'),
+    deps: {
+      getBinanceSymbols: async () => ['BTCUSDT', 'ETHUSDT'],
+      getTicker: async (symbol) => ({ price: symbol === 'BTCUSDT' ? 100 : 10, changePct: symbol === 'BTCUSDT' ? 1.5 : -1.2, quoteVolume: 80000000 })
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.openedEntries.length, 0);
+  assert.equal(result.nextState.activePairs.length, 2);
+  assert.equal(result.nextState.activePairs[0].symbol, 'BTCUSDT');
+  assert.equal(result.nextState.activePairs[0].score > 0, true);
+  assert.equal(result.nextState.activePairs[0].indicators.bias, 'LONG');
+  assert.equal(Number.isFinite(result.nextState.activePairs[0].indicators.confidence), true);
+  assert.equal(Number.isFinite(result.nextState.activePairs[0].indicators.htfAlignmentScore), true);
+  assert.equal(Number.isFinite(result.nextState.activePairs[0].indicators.patternScore), true);
+  assert.equal(Number.isFinite(result.nextState.activePairs[0].indicators.volumeRatio), true);
+});

@@ -391,8 +391,9 @@ function createApiRouter(context) {
           });
         }
 
+        const shouldPersist = tickResult.closedPositions > 0 || tickResult.openedPositions > 0 || tickResult.activeUniverseChanged === true;
         let persistence = null;
-        if (tickResult.closedPositions > 0 || tickResult.openedPositions > 0) {
+        if (shouldPersist) {
           if (typeof deps.writeTrainingState !== 'function') {
             return response(503, {
               ok: false,
@@ -426,7 +427,7 @@ function createApiRouter(context) {
           persistence,
           safety: {
             readOnly: false,
-            writesPerformed: tickResult.closedPositions > 0 || tickResult.openedPositions > 0,
+            writesPerformed: shouldPersist,
             realTradingTouched: false
           }
         });

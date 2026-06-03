@@ -52,6 +52,13 @@ function resolveTargetOpenPositions(state = {}) {
   );
 }
 
+function activeUniverseSignature(state = {}) {
+  const pairs = Array.isArray(state.activePairs) ? state.activePairs : [];
+  return pairs
+    .map((pair) => `${String(pair.venue || 'BINANCE').toUpperCase()}:${String(pair.symbol || '').toUpperCase()}`)
+    .join('|');
+}
+
 function findPositionContext(position, contexts = []) {
   const positionId = textValue(position.id);
   const signalId = textValue(position.signal_id, position.signalId);
@@ -218,6 +225,7 @@ async function runTrainingDemoTick(input = {}) {
   const tickId = buildTickId(new Date(nowMs));
   const contexts = Array.isArray(source.positionContexts) ? source.positionContexts.slice() : [];
   const balanceBefore = Number(snapshot.state.balance || 0);
+  const activeUniverseBefore = activeUniverseSignature(snapshot.state);
   let nextState = snapshot.state;
   let evaluatedPositions = 0;
   let closedPositions = 0;
@@ -315,6 +323,7 @@ async function runTrainingDemoTick(input = {}) {
     balanceAfter: Number(nextState.balance || balanceBefore),
     lessonPendingCount,
     entryEnabled,
+    activeUniverseChanged: activeUniverseSignature(nextState) !== activeUniverseBefore,
     nextState
   };
 }

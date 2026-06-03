@@ -87,8 +87,9 @@ async function executeTrainingDemoLoopTick(context = {}) {
     };
   }
 
+  const shouldPersist = tickResult.closedPositions > 0 || tickResult.openedPositions > 0 || tickResult.activeUniverseChanged === true;
   let persistence = null;
-  if (tickResult.closedPositions > 0 || tickResult.openedPositions > 0) {
+  if (shouldPersist) {
     if (typeof deps.writeTrainingState !== 'function') {
       return {
         ok: false,
@@ -130,7 +131,7 @@ async function executeTrainingDemoLoopTick(context = {}) {
     persistence,
     safety: {
       readOnly: false,
-      writesPerformed: tickResult.closedPositions > 0 || tickResult.openedPositions > 0,
+      writesPerformed: shouldPersist,
       realTradingTouched: false
     }
   };

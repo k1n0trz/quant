@@ -63,6 +63,37 @@ function createClosableState() {
   });
 }
 
+function createSaturatedBinanceState() {
+  const positions = Array.from({ length: 40 }, (_, index) => ({
+    id: `pos-binance-${index + 1}`,
+    signal_id: `sig-binance-${index + 1}`,
+    symbol: `Q${index + 1}USDT`,
+    venue: 'BINANCE',
+    direction: 'LONG',
+    entry_price: 100 + index,
+    size_demo: 1,
+    opened_tick: Date.parse('2026-05-10T12:00:00.000Z'),
+    min_hold_ms: 90 * 60 * 1000,
+    max_hold_ms: 12 * 60 * 60 * 1000,
+    horizon: index < 20 ? 'intraday' : 'swing'
+  }));
+  return createState({
+    targets: { total: 40, intraday: 20, swing: 20 },
+    targetOpenPositions: 40,
+    targetIntradayPositions: 20,
+    targetSwingPositions: 20,
+    minMt5OpenPositions: 6,
+    activePairs: positions.map((position) => ({
+      venue: 'BINANCE',
+      symbol: position.symbol,
+      score: 70,
+      price: position.entry_price,
+      indicators: { bias: 'LONG', confidence: 80 }
+    })),
+    positions
+  });
+}
+
 test('scheduler flag is explicit opt-in and interval is configurable', () => {
   assert.equal(isTrainingBackendLoopSchedulerEnabled({}), false);
   assert.equal(isTrainingBackendLoopSchedulerEnabled({ TRAINING_BACKEND_LOOP_SCHEDULER_ENABLED: 'true' }), true);
@@ -200,4 +231,37 @@ test('scheduler tick closes positions, does not open new ones, and never touches
   assert.equal(writes.length, 1);
   assert.equal(Array.isArray(writes[0].positions), true);
   assert.equal(writes[0].positions.length, 0);
+});
+
+test('scheduler tick persists active universe rebalance even when no positions open or close', async () => {
+  const writes = [];
+  const controller = createTrainingDemoLoopSchedulerController();
+  const result = await controller.runNow({
+    env: {
+      TRAINING_BACKEND_LOOP_ENABLED: 'true',
+      TRAINING_BACKEND_LOOP_SCHEDULER_ENABLED: 'true',
+      TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true',
+      MT5_CONNECTOR_ENABLED: 'true'
+    },
+    deps: {
+      readTrainingStateSnapshot: () => createTrainingStateSnapshot(createSaturatedBinanceState()),
+      getTicker: async (symbol) => ({ ok: true, price: 100 + Number(String(symbol).match(/\d+/)?.[0] || 0), changePct: 0.1, quoteVolume: 50000000 }),
+      getBinanceSymbols: async () => Array.from({ length: 40 }, (_, index) => `Q${index + 1}USDT`),
+      getMt5Symbols: async () => ({ ok: true, symbols: ['EURUSD'] }),
+      getMt5Ticker: async () => ({ ok: true, price: 1.16285, bid: 1.1628, ask: 1.1629, spread: 0.0001 }),
+      readMemory: () => [],
+      writeTrainingState: (nextState) => {
+        writes.push(JSON.parse(JSON.stringify(nextState)));
+        return { ok: true, persistedAt: '2026-05-10T16:00:00.000Z' };
+      }
+    },
+    nowMs: Date.parse('2026-05-10T12:20:00.000Z')
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.closedPositions, 0);
+  assert.equal(result.openedPositions, 0);
+  assert.equal(result.safety.writesPerformed, true);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].activePairs.some((pair) => pair.venue === 'MT5' && pair.symbol === 'EURUSD'), true);
 });

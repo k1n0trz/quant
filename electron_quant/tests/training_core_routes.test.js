@@ -86,6 +86,38 @@ const sampleTrainingState = {
   persistedAt: '2026-05-08T00:00:00.000Z'
 };
 
+function createSaturatedBinanceTrainingState() {
+  const positions = Array.from({ length: 40 }, (_, index) => ({
+    id: `pos-binance-route-${index + 1}`,
+    signal_id: `sig-binance-route-${index + 1}`,
+    symbol: `R${index + 1}USDT`,
+    venue: 'BINANCE',
+    direction: 'LONG',
+    entry_price: 100 + index,
+    size_demo: 1,
+    opened_tick: Date.parse('2026-05-10T12:00:00.000Z'),
+    min_hold_ms: 90 * 60 * 1000,
+    max_hold_ms: 12 * 60 * 60 * 1000,
+    horizon: index < 20 ? 'intraday' : 'swing'
+  }));
+  return {
+    ...sampleTrainingState,
+    positions,
+    targets: { total: 40, intraday: 20, swing: 20 },
+    targetOpenPositions: 40,
+    targetIntradayPositions: 20,
+    targetSwingPositions: 20,
+    minMt5OpenPositions: 6,
+    activePairs: positions.map((position) => ({
+      venue: 'BINANCE',
+      symbol: position.symbol,
+      score: 70,
+      price: position.entry_price,
+      indicators: { bias: 'LONG', confidence: 80 }
+    }))
+  };
+}
+
 test('training core status is read-only and backend scheduler remains disabled by default', async () => {
   const router = createRouterWithTrainingState(sampleTrainingState);
 
@@ -549,6 +581,53 @@ test('training demo tick endpoint can build backend contexts when request omits 
   assert.equal(res.body.entryEnabled, true);
   assert.equal(res.body.contextSource, 'backend');
   assert.equal(writes.length, 1);
+});
+
+test('training demo tick endpoint persists active universe rebalance without opens or closes', async () => {
+  const writes = [];
+  const context = createBackendContext({
+    env: {
+      TRAINING_BACKEND_LOOP_ENABLED: 'true',
+      TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true',
+      MT5_CONNECTOR_ENABLED: 'true'
+    },
+    botState: createDefaultBotState(),
+    riskConfig: createDefaultRiskConfig(),
+    deps: {
+      readTrainingStateSnapshot: () => createTrainingStateSnapshot(createSaturatedBinanceTrainingState()),
+      writeTrainingState: (nextState) => {
+        writes.push(JSON.parse(JSON.stringify(nextState)));
+        return { ok: true, persistedAt: '2026-05-10T16:00:00.000Z', file: 'fixture' };
+      },
+      getTicker: async (symbol) => ({
+        ok: true,
+        price: 100 + Number(String(symbol).match(/\d+/)?.[0] || 0),
+        changePct: 0.1,
+        quoteVolume: 50000000
+      }),
+      getBinanceSymbols: async () => Array.from({ length: 40 }, (_, index) => `R${index + 1}USDT`),
+      getMt5Symbols: async () => ({ ok: true, symbols: ['EURUSD'] }),
+      getMt5Ticker: async () => ({ ok: true, price: 1.16285, bid: 1.1628, ask: 1.1629, spread: 0.0001 }),
+      readMemory: () => []
+    }
+  });
+  const router = createApiRouter(context);
+
+  const res = await router.dispatch({
+    method: 'POST',
+    pathname: '/api/training/demo/tick',
+    body: {
+      nowMs: Date.parse('2026-05-10T12:20:00.000Z')
+    }
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+  assert.equal(res.body.closedPositions, 0);
+  assert.equal(res.body.openedPositions, 0);
+  assert.equal(res.body.safety.writesPerformed, true);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].activePairs.some((pair) => pair.venue === 'MT5' && pair.symbol === 'EURUSD'), true);
 });
 
 test('training demo context status endpoint reports market and signal sources without writes', async () => {

@@ -50,6 +50,37 @@ function normalizeBridgeCandle(row = {}) {
   };
 }
 
+function tickerFromBridgeRatesResult(symbol, ratesResult = {}) {
+  const requested = textValue(symbol, ratesResult.symbol);
+  const candles = (Array.isArray(ratesResult.candles) ? ratesResult.candles : [])
+    .map(normalizeBridgeCandle)
+    .filter(Boolean)
+    .sort((a, b) => a.openTime - b.openTime);
+  if (!requested || !candles.length) {
+    return { ok: false, symbol: requested, venue: 'MT5', source: 'mt5_bridge_rates', reason: 'bridge_rates_ticker_unavailable' };
+  }
+  const first = candles[0];
+  const last = candles[candles.length - 1];
+  const price = roundPrice(last.close);
+  if (price === null || price <= 0) {
+    return { ok: false, symbol: requested, venue: 'MT5', source: 'mt5_bridge_rates', reason: 'bridge_rates_ticker_unavailable' };
+  }
+  const spread = roundPrice(Math.max(Math.abs(price) * 0.00003, 1e-8));
+  return {
+    ok: true,
+    symbol: requested,
+    venue: 'MT5',
+    price,
+    bid: roundPrice(price - spread / 2),
+    ask: roundPrice(price + spread / 2),
+    spread,
+    changePct: first.open ? ((price - first.open) / first.open) * 100 : 0,
+    quoteVolume: Math.max(35000000, candles.reduce((sum, candle) => sum + Number(candle.volume || 0), 0) * Math.abs(price)),
+    updatedAt: ratesResult.updatedAt || last.closeTime || last.openTime || null,
+    source: 'mt5_bridge_rates'
+  };
+}
+
 function bridgeSymbolsFromStatus(status = {}) {
   if (status.ok !== true || status.connected !== true) {
     return { ok: false, symbols: [], source: 'mt5_bridge_status', reason: 'bridge_symbol_unavailable' };
@@ -97,6 +128,14 @@ function bridgeRatesFromStatus(symbol, timeframe, status = {}) {
     return { ok: false, symbol: requested, venue: 'MT5', source: 'mt5_bridge_rates', reason: 'bridge_rates_empty', candles: [] };
   }
   const ticker = bridgeTickerFromStatus(requested, status);
+  const candleTicker = ticker.ok
+    ? ticker
+    : tickerFromBridgeRatesResult(symbolKey || requested, {
+      ok: true,
+      symbol: symbolKey || requested,
+      candles,
+      updatedAt: status.updatedAt || status.ts || null
+    });
   return {
     ok: true,
     symbol: symbolKey || requested,
@@ -104,7 +143,7 @@ function bridgeRatesFromStatus(symbol, timeframe, status = {}) {
     source: 'mt5_bridge_rates',
     timeframe: textValue(packet?.timeframe) || String(timeframe || 'M1').toUpperCase(),
     candles,
-    ticker: ticker.ok ? ticker : null,
+    ticker: candleTicker.ok ? candleTicker : null,
     updatedAt: status.updatedAt || status.ts || null
   };
 }
@@ -180,5 +219,6 @@ module.exports = {
   bridgeSymbolsFromStatus,
   bridgeTickerFromStatus,
   bridgeRatesFromStatus,
-  bridgeTickCandlesFromStatus
+  bridgeTickCandlesFromStatus,
+  tickerFromBridgeRatesResult
 };

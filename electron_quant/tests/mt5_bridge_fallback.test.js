@@ -5,7 +5,8 @@ const {
   bridgeSymbolsFromStatus,
   bridgeTickerFromStatus,
   bridgeRatesFromStatus,
-  bridgeTickCandlesFromStatus
+  bridgeTickCandlesFromStatus,
+  tickerFromBridgeRatesResult
 } = require('../backend/adapters/mt5/mt5-bridge-fallback');
 
 test('bridgeSymbolsFromStatus exposes current connected bridge symbol', () => {
@@ -73,6 +74,25 @@ test('bridgeRatesFromStatus exposes OHLC candles for requested symbol and timefr
   assert.equal(result.candles[0].openTime, 1780457700000);
   assert.equal(result.candles[1].close, 0.902);
   assert.equal(result.ticker.price, 0.9011);
+});
+
+test('tickerFromBridgeRatesResult derives MT5 ticker from OHLC when chart ticker is not on that symbol', () => {
+  const result = tickerFromBridgeRatesResult('XAUUSD', {
+    ok: true,
+    symbol: 'XAUUSD',
+    candles: [
+      { openTime: 1780457700000, open: 4400, high: 4410, low: 4390, close: 4405, volume: 153 },
+      { openTime: 1780457760000, open: 4405, high: 4425, low: 4400, close: 4420, volume: 188 }
+    ],
+    updatedAt: 1780457760
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.symbol, 'XAUUSD');
+  assert.equal(result.price, 4420);
+  assert.equal(result.source, 'mt5_bridge_rates');
+  assert.equal(result.changePct > 0, true);
+  assert.equal(result.quoteVolume > 0, true);
 });
 
 test('bridgeTickCandlesFromStatus keeps chart visible when OHLC is unavailable', () => {

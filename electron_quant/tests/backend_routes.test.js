@@ -21,6 +21,29 @@ test('status route exposes safe operational summary', async () => {
   assert.equal(res.body.bot.trainingEnabled, true);
 });
 
+test('status route exposes effective real trading gate separately from UI state', async () => {
+  const context = createBackendContext({
+    env: { REAL_TRADING: 'false' },
+    botState: {
+      ...createDefaultBotState(),
+      tradingRealEnabled: true,
+      killSwitch: false,
+      paperMode: false
+    },
+    riskConfig: createDefaultRiskConfig()
+  });
+  const router = createApiRouter(context);
+
+  const res = await router.dispatch({ method: 'GET', pathname: '/api/status' });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.bot.tradingRealEnabled, true);
+  assert.equal(res.body.realTrading.requested, true);
+  assert.equal(res.body.realTrading.envArmed, false);
+  assert.equal(res.body.realTrading.effective, false);
+  assert.deepEqual(res.body.realTrading.issues, ['REAL_TRADING=false']);
+});
+
 test('trading real on route refuses invalid risk configuration', async () => {
   const context = createBackendContext({
     botState: createDefaultBotState(),

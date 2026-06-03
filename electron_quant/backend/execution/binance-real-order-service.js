@@ -5,6 +5,7 @@ const { validateRiskConfig } = require('../risk/risk-policy');
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 200;
 const TAIL_READ_BYTES = 64 * 1024;
+const SUPPORTED_SPOT_QUOTES = ['USDT', 'USDC', 'FDUSD'];
 
 function boolFlag(value) {
   return String(value || 'false').trim().toLowerCase() === 'true';
@@ -40,7 +41,8 @@ function sanitizeText(value, max = 240) {
 
 function normalizeSymbol(symbol) {
   const normalized = String(symbol || '').trim().toUpperCase();
-  return /^[A-Z0-9]{3,24}USDT$/.test(normalized) ? normalized : null;
+  if (!/^[A-Z0-9]{3,32}$/.test(normalized)) return null;
+  return SUPPORTED_SPOT_QUOTES.some((quote) => normalized.endsWith(quote)) ? normalized : null;
 }
 
 function normalizeSide(side) {
@@ -97,7 +99,7 @@ function normalizeRequest(input = {}) {
   if (venue !== 'BINANCE') return { ok: false, error: 'Solo Binance Spot esta soportado en este canal real.' };
 
   const symbol = normalizeSymbol(input.symbol);
-  if (!symbol) return { ok: false, error: 'Simbolo Binance Spot USDT invalido.' };
+  if (!symbol) return { ok: false, error: 'Simbolo Binance Spot invalido. Usa un par USDT, USDC o FDUSD soportado.' };
 
   const side = normalizeSide(input.side);
   if (!side) return { ok: false, error: 'Side invalido. Usa BUY o SELL.' };

@@ -137,6 +137,38 @@ test('POST /api/binance-real-order-preflight returns affordability without touch
   assert.equal(called, false);
 });
 
+test('POST /api/binance-real-order-preflight supports USDC quote pairs with USDC Spot balance', async () => {
+  const router = createApiRouter(armedContext({
+    deps: {
+      getSymbolFilters: async (symbol) => {
+        assert.equal(symbol, 'BTCUSDC');
+        return { minQty: 0.00001, stepSize: 0.00001, minNotional: 5, status: 'TRADING', quoteAsset: 'USDC' };
+      },
+      getTicker: async (symbol) => {
+        assert.equal(symbol, 'BTCUSDC');
+        return { price: 68000 };
+      },
+      getBinanceSpotBalance: async (asset) => {
+        assert.equal(asset, 'USDC');
+        return { asset: 'USDC', free: 30, locked: 0 };
+      }
+    }
+  }));
+
+  const res = await router.dispatch({
+    method: 'POST',
+    pathname: '/api/binance-real-order-preflight',
+    body: { side: 'BUY', symbol: 'BTCUSDC', qty: 0.0002, type: 'MARKET' }
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+  assert.equal(res.body.status, 'ready');
+  assert.equal(res.body.quoteAsset, 'USDC');
+  assert.equal(res.body.quoteFree, 30);
+  assert.equal(res.body.requestedNotional, 13.6);
+});
+
 test('POST /api/place-order uses preflight to block insufficient balance before executor', async () => {
   const file = auditFile();
   let called = false;

@@ -51,6 +51,27 @@ function response(status, body) {
   return { status, body };
 }
 
+function boolFlag(value) {
+  return String(value || 'false').trim().toLowerCase() === 'true';
+}
+
+function getEffectiveRealTradingStatus(env = {}, botState = {}) {
+  const requested = botState.tradingRealEnabled === true;
+  const envArmed = boolFlag(env.REAL_TRADING);
+  const killSwitch = botState.killSwitch === true;
+  const issues = [];
+  if (!envArmed) issues.push('REAL_TRADING=false');
+  if (!requested) issues.push('bot tradingRealEnabled=false');
+  if (killSwitch) issues.push('killSwitch=true');
+  return {
+    requested,
+    envArmed,
+    killSwitch,
+    effective: requested && envArmed && !killSwitch,
+    issues
+  };
+}
+
 function flattenBinanceOrderResult(result) {
   if (result?.ok === true) {
     return {
@@ -100,9 +121,11 @@ function createApiRouter(context) {
       }
 
       if (method === 'GET' && pathname === '/api/status') {
+        const botState = context.getBotState();
         return response(200, {
           ok: true,
-          bot: context.getBotState(),
+          bot: botState,
+          realTrading: getEffectiveRealTradingStatus(env, botState),
           risk: validateRiskConfig(context.getRiskConfig()),
           adapters: getConnectionsSummary(env).adapters
         });

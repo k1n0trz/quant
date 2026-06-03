@@ -134,6 +134,37 @@ test('preflight reports ready sizing when balance and minNotional are valid', as
   assert.equal(result.suggestedQty, 0.001);
 });
 
+test('preflight and execution support Binance Spot USDC quote pairs', async () => {
+  const calls = [];
+  const result = await executeBinanceRealOrder({
+    input: { venue: 'BINANCE', side: 'BUY', symbol: 'btcusdc', qty: 0.0002, type: 'MARKET' },
+    ...armedContext({
+      deps: {
+        getSymbolFilters: async (symbol) => {
+          assert.equal(symbol, 'BTCUSDC');
+          return { minQty: 0.00001, stepSize: 0.00001, minNotional: 5, status: 'TRADING', quoteAsset: 'USDC' };
+        },
+        getTicker: async (symbol) => {
+          assert.equal(symbol, 'BTCUSDC');
+          return { price: 68000 };
+        },
+        getBinanceSpotBalance: async (asset) => {
+          assert.equal(asset, 'USDC');
+          return { asset: 'USDC', free: 30, locked: 0 };
+        },
+        placeOrderBinance: async (...args) => {
+          calls.push(args);
+          return { ok: true, orderId: 456, status: 'FILLED', symbol: 'BTCUSDC', side: 'BUY', type: 'MARKET', qty: 0.0002, price: 68000, notional: 13.6 };
+        }
+      }
+    })
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.order.orderId, 456);
+  assert.deepEqual(calls, [['BUY', 'BTCUSDC', 0.0002, 'MARKET', null]]);
+});
+
 test('rejects unsupported venue side type and invalid limit price before executor', async () => {
   for (const input of [
     { venue: 'MT5', side: 'BUY', symbol: 'XAUUSD', qty: 0.01, type: 'MARKET' },

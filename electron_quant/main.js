@@ -393,7 +393,8 @@ function createBinanceRealExecutionDeps(env) {
     getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, env),
     getBinanceEarnBalance: (asset) => getBinanceEarnBalance(asset, env),
     testOrderBinance: (side, symbol, qty, type, price) => testOrderBinance(side, symbol, qty, type, price, env),
-    placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, env)
+    placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, env),
+    placeProtectionBinance: (request, order) => placeBinanceSpotOcoProtection(request, order, env)
   };
 }
 
@@ -2029,6 +2030,54 @@ async function placeOrderBinance(side, symbol, qty, type = 'MARKET', price = nul
   };
 }
 
+async function placeBinanceSpotOcoProtection(request = {}, order = {}, env = ENV) {
+  assertRealTradingExecutionAllowed(env);
+  if (!env.BINANCE_API_KEY || !env.BINANCE_SECRET)
+    throw new Error('Faltan BINANCE_API_KEY / BINANCE_SECRET en .env');
+
+  const symbol = String(request.symbol || order.symbol || '').trim().toUpperCase();
+  const side = String(request.side || order.side || '').trim().toUpperCase();
+  if (side !== 'BUY') throw new Error('La proteccion OCO automatica solo soporta salida SELL para entradas BUY Spot.');
+
+  const filters = await getSymbolFilters(symbol);
+  const qty = roundStep(parseFloat(order.qty || order.executedQty || request.qty || 0), filters.stepSize);
+  const takeProfit = roundTick(parseFloat(request.takeProfit), filters.tickSize);
+  const stopLoss = roundTick(parseFloat(request.stopLoss), filters.tickSize);
+  const stopLimit = roundTick(stopLoss * 0.995, filters.tickSize);
+  if (!qty || qty < filters.minQty) throw new Error(`Qty ${qty} < minimo ${filters.minQty} para proteccion ${symbol}`);
+  if (!takeProfit || !stopLoss || !stopLimit) throw new Error('SL/TP invalidos para proteccion Binance.');
+  if (takeProfit <= stopLoss) throw new Error('TP debe estar por encima del SL para proteccion BUY Spot.');
+
+  const params = {
+    symbol,
+    side: 'SELL',
+    quantity: qty,
+    aboveType: 'LIMIT_MAKER',
+    abovePrice: takeProfit,
+    belowType: 'STOP_LOSS_LIMIT',
+    belowStopPrice: stopLoss,
+    belowPrice: stopLimit,
+    belowTimeInForce: 'GTC',
+    newOrderRespType: 'RESULT'
+  };
+  const res = await signedBinance('/api/v3/orderList/oco', params, 'POST', env);
+  if (res.code && res.code < 0)
+    throw new Error(`Binance OCO error ${res.code}: ${res.msg}`);
+  return {
+    ok: true,
+    orderListId: res.orderListId,
+    listClientOrderId: res.listClientOrderId,
+    symbol,
+    side: 'SELL',
+    qty,
+    stopLoss,
+    takeProfit,
+    stopLimit,
+    orders: res.orders || [],
+    orderReports: res.orderReports || []
+  };
+}
+
 async function testOrderBinance(side, symbol, qty, type = 'MARKET', price = null, env = ENV) {
   assertRealTradingExecutionAllowed(env);
   if (!env.BINANCE_API_KEY || !env.BINANCE_SECRET)
@@ -2083,7 +2132,8 @@ async function executeAndAuditBinanceRealOrder(input, env = ENV) {
       getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, env),
       getBinanceEarnBalance: (asset) => getBinanceEarnBalance(asset, env),
       testOrderBinance: (side, symbol, qty, type, price) => testOrderBinance(side, symbol, qty, type, price, env),
-      placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, env)
+      placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, env),
+      placeProtectionBinance: (request, order) => placeBinanceSpotOcoProtection(request, order, env)
     }
   });
   try {
@@ -2421,6 +2471,7 @@ async function handleApi(req, res, url) {
         readMt5Snapshot,
         binanceRealOrderAuditFile,
         placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, userEnv),
+        placeProtectionBinance: (request, order) => placeBinanceSpotOcoProtection(request, order, userEnv),
         testOrderBinance: (side, symbol, qty, type, price) => testOrderBinance(side, symbol, qty, type, price, userEnv),
         placeMt5DemoOrder: (input) => placeMt5DemoOrder(input, { env: userEnv }),
         closeMt5DemoPosition: (input) => closeMt5DemoPosition(input, { env: userEnv }),

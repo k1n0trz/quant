@@ -16,6 +16,8 @@ assert.ok(main.includes('real.autonomous.autostart'), 'main debe registrar autos
 assert.ok(main.includes('createRealAutonomousRuntimeContext(realEnv)'), 'autostart debe usar contexto runtime real.');
 assert.ok(main.includes('effectiveEnvForUser(WEB_AUTH_EMAIL)'), 'autostart debe usar las APIs guardadas del usuario admin.');
 assert.ok(main.includes('if (account?.is_demo === true) continue;'), 'conteo de posiciones reales no debe consumir cupo con posiciones MT5 demo.');
+assert.ok(main.includes('placeProtectionBinance: (request, order) => placeBinanceSpotOcoProtection(request, order, env)'), 'deps Binance real deben inyectar proteccion SL/TP.');
+assert.ok(main.includes("signedBinance('/api/v3/orderList/oco'"), 'main debe colocar OCO de proteccion en Binance Spot.');
 
 for (const route of [
   '/api/real-autonomous/status',
@@ -35,6 +37,11 @@ assert.ok(renderer.includes("apiPost('real-autonomous/tick'"), 'renderer web deb
 
 assert.ok(scheduler.includes('getRealAutonomousOrdersToday'), 'scheduler debe respetar cap diario inyectado.');
 assert.ok(scheduler.includes('already_open_real_position'), 'scheduler debe evitar duplicar pares ya abiertos.');
+assert.ok(scheduler.includes("autonomyMode: 'opportunity_only'"), 'scheduler no debe operar por cupo forzado.');
+assert.ok(scheduler.includes('minOpenPositions: 0'), 'scheduler no debe tener minimo forzado de posiciones reales.');
+assert.ok(scheduler.includes('REAL_AUTONOMOUS_STOP_LOSS_PCT'), 'scheduler debe soportar stop-loss configurable.');
+assert.ok(scheduler.includes('REAL_AUTONOMOUS_TAKE_PROFIT_PCT'), 'scheduler debe soportar take-profit configurable.');
+assert.ok(scheduler.includes('missing_protection_price'), 'scheduler debe saltar candidatos sin precio para SL/TP.');
 assert.ok(scheduler.includes('REAL_AUTONOMOUS_MT5_ENABLED'), 'MT5 real debe requerir flag explicito.');
 assert.ok(!/blockRealExecution/.test(scheduler), 'scheduler real no debe depender del flag de training blockRealExecution.');
 assert.ok(!/BTCUSDT['"]/.test(scheduler), 'scheduler real no debe hardcodear BTCUSDT.');

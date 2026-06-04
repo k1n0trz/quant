@@ -121,6 +121,12 @@ function normalizeRequest(input = {}) {
 
   const price = type === 'LIMIT' ? finiteNumber(input.price) : null;
   if (type === 'LIMIT' && (price === null || price <= 0)) return { ok: false, error: 'Precio limite requerido.' };
+  const entryPrice = finiteNumber(input.entryPrice);
+  const stopLoss = finiteNumber(input.stopLoss ?? input.sl);
+  const takeProfit = finiteNumber(input.takeProfit ?? input.tp);
+  if ((stopLoss !== null && stopLoss <= 0) || (takeProfit !== null && takeProfit <= 0)) {
+    return { ok: false, error: 'Proteccion SL/TP invalida.' };
+  }
 
   return {
     ok: true,
@@ -130,9 +136,21 @@ function normalizeRequest(input = {}) {
       side,
       type,
       qty,
-      price
+      price,
+      entryPrice,
+      stopLoss,
+      takeProfit,
+      reason: sanitizeText(input.reason || '', 80)
     }
   };
+}
+
+function isAutonomousRequest(request = {}) {
+  return request.reason === 'real-autonomous-scheduler';
+}
+
+function hasStopTakeProtection(request = {}) {
+  return finiteNumber(request.stopLoss) !== null && finiteNumber(request.takeProfit) !== null;
 }
 
 function validateExecutionGates({ env = {}, botState = {}, riskConfig = {} }) {
@@ -265,6 +283,14 @@ async function executeBinanceRealOrder({ input = {}, env = {}, botState = {}, ri
   if (typeof deps.placeOrderBinance !== 'function') {
     return buildBlockedResult('Executor Binance real no disponible.', request);
   }
+  if (isAutonomousRequest(request)) {
+    if (!hasStopTakeProtection(request)) {
+      return buildBlockedResult('Orden autonoma Binance bloqueada: falta proteccion SL/TP.', request);
+    }
+    if (typeof deps.placeProtectionBinance !== 'function') {
+      return buildBlockedResult('Orden autonoma Binance bloqueada: handler de proteccion SL/TP no disponible.', request);
+    }
+  }
 
   try {
     const order = await deps.placeOrderBinance(request.side, request.symbol, request.qty, request.type, request.price);
@@ -281,11 +307,34 @@ async function executeBinanceRealOrder({ input = {}, env = {}, botState = {}, ri
         }
       };
     }
+    let protection = null;
+    if (isAutonomousRequest(request) && typeof deps.placeProtectionBinance === 'function') {
+      try {
+        protection = await deps.placeProtectionBinance(request, order);
+      } catch (error) {
+        protection = { ok: false, error: sanitizeText(error?.message || error) };
+      }
+      if (!protection || protection.ok !== true) {
+        return {
+          ok: false,
+          status: 'protection_failed',
+          error: sanitizeText(protection?.error || protection?.reason || 'No se pudo colocar proteccion SL/TP.'),
+          request,
+          order,
+          protection,
+          safety: {
+            realTradingTouched: true,
+            binanceSpotOnly: true
+          }
+        };
+      }
+    }
     return {
       ok: true,
       status: 'executed',
       request,
       order,
+      protection,
       safety: {
         realTradingTouched: true,
         binanceSpotOnly: true

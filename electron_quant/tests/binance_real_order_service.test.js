@@ -42,6 +42,101 @@ test('executes a Binance real order through the injected executor and marks real
   assert.equal(result.order.orderId, 123);
 });
 
+test('autonomous Binance real order requires SL TP protection before accepting execution', async () => {
+  let placed = false;
+  const result = await executeBinanceRealOrder({
+    input: {
+      venue: 'BINANCE',
+      side: 'BUY',
+      symbol: 'ACXUSDT',
+      qty: 100,
+      type: 'MARKET',
+      entryPrice: 0.041,
+      stopLoss: 0.04018,
+      takeProfit: 0.04223,
+      reason: 'real-autonomous-scheduler'
+    },
+    ...armedContext({
+      deps: {
+        placeOrderBinance: async () => { placed = true; return { ok: true, orderId: 1 }; }
+      }
+    })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 'blocked');
+  assert.equal(result.safety.realTradingTouched, false);
+  assert.equal(placed, false);
+  assert.match(result.error, /proteccion/i);
+});
+
+test('autonomous Binance real order places protection after filled spot entry', async () => {
+  const orders = [];
+  const protections = [];
+  const result = await executeBinanceRealOrder({
+    input: {
+      venue: 'BINANCE',
+      side: 'BUY',
+      symbol: 'ACXUSDT',
+      qty: 100,
+      type: 'MARKET',
+      entryPrice: 0.041,
+      stopLoss: 0.04018,
+      takeProfit: 0.04223,
+      reason: 'real-autonomous-scheduler'
+    },
+    ...armedContext({
+      deps: {
+        placeOrderBinance: async (...args) => {
+          orders.push(args);
+          return { ok: true, orderId: 321, status: 'FILLED', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, price: 0.041, notional: 4.1 };
+        },
+        placeProtectionBinance: async (request, order) => {
+          protections.push({ request, order });
+          return { ok: true, orderListId: 99, symbol: request.symbol };
+        }
+      }
+    })
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 'executed');
+  assert.deepEqual(orders, [['BUY', 'ACXUSDT', 100, 'MARKET', null]]);
+  assert.equal(protections.length, 1);
+  assert.equal(protections[0].request.stopLoss, 0.04018);
+  assert.equal(protections[0].request.takeProfit, 0.04223);
+  assert.equal(result.protection.ok, true);
+});
+
+test('autonomous Binance real order reports protection_failed when OCO placement fails after entry', async () => {
+  const result = await executeBinanceRealOrder({
+    input: {
+      venue: 'BINANCE',
+      side: 'BUY',
+      symbol: 'ACXUSDT',
+      qty: 100,
+      type: 'MARKET',
+      entryPrice: 0.041,
+      stopLoss: 0.04018,
+      takeProfit: 0.04223,
+      reason: 'real-autonomous-scheduler'
+    },
+    ...armedContext({
+      deps: {
+        placeOrderBinance: async () => ({ ok: true, orderId: 654, status: 'FILLED', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, price: 0.041 }),
+        placeProtectionBinance: async () => { throw new Error('oco_rejected'); }
+      }
+    })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 'protection_failed');
+  assert.equal(result.order.orderId, 654);
+  assert.equal(result.protection.ok, false);
+  assert.match(result.error, /oco_rejected/);
+  assert.equal(result.safety.realTradingTouched, true);
+});
+
 test('blocks real order when runtime is not armed and never calls executor', async () => {
   let called = false;
   const result = await executeBinanceRealOrder({

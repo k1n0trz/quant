@@ -5,6 +5,7 @@ function boolFlag(value) {
 }
 
 function finiteNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
@@ -54,7 +55,7 @@ function resolveAllowedVenues(env = {}) {
 function resolveRealAutonomousLimits(env = {}, riskConfig = {}) {
   const maxOpenFromRisk = finiteNumber(riskConfig.maxOpenPositions);
   const envMaxOpen = finiteNumber(env.REAL_AUTONOMOUS_MAX_OPEN_POSITIONS);
-  const maxOpenPositions = Math.floor(clampNumber(envMaxOpen ?? maxOpenFromRisk, 3, 1, 20));
+  const maxOpenPositions = Math.floor(clampNumber(envMaxOpen ?? maxOpenFromRisk, 4, 1, 20));
   const maxOrdersPerTick = Math.floor(clampNumber(env.REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK, 1, 1, 5));
   const maxOrdersPerDay = Math.floor(clampNumber(env.REAL_AUTONOMOUS_MAX_ORDERS_PER_DAY, 10, 1, 50));
   const configuredNotional = finiteNumber(env.REAL_AUTONOMOUS_MAX_NOTIONAL_USDT);
@@ -62,14 +63,20 @@ function resolveRealAutonomousLimits(env = {}, riskConfig = {}) {
   const maxNotionalUsdt = clampNumber(configuredNotional ?? Math.min(envCap || 5, 5), 5, 5, Math.max(5, envCap || 25));
   const minConfidence = clampNumber(env.REAL_AUTONOMOUS_MIN_CONFIDENCE, 78, 1, 100);
   const mt5Lots = clampNumber(env.REAL_AUTONOMOUS_MT5_LOTS ?? env.MT5_REAL_MAX_LOTS, 0.01, 0.01, 0.05);
+  const stopLossPct = clampNumber(env.REAL_AUTONOMOUS_STOP_LOSS_PCT, 2, 0.1, 20);
+  const takeProfitPct = clampNumber(env.REAL_AUTONOMOUS_TAKE_PROFIT_PCT, 3, 0.1, 50);
   return {
     allowedVenues: resolveAllowedVenues(env),
+    autonomyMode: 'opportunity_only',
+    minOpenPositions: 0,
     maxOpenPositions,
     maxOrdersPerTick,
     maxOrdersPerDay,
     maxNotionalUsdt,
     minConfidence,
-    mt5Lots
+    mt5Lots,
+    stopLossPct,
+    takeProfitPct
   };
 }
 
@@ -122,11 +129,33 @@ function buildTrainingSignalIndex(state = {}) {
         score,
         bias: normalizeBias(row.bias ?? row.direction ?? row.indicators?.bias),
         horizon: textValue(row.horizon, row.indicators?.horizon, 'intraday'),
+        price: finiteNumber(row.price ?? row.mark ?? row.entry ?? row.entry_price ?? row.indicators?.price),
         reason: textValue(row.strategy_name, row.primaryStrategy?.name, row.indicators?.primaryStrategy?.name, 'training_signal')
       });
     }
   }
   return index;
+}
+
+function buildProtection(side, entryPrice, limits) {
+  const price = finiteNumber(entryPrice);
+  if (price === null || price <= 0) return null;
+  const normalizedSide = String(side || '').toUpperCase();
+  const slMove = limits.stopLossPct / 100;
+  const tpMove = limits.takeProfitPct / 100;
+  const stopLoss = normalizedSide === 'SELL'
+    ? price * (1 + slMove)
+    : price * (1 - slMove);
+  const takeProfit = normalizedSide === 'SELL'
+    ? price * (1 - tpMove)
+    : price * (1 + tpMove);
+  return {
+    entryPrice: Number(price.toFixed(8)),
+    stopLoss: Number(stopLoss.toFixed(8)),
+    takeProfit: Number(takeProfit.toFixed(8)),
+    stopLossPct: limits.stopLossPct,
+    takeProfitPct: limits.takeProfitPct
+  };
 }
 
 function realPositionKey(position = {}) {
@@ -195,8 +224,13 @@ async function buildBinanceCandidates(context, state, limits, opened) {
     const signal = index.get(key) || index.get(`BINANCE:${symbol.replace(/USDC$|FDUSD$/, 'USDT')}`) || null;
     const priorityScore = signal?.score || finiteNumber(row.score) || limits.minConfidence;
     const bias = signal?.bias || normalizeBias(row.side);
+    const protection = buildProtection('BUY', finiteNumber(row.price ?? row.entryPrice ?? signal?.price), limits);
     if (priorityScore < limits.minConfidence) continue;
     if (bias === 'SHORT') continue;
+    if (!protection) {
+      rows.push({ venue: 'BINANCE', symbol, skipOnly: true, reason: 'missing_protection_price' });
+      continue;
+    }
     rows.push({
       venue: 'BINANCE',
       symbol,
@@ -205,6 +239,7 @@ async function buildBinanceCandidates(context, state, limits, opened) {
       qty: row.qty,
       requestedNotional: Math.min(finiteNumber(row.requestedNotional) || limits.maxNotionalUsdt, limits.maxNotionalUsdt),
       priorityScore,
+      ...protection,
       reason: signal?.reason || 'real_universe_ready'
     });
   }
@@ -236,13 +271,20 @@ async function buildMt5Candidates(context, state, limits, opened) {
     }
     if (signal.score < limits.minConfidence) continue;
     if (signal.bias !== 'LONG' && signal.bias !== 'SHORT') continue;
+    const side = signal.bias === 'LONG' ? 'BUY' : 'SELL';
+    const protection = buildProtection(side, signal.price, limits);
+    if (!protection) {
+      rows.push({ venue: 'MT5', symbol: signal.symbol, skipOnly: true, reason: 'missing_protection_price' });
+      continue;
+    }
     rows.push({
       venue: 'MT5',
       symbol: signal.symbol,
-      side: signal.bias === 'LONG' ? 'BUY' : 'SELL',
+      side,
       volume: limits.mt5Lots,
       type: 'MARKET',
       priorityScore: signal.score,
+      ...protection,
       reason: signal.reason || 'training_signal'
     });
   }
@@ -261,6 +303,9 @@ async function executeCandidate(candidate, context) {
       side: candidate.side,
       type: candidate.type,
       qty: candidate.qty,
+      entryPrice: candidate.entryPrice,
+      stopLoss: candidate.stopLoss,
+      takeProfit: candidate.takeProfit,
       reason: 'real-autonomous-scheduler'
     };
     const result = await deps.executeBinanceRealOrder({
@@ -280,6 +325,9 @@ async function executeCandidate(candidate, context) {
       side: candidate.side,
       volume: candidate.volume,
       type: candidate.type,
+      entryPrice: candidate.entryPrice,
+      stopLoss: candidate.stopLoss,
+      takeProfit: candidate.takeProfit,
       reason: 'real-autonomous-scheduler'
     };
     if (typeof deps.checkMt5RealOrder === 'function') {
@@ -393,6 +441,9 @@ async function runRealAutonomousTick(context = {}) {
       symbol: candidate.symbol,
       side: candidate.side,
       priorityScore: candidate.priorityScore,
+      entryPrice: candidate.entryPrice,
+      stopLoss: candidate.stopLoss,
+      takeProfit: candidate.takeProfit,
       reason: candidate.reason
     })),
     skipped,

@@ -76,8 +76,9 @@ test('real autonomous tick builds executable universe from router deps and audit
       testOrderBinance: async () => ({ ok: true }),
       placeOrderBinance: async (side, symbol, qty) => {
         executed.push({ side, symbol, qty });
-        return { ok: true, status: 'FILLED', orderId: 11, notional: 5.2 };
-      }
+        return { ok: true, status: 'FILLED', orderId: 11, symbol, side, qty, price: 0.04, notional: 5.2 };
+      },
+      placeProtectionBinance: async (request, order) => ({ ok: true, orderListId: 22, symbol: request.symbol, entryOrderId: order.orderId })
     }
   }));
 

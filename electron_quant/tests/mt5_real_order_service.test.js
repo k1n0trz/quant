@@ -49,6 +49,8 @@ test('MT5 real order request is independent from training blockRealExecution', (
     side: 'BUY',
     volume: 0.01,
     type: 'MARKET',
+    stopLoss: 1.078,
+    takeProfit: 1.105,
     blockRealExecution: true
   }, realEnv);
 
@@ -56,6 +58,8 @@ test('MT5 real order request is independent from training blockRealExecution', (
   assert.equal(req.order.symbol, 'EURUSD');
   assert.equal(req.order.side, 'BUY');
   assert.equal(req.order.volume, 0.01);
+  assert.equal(req.order.sl, 1.078);
+  assert.equal(req.order.tp, 1.105);
   assert.equal(req.safety.realTradingTouched, true);
   assert.equal(req.safety.blockRealExecutionIgnoredForRealChannel, true);
 });
@@ -108,6 +112,8 @@ test('MT5 real order writes ORDER command only through a real bridge', async () 
         assert.ok(id);
         assert.match(text, /^action=ORDER$/m);
         assert.match(text, /^symbol=EURUSD$/m);
+        assert.match(text, /^sl=1\.078$/m);
+        assert.match(text, /^tp=1\.105$/m);
         fs.writeFileSync(path.join(dir, `quant_bridge_result_${id}.json`), JSON.stringify({
           ok: true,
           action: 'ORDER',
@@ -123,7 +129,7 @@ test('MT5 real order writes ORDER command only through a real bridge', async () 
     throw new Error('real order command not written');
   })();
 
-  const result = await placeMt5RealOrder({ symbol: 'EURUSD', side: 'BUY', volume: 0.01 }, { env });
+  const result = await placeMt5RealOrder({ symbol: 'EURUSD', side: 'BUY', volume: 0.01, stopLoss: 1.078, takeProfit: 1.105 }, { env });
   await watcher;
 
   assert.equal(result.ok, true);

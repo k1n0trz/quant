@@ -108,6 +108,8 @@ function buildBridgeRealCommand(order, action) {
     volume: order.volume,
     type: order.type,
     price: order.price || '',
+    sl: order.sl || '',
+    tp: order.tp || '',
     deviation: order.deviation,
     magic: order.magic,
     comment: order.comment
@@ -192,6 +194,11 @@ function buildMt5RealOrderRequest(input = {}, env = {}) {
   if (type === 'LIMIT' && (!price || price <= 0)) {
     return { ok: false, reason: 'limit_price_required', safety: { realTradingTouched: false } };
   }
+  const sl = finiteNumber(input.sl, input.stopLoss);
+  const tp = finiteNumber(input.tp, input.takeProfit);
+  if ((sl !== null && sl <= 0) || (tp !== null && tp <= 0)) {
+    return { ok: false, reason: 'invalid_sl_tp', safety: { realTradingTouched: false } };
+  }
 
   return {
     ok: true,
@@ -203,6 +210,8 @@ function buildMt5RealOrderRequest(input = {}, env = {}) {
       volume,
       type,
       price: price || null,
+      sl,
+      tp,
       deviation: Math.max(1, Math.min(100, finiteNumber(input.deviation, env.MT5_REAL_DEVIATION, 20) || 20)),
       magic: finiteNumber(env.MT5_REAL_MAGIC, 260531) || 260531,
       comment: safeComment(input.reason, input.requestId)

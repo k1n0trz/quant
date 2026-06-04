@@ -47,8 +47,32 @@ test('autonomous scheduler is opt-in and exposes conservative defaults', () => {
   const limits = resolveRealAutonomousLimits({ REAL_TRADING_MAX_NOTIONAL_USDT: '25' }, { maxOpenPositions: 7 });
   assert.equal(limits.maxOrdersPerTick, 1);
   assert.equal(limits.maxOpenPositions, 7);
+  assert.equal(limits.minOpenPositions, 0);
+  assert.equal(limits.autonomyMode, 'opportunity_only');
   assert.equal(limits.maxNotionalUsdt, 5);
+  assert.equal(limits.stopLossPct, 2);
+  assert.equal(limits.takeProfitPct, 3);
   assert.deepEqual(limits.allowedVenues, ['BINANCE', 'MT5']);
+
+  const defaultLimits = resolveRealAutonomousLimits({}, {});
+  assert.equal(defaultLimits.maxOpenPositions, 4);
+});
+
+test('tick does not force a minimum number of real positions when no opportunity is available', async () => {
+  let called = false;
+  const result = await runRealAutonomousTick(armedContext({
+    deps: {
+      readTrainingStateSnapshot: () => ({ state: { activePairs: [] } }),
+      discoverBinanceRealUniverse: async () => ({ ok: true, ready: [] }),
+      executeBinanceRealOrder: async () => { called = true; return { ok: true }; }
+    }
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.executedCount, 0);
+  assert.equal(called, false);
+  assert.equal(result.limits.minOpenPositions, 0);
+  assert.equal(result.limits.autonomyMode, 'opportunity_only');
 });
 
 test('tick refuses real execution when real gates are not armed', async () => {
@@ -84,9 +108,9 @@ test('tick uses executable USDT universe instead of hardcoded BTC and respects m
       discoverBinanceRealUniverse: async () => ({
         ok: true,
         ready: [
-          { venue: 'BINANCE', symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', qty: 0.00008, requestedNotional: 5.5 },
-          { venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 140, requestedNotional: 5.7 },
-          { venue: 'BINANCE', symbol: 'ALLOUSDT', side: 'BUY', type: 'MARKET', qty: 30, requestedNotional: 5.2 }
+          { venue: 'BINANCE', symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', qty: 0.00008, requestedNotional: 5.5, price: 68000 },
+          { venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 140, requestedNotional: 5.7, price: 0.041 },
+          { venue: 'BINANCE', symbol: 'ALLOUSDT', side: 'BUY', type: 'MARKET', qty: 30, requestedNotional: 5.2, price: 0.17 }
         ]
       }),
       executeBinanceRealOrder: async ({ input }) => {
@@ -100,6 +124,8 @@ test('tick uses executable USDT universe instead of hardcoded BTC and respects m
   assert.equal(result.executedCount, 2);
   assert.deepEqual(executions.map((input) => input.symbol), ['ACXUSDT', 'ALLOUSDT']);
   assert.equal(executions.every((input) => input.type === 'MARKET' && input.side === 'BUY'), true);
+  assert.equal(executions.every((input) => input.stopLoss > 0 && input.takeProfit > 0), true);
+  assert.equal(executions.every((input) => input.stopLoss < input.entryPrice && input.takeProfit > input.entryPrice), true);
 });
 
 test('tick avoids symbols already open in real accounts', async () => {
@@ -117,8 +143,8 @@ test('tick avoids symbols already open in real accounts', async () => {
       discoverBinanceRealUniverse: async () => ({
         ok: true,
         ready: [
-          { venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, requestedNotional: 5 },
-          { venue: 'BINANCE', symbol: 'ALLOUSDT', side: 'BUY', type: 'MARKET', qty: 20, requestedNotional: 5 }
+          { venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, requestedNotional: 5, price: 0.041 },
+          { venue: 'BINANCE', symbol: 'ALLOUSDT', side: 'BUY', type: 'MARKET', qty: 20, requestedNotional: 5, price: 0.17 }
         ]
       }),
       executeBinanceRealOrder: async ({ input }) => {
@@ -142,7 +168,7 @@ test('tick respects max autonomous orders per day from audit/deps', async () => 
       getRealAutonomousOrdersToday: async () => 10,
       discoverBinanceRealUniverse: async () => ({
         ok: true,
-        ready: [{ venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, requestedNotional: 5 }]
+        ready: [{ venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, requestedNotional: 5, price: 0.041 }]
       }),
       executeBinanceRealOrder: async () => { called = true; return { ok: true }; }
     }
@@ -169,7 +195,7 @@ test('tick continues to next candidate when the highest ranked preflight is bloc
       readTrainingStateSnapshot: () => ({
         state: {
           activePairs: [
-            { venue: 'MT5', symbol: 'GBPUSD', bias: 'LONG', confidence: 100 },
+            { venue: 'MT5', symbol: 'GBPUSD', bias: 'LONG', confidence: 100, price: 1.27 },
             { venue: 'BINANCE', symbol: 'ACXUSDT', bias: 'LONG', confidence: 90 }
           ]
         }
@@ -179,7 +205,7 @@ test('tick continues to next candidate when the highest ranked preflight is bloc
       placeMt5RealOrder: async () => { throw new Error('should_not_place_mt5'); },
       discoverBinanceRealUniverse: async () => ({
         ok: true,
-        ready: [{ venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, requestedNotional: 5 }]
+        ready: [{ venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, requestedNotional: 5, price: 0.041 }]
       }),
       executeBinanceRealOrder: async ({ input }) => {
         executions.push(input);
@@ -206,7 +232,7 @@ test('Binance ready universe can trade when persisted training pair has no score
       }),
       discoverBinanceRealUniverse: async () => ({
         ok: true,
-        ready: [{ venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, requestedNotional: 5 }]
+        ready: [{ venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, requestedNotional: 5, price: 0.041 }]
       }),
       executeBinanceRealOrder: async ({ input }) => {
         executions.push(input);
@@ -218,6 +244,28 @@ test('Binance ready universe can trade when persisted training pair has no score
   assert.equal(result.executedCount, 1);
   assert.deepEqual(executions.map((input) => input.symbol), ['ACXUSDT']);
   assert.equal(result.candidates[0].priorityScore, 60);
+  assert.equal(executions[0].stopLoss < executions[0].entryPrice, true);
+  assert.equal(executions[0].takeProfit > executions[0].entryPrice, true);
+});
+
+test('autonomous Binance candidates without a protection price are skipped before execution', async () => {
+  let called = false;
+  const result = await runRealAutonomousTick(armedContext({
+    deps: {
+      readTrainingStateSnapshot: () => ({
+        state: { activePairs: [{ venue: 'BINANCE', symbol: 'ACXUSDT', bias: 'LONG', confidence: 90 }] }
+      }),
+      discoverBinanceRealUniverse: async () => ({
+        ok: true,
+        ready: [{ venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, requestedNotional: 5 }]
+      }),
+      executeBinanceRealOrder: async () => { called = true; return { ok: true }; }
+    }
+  }));
+
+  assert.equal(result.executedCount, 0);
+  assert.equal(called, false);
+  assert.equal(result.skipped.some((row) => row.symbol === 'ACXUSDT' && row.reason === 'missing_protection_price'), true);
 });
 
 test('MT5 real candidates run only when explicitly enabled and market is open', async () => {
@@ -235,7 +283,7 @@ test('MT5 real candidates run only when explicitly enabled and market is open', 
       readTrainingStateSnapshot: () => ({
         state: {
           activePairs: [
-            { venue: 'MT5', symbol: 'XAUUSD', bias: 'LONG', confidence: 91, horizon: 'intraday' }
+            { venue: 'MT5', symbol: 'XAUUSD', bias: 'LONG', confidence: 91, horizon: 'intraday', price: 2350 }
           ]
         }
       }),
@@ -251,6 +299,10 @@ test('MT5 real candidates run only when explicitly enabled and market is open', 
   assert.equal(result.ok, true);
   assert.equal(result.executedCount, 1);
   assert.deepEqual(mt5Orders.map((input) => [input.symbol, input.side, input.volume]), [['XAUUSD', 'BUY', 0.01]]);
+  assert.equal(mt5Orders[0].stopLoss > 0, true);
+  assert.equal(mt5Orders[0].takeProfit > 0, true);
+  assert.equal(mt5Orders[0].stopLoss < mt5Orders[0].entryPrice, true);
+  assert.equal(mt5Orders[0].takeProfit > mt5Orders[0].entryPrice, true);
 });
 
 test('controller prevents overlapping autonomous ticks', async () => {

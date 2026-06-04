@@ -63,6 +63,16 @@ function findCandidatePair(symbol, venue, state = {}) {
   )) || null;
 }
 
+function findOpenPositionForPair(symbol, venue, state = {}) {
+  const positions = Array.isArray(state.positions) ? state.positions : [];
+  return positions.find((position) => (
+    isObject(position)
+    && !position.exit_price
+    && sameText(position.symbol, symbol)
+    && (textValue(venue) ? sameText(position.venue, venue) : true)
+  )) || null;
+}
+
 function buildUnavailableCandidate(symbol, venue, reason) {
   return {
     available: false,
@@ -99,6 +109,7 @@ async function generateTrainingSignalCandidate(symbol, context = {}, options = {
   const pair = context.pair || findCandidatePair(symbol, context.venue, state);
   const resolvedSymbol = textValue(symbol, pair?.symbol);
   const resolvedVenue = textValue(context.venue, pair?.venue, 'BINANCE');
+  const openPosition = findOpenPositionForPair(resolvedSymbol, resolvedVenue, state);
 
   if (!isTrainingBackendSignalCandidatesEnabled(env)) {
     return buildUnavailableCandidate(resolvedSymbol, resolvedVenue, 'signal_candidates_disabled');
@@ -125,11 +136,17 @@ async function generateTrainingSignalCandidate(symbol, context = {}, options = {
   }
 
   const indicators = {
-    bias: pair?.bias,
-    confidence: pair?.confidence,
-    horizon: pair?.horizon,
+    bias: textValue(pair?.bias, openPosition?.direction),
+    confidence: finiteNumber(pair?.confidence, openPosition?.confidence),
+    horizon: textValue(pair?.horizon, openPosition?.horizon),
     signalQuality: pair?.signalQuality,
-    primaryStrategy: isObject(pair?.primaryStrategy) ? pair.primaryStrategy : undefined,
+    primaryStrategy: isObject(pair?.primaryStrategy)
+      ? pair.primaryStrategy
+      : (openPosition ? {
+        id: openPosition.strategy_id,
+        name: openPosition.strategy_name,
+        score: openPosition.strategy_score
+      } : undefined),
     macroRisk: pair?.macroRisk,
     macroReasons: pair?.macroReasons,
     ...(isObject(pair?.indicators) ? pair.indicators : {})
@@ -143,7 +160,7 @@ async function generateTrainingSignalCandidate(symbol, context = {}, options = {
   const horizon = textValue(indicators.horizon, 'intraday');
   const primaryStrategy = isObject(indicators.primaryStrategy) ? indicators.primaryStrategy : {};
   const signalQuality = finiteNumber(indicators.signalQuality, indicators.signal_quality, pair?.signalQuality, pair?.signal_quality);
-  const pairScore = finiteNumber(pair?.score, indicators.pairScore, indicators.score, primaryStrategy.score, confidence);
+  const pairScore = finiteNumber(pair?.score, indicators.pairScore, indicators.score, primaryStrategy.score, openPosition?.strategy_score, confidence);
   const htfAlignmentScore = finiteNumber(
     indicators.htfAlignmentScore,
     indicators.htf_alignment_score,
@@ -170,6 +187,7 @@ async function generateTrainingSignalCandidate(symbol, context = {}, options = {
   ];
   if (strategyId && state.strategyStats?.[strategyId]) reasonCodes.push(`strategy_stats:${strategyId}`);
   if (Array.isArray(state.lessons) && state.lessons.some((lesson) => sameText(lesson.symbol, resolvedSymbol))) reasonCodes.push('lessons_symbol_history');
+  if (openPosition) reasonCodes.push('open_position_context');
   if (typeof deps.readMemory === 'function' && Array.isArray(deps.readMemory(50)) && deps.readMemory(50).some((entry) => sameText(entry?.payload?.symbol || entry?.symbol, resolvedSymbol))) {
     reasonCodes.push('memory_symbol_context');
   }

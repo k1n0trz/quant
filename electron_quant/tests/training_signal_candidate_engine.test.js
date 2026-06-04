@@ -184,6 +184,40 @@ test('signal candidate falls back to persisted active pair price when live conte
   assert.equal(result.reason_codes.includes('market_source:active_pair_projection'), true);
 });
 
+test('signal candidate can use open MT5 position metadata when active pair has no indicators', async () => {
+  const result = await generateTrainingSignalCandidate('EURUSD', {
+    state: createState({
+      activePairs: [{
+        symbol: 'EURUSD',
+        venue: 'MT5',
+        price: 1.16073
+      }],
+      positions: [{
+        id: 'pos-eurusd-mt5',
+        symbol: 'EURUSD',
+        venue: 'MT5',
+        direction: 'SHORT',
+        horizon: 'intraday',
+        confidence: 76,
+        strategy_id: 'trendMomentum',
+        strategy_name: 'Trend Momentum / MT5',
+        strategy_score: 84
+      }]
+    }),
+    marketContext: { available: false, symbol: 'EURUSD', venue: 'MT5', reason: 'mt5_rates_timeout' },
+    env: { TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED: 'true' },
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z')
+  });
+
+  assert.equal(result.available, true);
+  assert.equal(result.symbol, 'EURUSD');
+  assert.equal(result.venue, 'MT5');
+  assert.equal(result.bias, 'SHORT');
+  assert.equal(result.confidence, 76);
+  assert.equal(result.strategy_id, 'trendMomentum');
+  assert.equal(result.reason_codes.includes('open_position_context'), true);
+});
+
 test('signal candidate batch generation stays read-only and returns per-symbol results', async () => {
   const results = await generateTrainingSignalCandidates(['BTCUSDT', 'ETHUSDT'], {
     state: createState({

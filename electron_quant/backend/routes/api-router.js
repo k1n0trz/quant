@@ -86,6 +86,7 @@ function flattenBinanceOrderResult(result) {
       ok: true,
       executionStatus: result.status || 'executed',
       request: result.request || null,
+      protection: result.protection || null,
       safety: result.safety || null,
       ...(result.order || {})
     };

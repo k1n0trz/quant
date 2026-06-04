@@ -22,11 +22,19 @@ assert.ok(main.includes("ipcMain.handle('binance-real-universe'"), 'main debe re
 const submitBody = renderer.match(/async function submitOrder\(side\) \{([\s\S]*?)\r?\n\}\r?\n\r?\nfunction updateClock/)?.[1] || '';
 assert.ok(submitBody.includes('window.quant.binanceRealOrderPreflight'), 'submitOrder debe ejecutar preflight real Binance.');
 assert.ok(submitBody.indexOf('window.quant.binanceRealOrderPreflight') < submitBody.indexOf('window.quant.placeOrder'), 'preflight debe ocurrir antes de placeOrder.');
+assert.ok(submitBody.includes('takeProfitInput'), 'submitOrder debe leer TAKE-PROFIT del formulario.');
+assert.match(submitBody, /binanceRealOrderPreflight\(\{[\s\S]*stopLoss:\s*stopPrice[\s\S]*takeProfit/s, 'preflight Binance debe recibir stopLoss/takeProfit.');
+assert.match(submitBody, /placeOrder\(side,\s*symbol,\s*qty,\s*orderType,\s*limitPrice,\s*\{[\s\S]*stopLoss:\s*stopPrice[\s\S]*takeProfit/s, 'placeOrder Binance debe recibir stopLoss/takeProfit.');
 assert.match(submitBody, /if\s*\(!preflight\.ok\)/, 'submitOrder debe bloquear cuando preflight no esta ready.');
 assert.match(submitBody, /Preflight Binance/i, 'submitOrder debe mostrar feedback de preflight.');
 assert.match(submitBody, /Faltante Spot/i, 'submitOrder debe mostrar faltante Spot.');
 assert.match(submitBody, /Earn Flexible detectado/i, 'submitOrder debe mostrar saldo Earn detectado.');
 assert.match(main, /getBinanceEarnBalance/, 'main debe leer saldo Simple Earn para preflight.');
+assert.match(renderer, /placeOrder:\s*\(side,\s*sym,\s*qty,\s*type,\s*price,\s*protection\s*=\s*\{\}\)\s*=>\s*apiPost\('place-order',\s*\{[\s\S]*stopLoss:\s*protection\.stopLoss[\s\S]*takeProfit:\s*protection\.takeProfit/s, 'renderer web placeOrder debe transportar SL/TP.');
+assert.ok(preload.includes("placeOrder:       (side, symbol, qty, type, price, protection = {}) => ipcRenderer.invoke('place-order', side, symbol, qty, type, price, protection)"), 'preload placeOrder debe transportar SL/TP.');
+assert.match(main, /ipcMain\.handle\('place-order',\s*\(_e,\s*side,\s*symbol,\s*qty,\s*type,\s*price,\s*protection\s*=\s*\{\}\)/, 'main place-order debe aceptar payload de proteccion.');
+assert.ok(!html.includes('<label data-pending="backend" title="Pendiente integración backend">TAKE-PROFIT'), 'TAKE-PROFIT ya no debe marcarse como pendiente backend.');
+assert.ok(!html.includes('TAKE-PROFIT y MULTIPLICADOR aún no se transmiten'), 'La nota manual no debe decir que TAKE-PROFIT esta pendiente.');
 
 const loadOrdersBody = renderer.match(/async function loadOrders\(\) \{([\s\S]*?)\r?\n\}\r?\n\r?\nfunction renderRealOrderAuditRows/)?.[1] || '';
 assert.ok(loadOrdersBody.includes('window.quant.binanceRealOrderAudit'), 'loadOrders debe leer audit real Binance.');

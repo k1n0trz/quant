@@ -11,6 +11,15 @@ const main = fs.readFileSync(path.join(root, 'main.js'), 'utf8');
 assert.equal(/data-view="lab"/.test(html), false, 'Quant Lab no debe aparecer en la navegacion.');
 assert.equal(/quant-lab-api|quant-lab-hero|quant-lab-panels|ui\/lab\.css|ui\/tokens\.css/.test(html), false, 'La UI no debe cargar assets de Quant Lab.');
 assert.equal(/id="view-lab"/.test(html), false, 'El markup de Quant Lab debe salir del shell principal.');
+for (const retired of [
+  path.join(root, 'src', 'views', 'quant-lab-hero.js'),
+  path.join(root, 'src', 'views', 'quant-lab-panels.js'),
+  path.join(root, 'src', 'services', 'quant-lab-api.js'),
+  path.join(root, 'src', 'ui', 'lab.css'),
+  path.join(root, 'src', 'ui', 'tokens.css')
+]) {
+  assert.equal(fs.existsSync(retired), false, `Artefacto retirado de Quant Lab no debe existir: ${path.basename(retired)}`);
+}
 assert.ok(html.includes('ENTRENAMIENTO DE QUANT'), 'Training debe ser la superficie principal visible.');
 assert.ok(html.includes('trainingRuntimeStrip') && html.includes('trainingRuntimePill'), 'Training debe exponer estado real del scheduler.');
 assert.ok(renderer.includes('trainingLoopStatus'), 'Renderer debe leer /api/training/demo/loop/status.');

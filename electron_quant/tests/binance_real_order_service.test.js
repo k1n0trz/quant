@@ -108,6 +108,63 @@ test('autonomous Binance real order places protection after filled spot entry', 
   assert.equal(result.protection.ok, true);
 });
 
+test('manual Binance BUY with SL TP places OCO protection after filled spot entry', async () => {
+  const protections = [];
+  const result = await executeBinanceRealOrder({
+    input: {
+      venue: 'BINANCE',
+      side: 'BUY',
+      symbol: 'ACXUSDT',
+      qty: 100,
+      type: 'MARKET',
+      stopLoss: 0.04018,
+      takeProfit: 0.04223,
+      reason: 'manual-real-order'
+    },
+    ...armedContext({
+      deps: {
+        placeOrderBinance: async () => ({ ok: true, orderId: 777, status: 'FILLED', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, price: 0.041, notional: 4.1 }),
+        placeProtectionBinance: async (request, order) => {
+          protections.push({ request, order });
+          return { ok: true, orderListId: 1001, symbol: request.symbol };
+        }
+      }
+    })
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.status, 'executed');
+  assert.equal(protections.length, 1);
+  assert.equal(protections[0].request.reason, 'manual-real-order');
+  assert.equal(result.protection.orderListId, 1001);
+});
+
+test('manual Binance SL TP request blocks before entry when protection handler is unavailable', async () => {
+  let placed = false;
+  const result = await executeBinanceRealOrder({
+    input: {
+      venue: 'BINANCE',
+      side: 'BUY',
+      symbol: 'ACXUSDT',
+      qty: 100,
+      type: 'MARKET',
+      stopLoss: 0.04018,
+      takeProfit: 0.04223,
+      reason: 'manual-real-order'
+    },
+    ...armedContext({
+      deps: {
+        placeOrderBinance: async () => { placed = true; return { ok: true, orderId: 1 }; }
+      }
+    })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 'blocked');
+  assert.equal(placed, false);
+  assert.match(result.error, /proteccion/i);
+});
+
 test('autonomous Binance real order reports protection_failed when OCO placement fails after entry', async () => {
   const result = await executeBinanceRealOrder({
     input: {

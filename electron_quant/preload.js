@@ -58,6 +58,6 @@ contextBridge.exposeInMainWorld('quant', {
   realAutonomousTick: () => ipcRenderer.invoke('real-autonomous-tick'),
   realAutonomousStart: () => ipcRenderer.invoke('real-autonomous-start'),
   realAutonomousStop: () => ipcRenderer.invoke('real-autonomous-stop'),
-  placeOrder:       (side, symbol, qty, type, price) => ipcRenderer.invoke('place-order', side, symbol, qty, type, price),
+  placeOrder:       (side, symbol, qty, type, price, protection = {}) => ipcRenderer.invoke('place-order', side, symbol, qty, type, price, protection),
   cancelOrder:      (symbol, orderId) => ipcRenderer.invoke('cancel-order', symbol, orderId)
 });

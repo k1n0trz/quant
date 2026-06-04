@@ -969,7 +969,7 @@ select:hover, input:hover, select:focus, input:focus {
 .api-config-actions { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; }
 .api-config-actions span { color: var(--text-secondary); font-size: 13px; }
 
-/* Production hotfix: Quant Lab retired, training/status surfaces kept visible. */
+/* Production shell guard: retired lab surfaces stay hidden; training/status stay visible. */
 #view-lab,
 .nav-item[data-view="lab"] {
   display: none !important;

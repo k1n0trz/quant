@@ -3442,8 +3442,8 @@ ipcMain.handle('real-autonomous-start', () =>
 ipcMain.handle('real-autonomous-stop', () =>
   realAutonomousScheduler.stop(createRealAutonomousRuntimeContext(ENV))
 );
-ipcMain.handle('place-order', (_e, side, symbol, qty, type, price) =>
-  executeAndAuditBinanceRealOrder({ venue: 'BINANCE', side, symbol, qty, type, price }, ENV)
+ipcMain.handle('place-order', (_e, side, symbol, qty, type, price, protection = {}) =>
+  executeAndAuditBinanceRealOrder({ venue: 'BINANCE', side, symbol, qty, type, price, stopLoss: protection.stopLoss, takeProfit: protection.takeProfit }, ENV)
     .catch((err) => ({ ok: false, status: 'error', error: err.message }))
 );
 ipcMain.handle('cancel-order', (_e, symbol, orderId) =>

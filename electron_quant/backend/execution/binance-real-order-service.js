@@ -149,8 +149,17 @@ function isAutonomousRequest(request = {}) {
   return request.reason === 'real-autonomous-scheduler';
 }
 
+function providedFiniteNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  return finiteNumber(value);
+}
+
 function hasStopTakeProtection(request = {}) {
-  return finiteNumber(request.stopLoss) !== null && finiteNumber(request.takeProfit) !== null;
+  return providedFiniteNumber(request.stopLoss) !== null && providedFiniteNumber(request.takeProfit) !== null;
+}
+
+function hasAnyStopTakeProtection(request = {}) {
+  return providedFiniteNumber(request.stopLoss) !== null || providedFiniteNumber(request.takeProfit) !== null;
 }
 
 function validateExecutionGates({ env = {}, botState = {}, riskConfig = {} }) {
@@ -219,6 +228,15 @@ async function preflightBinanceRealOrder({ input = {}, env = {}, botState = {}, 
     orderTestOk: null
   };
   const reasons = [];
+  if (hasAnyStopTakeProtection(request) && !hasStopTakeProtection(request)) {
+    reasons.push('SL y TP deben enviarse juntos para proteccion Binance Spot.');
+  }
+  if (hasStopTakeProtection(request) && request.side !== 'BUY') {
+    reasons.push('Proteccion SL/TP Binance Spot solo soporta entradas BUY.');
+  }
+  if (hasStopTakeProtection(request) && typeof deps.placeProtectionBinance !== 'function') {
+    reasons.push('Handler de proteccion SL/TP Binance no disponible.');
+  }
   if (!checks.symbolTrading) reasons.push(`${request.symbol} no esta en estado TRADING.`);
   if (!checks.priceKnown) reasons.push('Precio Binance no disponible para preflight.');
   if (!checks.qtyAboveMin) reasons.push(`Cantidad ${request.qty} menor al minimo ${minQty}.`);
@@ -287,9 +305,15 @@ async function executeBinanceRealOrder({ input = {}, env = {}, botState = {}, ri
     if (!hasStopTakeProtection(request)) {
       return buildBlockedResult('Orden autonoma Binance bloqueada: falta proteccion SL/TP.', request);
     }
-    if (typeof deps.placeProtectionBinance !== 'function') {
-      return buildBlockedResult('Orden autonoma Binance bloqueada: handler de proteccion SL/TP no disponible.', request);
-    }
+  }
+  if (hasAnyStopTakeProtection(request) && !hasStopTakeProtection(request)) {
+    return buildBlockedResult('Orden Binance bloqueada: SL y TP deben enviarse juntos.', request);
+  }
+  if (hasStopTakeProtection(request) && request.side !== 'BUY') {
+    return buildBlockedResult('Orden Binance bloqueada: proteccion SL/TP Spot solo soporta entradas BUY.', request);
+  }
+  if (hasStopTakeProtection(request) && typeof deps.placeProtectionBinance !== 'function') {
+    return buildBlockedResult('Orden Binance bloqueada: handler de proteccion SL/TP no disponible.', request);
   }
 
   try {
@@ -308,7 +332,7 @@ async function executeBinanceRealOrder({ input = {}, env = {}, botState = {}, ri
       };
     }
     let protection = null;
-    if (isAutonomousRequest(request) && typeof deps.placeProtectionBinance === 'function') {
+    if (hasStopTakeProtection(request) && typeof deps.placeProtectionBinance === 'function') {
       try {
         protection = await deps.placeProtectionBinance(request, order);
       } catch (error) {

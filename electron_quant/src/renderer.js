@@ -57,7 +57,7 @@ if (!window.quant) {
     realAutonomousTick:    ()                           => apiPost('real-autonomous/tick', {}),
     realAutonomousStart:   ()                           => apiPost('real-autonomous/start', {}),
     realAutonomousStop:    ()                           => apiPost('real-autonomous/stop', {}),
-    placeOrder:            (side, sym, qty, type, price) => apiPost('place-order', { side, symbol: sym, qty, type, price }),
+    placeOrder:            (side, sym, qty, type, price, protection = {}) => apiPost('place-order', { side, symbol: sym, qty, type, price, stopLoss: protection.stopLoss, takeProfit: protection.takeProfit }),
     cancelOrder:           (sym, orderId)              => apiPost('cancel-order', { symbol: sym, orderId }),
     mt5DemoOrder:          (payload)                   => apiPost('mt5-demo/order', payload),
     mt5RealOrderPreflight: (payload)                   => apiPost('mt5-real/preflight', payload),
@@ -4580,13 +4580,14 @@ async function submitOrder(side) {
   const orderType = $('orderType').value || 'MARKET';
   const limitPrice = parseFloat($('limitPriceInput').value) || null;
   const stopPrice = parseFloat($('stopLossInput').value) || null;
+  const takeProfit = parseFloat($('takeProfitInput').value) || null;
   const confirmation = $('confirmInput').value.trim().toUpperCase();
   const expected = `CONFIRMO ${side} ${symbol}`.toUpperCase();
   const rb = $('orderResultBox');
 
   if (!state.env.realTrading) {
     logEvent('WARN', `Orden ${side} ${symbol} bloqueada: REAL_TRADING=false`);
-    window.quant.memoryWrite('trade', { status: 'blocked', reason: 'REAL_TRADING=false', side, symbol, qty, venue, stopPrice, macro_context: currentNewsContext(symbol) }).then(loadMemoryStats);
+    window.quant.memoryWrite('trade', { status: 'blocked', reason: 'REAL_TRADING=false', side, symbol, qty, venue, stopPrice, takeProfit, macro_context: currentNewsContext(symbol) }).then(loadMemoryStats);
     if (rb) { rb.style.display = 'block'; rb.style.color = '#e05a5a'; rb.textContent = 'Bloqueada: REAL_TRADING=false en .env.'; }
     return;
   }
@@ -4615,8 +4616,8 @@ async function submitOrder(side) {
   let preflight = null;
   try {
     preflight = venue === 'MT5'
-      ? await window.quant.mt5RealOrderPreflight({ symbol, side, volume: qty, type: orderType, price: limitPrice, reason: 'manual-real-order' })
-      : await window.quant.binanceRealOrderPreflight({ venue, side, symbol, qty, type: orderType, price: limitPrice });
+      ? await window.quant.mt5RealOrderPreflight({ symbol, side, volume: qty, type: orderType, price: limitPrice, stopLoss: stopPrice, takeProfit, reason: 'manual-real-order' })
+      : await window.quant.binanceRealOrderPreflight({ venue, side, symbol, qty, type: orderType, price: limitPrice, stopLoss: stopPrice, takeProfit });
     if (!preflight.ok) {
       const detail = venue === 'MT5'
         ? [
@@ -4658,8 +4659,8 @@ async function submitOrder(side) {
   logEvent('OK', `Enviando orden real ${venue}: ${orderType} ${side} ${qty} ${symbol}`);
   try {
     const res = venue === 'MT5'
-      ? await window.quant.mt5RealOrder({ symbol, side, volume: qty, type: orderType, price: limitPrice, reason: 'manual-real-order' })
-      : await window.quant.placeOrder(side, symbol, qty, orderType, limitPrice);
+      ? await window.quant.mt5RealOrder({ symbol, side, volume: qty, type: orderType, price: limitPrice, stopLoss: stopPrice, takeProfit, reason: 'manual-real-order' })
+      : await window.quant.placeOrder(side, symbol, qty, orderType, limitPrice, { stopLoss: stopPrice, takeProfit });
     if (!res.ok) throw new Error(res.error || res.reason || 'Error desconocido');
 
     const msg = venue === 'MT5'
@@ -4681,6 +4682,7 @@ async function submitOrder(side) {
       type: orderType,
       venue,
       stopPrice: stopPrice || null,
+      takeProfit: takeProfit || null,
       macro_risk: macro.risk,
       fills: res.fills || null,
       ts: new Date().toISOString()
@@ -4692,7 +4694,7 @@ async function submitOrder(side) {
     if (_alertConfig?.enabled) {
       window.quant.sendAlert(
         `Orden ejecutada: ${side} ${symbol}`,
-        `${venue} ${orderType} ${side} ${qty} ${symbol} ejecutada.\n${msg}\nStop configurado: ${stopPrice ? fmtPrice(stopPrice) : 'no especificado'}`
+        `${venue} ${orderType} ${side} ${qty} ${symbol} ejecutada.\n${msg}\nStop configurado: ${stopPrice ? fmtPrice(stopPrice) : 'no especificado'}\nTake-profit configurado: ${takeProfit ? fmtPrice(takeProfit) : 'no especificado'}`
       ).catch(() => {});
     }
   } catch (err) {

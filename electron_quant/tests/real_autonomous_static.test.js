@@ -15,6 +15,7 @@ assert.ok(main.includes('REAL_AUTONOMOUS_SCHEDULER_ENABLED'), 'main debe permiti
 assert.ok(main.includes('real.autonomous.autostart'), 'main debe registrar autostart del scheduler real.');
 assert.ok(main.includes('createRealAutonomousRuntimeContext(realEnv)'), 'autostart debe usar contexto runtime real.');
 assert.ok(main.includes('effectiveEnvForUser(WEB_AUTH_EMAIL)'), 'autostart debe usar las APIs guardadas del usuario admin.');
+assert.ok(main.includes('if (account?.is_demo === true) continue;'), 'conteo de posiciones reales no debe consumir cupo con posiciones MT5 demo.');
 
 for (const route of [
   '/api/real-autonomous/status',

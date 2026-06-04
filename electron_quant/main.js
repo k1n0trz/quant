@@ -420,6 +420,7 @@ async function getOpenRealPositionsForScheduler(env) {
   try {
     const live = await livePositions(env, true);
     for (const account of (Array.isArray(live?.mt5Accounts) ? live.mt5Accounts : [])) {
+      if (account?.is_demo === true) continue;
       for (const position of (Array.isArray(account?.positions) ? account.positions : [])) {
         if (position?.symbol) rows.push({ venue: 'MT5', symbol: position.symbol });
       }

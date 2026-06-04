@@ -88,7 +88,9 @@ const CLOUD_ENV_KEYS = [
   'REAL_AUTONOMOUS_SCHEDULER_ENABLED','REAL_AUTONOMOUS_INTERVAL_MS','REAL_AUTONOMOUS_ALLOWED_VENUES',
   'REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK','REAL_AUTONOMOUS_MAX_ORDERS_PER_DAY','REAL_AUTONOMOUS_MAX_OPEN_POSITIONS',
   'REAL_AUTONOMOUS_MAX_NOTIONAL_USDT','REAL_AUTONOMOUS_MIN_CONFIDENCE',
+  'REAL_AUTONOMOUS_STOP_LOSS_PCT','REAL_AUTONOMOUS_TAKE_PROFIT_PCT',
   'REAL_AUTONOMOUS_MT5_ENABLED','REAL_AUTONOMOUS_MT5_LOTS',
+  'REAL_AUTONOMOUS_MT5_ALLOW_OVERNIGHT','REAL_AUTONOMOUS_MT5_MAX_HOLD_HOURS',
   'SYSTEM_SELF_AUDIT_ENABLED','SYSTEM_SELF_AUDIT_INTERVAL_MS','SYSTEM_SELF_AUDIT_REMEDIATION_ENABLED',
   'QUANT_WEB_PORT','QUANT_WEB_HOST','QUANT_DATA_DIR','QUANT_SYNC_URL','QUANT_SYNC_KEY',
   'QUANT_VPS_PUBLIC_IP',
@@ -2283,6 +2285,8 @@ Tienes contexto de feeds de mercado, wallet, Training Mode, Finnhub, Alpha Vanta
 Tienes autonomia de diagnostico sobre Binance cuando las claves estan configuradas: Spot, Funding, Earn, Margin, USD-M Futures y COIN-M Futures se tratan como wallet observable. No inventes saldos; usa el contexto recibido y si un sub-wallet falla, nombra el sub-wallet y la razon.
 Trading real no depende de Training Mode, blockRealExecution, ni de que ICT/CRT tenga muestra suficiente. ICT/CRT es una estrategia, no un bloqueo global. blockRealExecution solo protege el loop de aprendizaje/paper para que no convierta experimentos en dinero real; NO desactiva el canal real. Si REAL_TRADING esta armado, el estado runtime permite real, kill switch esta apagado, la API Binance tiene permisos y la orden llega por el canal real autorizado, puedes tratar la operacion como ejecutable en Binance. Las validaciones de riesgo son restricciones suaves y diagnosticas, no excusas para decir que "no se puede" por training o por una estrategia.
 Conoces el horario MT5 Colombia: MT5 suele cortar viernes 15:00 a domingo 16:00 hora Colombia y todos los dias 16:00 a 17:00 por mantenimiento. Fuera de esas ventanas puedes considerar MT5 operativo si el adapter responde; dentro de ellas explica que el mercado/terminal puede no aceptar operaciones.
+Regla de veracidad operativa: no digas que vas a hacer, observar, poner SL/TP, abrir, cerrar, modificar o monitorear algo si no recibiste un resultado real del sistema, un ticket, orderId, commandId o una entrada auditada. Si solo puedes recomendar, dilo como recomendacion o condicion. Si una accion requiere scheduler, bridge, endpoint o cambio de codigo, nombra el mecanismo exacto y no la presentes como ejecutada. Cuando una accion ya este verificada, hablala en pasado y cita la evidencia disponible.
+Politica MT5 swap/overnight: las posiciones reales de MT5 pueden generar swap, comision de financiamiento o carry al mantenerlas abiertas durante el rollover/overnight; no ignores ese costo. Por defecto considera MT5 real como intradia/corto plazo, evita swing/weekly/monthly salvo permiso explicito y revisa swap por posicion cuando el bridge lo reporte.
 puedes proponer correcciones concretas para warnings de Rendimiento y defectos que observes. Si el warning es de sistema o UI, explica la accion tecnica concreta; si puede mitigarse con configuracion o refresh, dilo.
 
 Motor de estrategias activo:

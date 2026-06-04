@@ -65,6 +65,8 @@ function resolveRealAutonomousLimits(env = {}, riskConfig = {}) {
   const mt5Lots = clampNumber(env.REAL_AUTONOMOUS_MT5_LOTS ?? env.MT5_REAL_MAX_LOTS, 0.01, 0.01, 0.05);
   const stopLossPct = clampNumber(env.REAL_AUTONOMOUS_STOP_LOSS_PCT, 2, 0.1, 20);
   const takeProfitPct = clampNumber(env.REAL_AUTONOMOUS_TAKE_PROFIT_PCT, 3, 0.1, 50);
+  const mt5AllowOvernight = boolFlag(env.REAL_AUTONOMOUS_MT5_ALLOW_OVERNIGHT);
+  const mt5MaxHoldHours = Math.floor(clampNumber(env.REAL_AUTONOMOUS_MT5_MAX_HOLD_HOURS, 22, 1, 168));
   return {
     allowedVenues: resolveAllowedVenues(env),
     autonomyMode: 'opportunity_only',
@@ -76,7 +78,9 @@ function resolveRealAutonomousLimits(env = {}, riskConfig = {}) {
     minConfidence,
     mt5Lots,
     stopLossPct,
-    takeProfitPct
+    takeProfitPct,
+    mt5AllowOvernight,
+    mt5MaxHoldHours
   };
 }
 
@@ -253,6 +257,13 @@ function mt5MarketOpen(context) {
   return { open: session?.open !== false, reason: session?.reason || 'unknown' };
 }
 
+function mt5HorizonRequiresOvernight(horizon) {
+  const text = String(horizon || '').trim().toLowerCase();
+  if (!text) return false;
+  if (text.includes('intraday') || text.includes('scalp') || text.includes('minute') || text.includes('m1') || text.includes('m5') || text.includes('m15') || text.includes('h1')) return false;
+  return /swing|weekly|week|monthly|month|medium|long|position|daily|multi.?day/.test(text);
+}
+
 async function buildMt5Candidates(context, state, limits, opened) {
   const env = context.env || {};
   if (!limits.allowedVenues.includes('MT5')) return [];
@@ -271,6 +282,10 @@ async function buildMt5Candidates(context, state, limits, opened) {
     }
     if (signal.score < limits.minConfidence) continue;
     if (signal.bias !== 'LONG' && signal.bias !== 'SHORT') continue;
+    if (!limits.mt5AllowOvernight && mt5HorizonRequiresOvernight(signal.horizon)) {
+      rows.push({ venue: 'MT5', symbol: signal.symbol, skipOnly: true, reason: 'mt5_overnight_horizon_blocked' });
+      continue;
+    }
     const side = signal.bias === 'LONG' ? 'BUY' : 'SELL';
     const protection = buildProtection(side, signal.price, limits);
     if (!protection) {
@@ -283,7 +298,9 @@ async function buildMt5Candidates(context, state, limits, opened) {
       side,
       volume: limits.mt5Lots,
       type: 'MARKET',
+      horizon: signal.horizon,
       priorityScore: signal.score,
+      maxHoldHours: limits.mt5MaxHoldHours,
       ...protection,
       reason: signal.reason || 'training_signal'
     });
@@ -444,6 +461,7 @@ async function runRealAutonomousTick(context = {}) {
       entryPrice: candidate.entryPrice,
       stopLoss: candidate.stopLoss,
       takeProfit: candidate.takeProfit,
+      maxHoldHours: candidate.maxHoldHours,
       reason: candidate.reason
     })),
     skipped,

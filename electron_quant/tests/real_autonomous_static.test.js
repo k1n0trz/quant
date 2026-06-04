@@ -43,6 +43,9 @@ assert.ok(scheduler.includes('REAL_AUTONOMOUS_STOP_LOSS_PCT'), 'scheduler debe s
 assert.ok(scheduler.includes('REAL_AUTONOMOUS_TAKE_PROFIT_PCT'), 'scheduler debe soportar take-profit configurable.');
 assert.ok(scheduler.includes('missing_protection_price'), 'scheduler debe saltar candidatos sin precio para SL/TP.');
 assert.ok(scheduler.includes('REAL_AUTONOMOUS_MT5_ENABLED'), 'MT5 real debe requerir flag explicito.');
+assert.ok(scheduler.includes('REAL_AUTONOMOUS_MT5_ALLOW_OVERNIGHT'), 'MT5 real debe bloquear overnight salvo flag explicito.');
+assert.ok(scheduler.includes('REAL_AUTONOMOUS_MT5_MAX_HOLD_HOURS'), 'MT5 real debe exponer max hold hours para controlar swap/carry.');
+assert.ok(scheduler.includes('mt5_overnight_horizon_blocked'), 'MT5 real debe bloquear horizontes swing/overnight por defecto.');
 assert.ok(!/blockRealExecution/.test(scheduler), 'scheduler real no debe depender del flag de training blockRealExecution.');
 assert.ok(!/BTCUSDT['"]/.test(scheduler), 'scheduler real no debe hardcodear BTCUSDT.');
 

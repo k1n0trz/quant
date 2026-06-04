@@ -52,6 +52,8 @@ test('autonomous scheduler is opt-in and exposes conservative defaults', () => {
   assert.equal(limits.maxNotionalUsdt, 5);
   assert.equal(limits.stopLossPct, 2);
   assert.equal(limits.takeProfitPct, 3);
+  assert.equal(limits.mt5AllowOvernight, false);
+  assert.equal(limits.mt5MaxHoldHours, 22);
   assert.deepEqual(limits.allowedVenues, ['BINANCE', 'MT5']);
 
   const defaultLimits = resolveRealAutonomousLimits({}, {});
@@ -303,6 +305,61 @@ test('MT5 real candidates run only when explicitly enabled and market is open', 
   assert.equal(mt5Orders[0].takeProfit > 0, true);
   assert.equal(mt5Orders[0].stopLoss < mt5Orders[0].entryPrice, true);
   assert.equal(mt5Orders[0].takeProfit > mt5Orders[0].entryPrice, true);
+});
+
+test('MT5 real scheduler blocks swing/overnight horizons unless explicitly allowed', async () => {
+  let called = false;
+  const blocked = await runRealAutonomousTick(armedContext({
+    env: {
+      REAL_AUTONOMOUS_ALLOWED_VENUES: 'MT5',
+      REAL_AUTONOMOUS_MT5_ENABLED: 'true',
+      MT5_REAL_TRADING_ENABLED: 'true',
+      MT5_CONNECTOR_ENABLED: 'true'
+    },
+    riskConfig: { allowedVenues: ['BINANCE', 'MT5'] },
+    deps: {
+      readTrainingStateSnapshot: () => ({
+        state: {
+          activePairs: [
+            { venue: 'MT5', symbol: 'AUDCAD', bias: 'SHORT', confidence: 92, horizon: 'swing', price: 0.9922 }
+          ]
+        }
+      }),
+      getMt5MarketSession: () => ({ open: true, reason: 'open' }),
+      checkMt5RealOrder: async () => { called = true; return { ok: true }; },
+      placeMt5RealOrder: async () => { called = true; return { ok: true }; }
+    }
+  }));
+
+  assert.equal(blocked.executedCount, 0);
+  assert.equal(called, false);
+  assert.equal(blocked.skipped.some((row) => row.symbol === 'AUDCAD' && row.reason === 'mt5_overnight_horizon_blocked'), true);
+
+  const allowed = await runRealAutonomousTick(armedContext({
+    env: {
+      REAL_AUTONOMOUS_ALLOWED_VENUES: 'MT5',
+      REAL_AUTONOMOUS_MT5_ENABLED: 'true',
+      MT5_REAL_TRADING_ENABLED: 'true',
+      MT5_CONNECTOR_ENABLED: 'true',
+      REAL_AUTONOMOUS_MT5_ALLOW_OVERNIGHT: 'true'
+    },
+    riskConfig: { allowedVenues: ['BINANCE', 'MT5'] },
+    deps: {
+      readTrainingStateSnapshot: () => ({
+        state: {
+          activePairs: [
+            { venue: 'MT5', symbol: 'AUDCAD', bias: 'SHORT', confidence: 92, horizon: 'swing', price: 0.9922 }
+          ]
+        }
+      }),
+      getMt5MarketSession: () => ({ open: true, reason: 'open' }),
+      checkMt5RealOrder: async () => ({ ok: true }),
+      placeMt5RealOrder: async (input) => ({ ok: true, order: input, realTradingTouched: true })
+    }
+  }));
+
+  assert.equal(allowed.executedCount, 1);
+  assert.equal(allowed.candidates[0].maxHoldHours, 22);
 });
 
 test('controller prevents overlapping autonomous ticks', async () => {

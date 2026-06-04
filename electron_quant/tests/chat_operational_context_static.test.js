@@ -10,6 +10,9 @@ assert(main.includes('la operacion como ejecutable en Binance'), 'El prompt sist
 assert(main.includes('restricciones suaves y diagnosticas'), 'El prompt sistema debe hablar de restricciones suaves y diagnosticas, no bloqueos por estrategia.');
 assert(main.includes('puedes proponer correcciones concretas para warnings'), 'Quant debe tener poder para diagnosticar/corregir warnings.');
 assert(main.includes('horario MT5 Colombia'), 'El prompt sistema debe conocer horario MT5 Colombia.');
+assert(main.includes('Regla de veracidad operativa'), 'El prompt sistema debe impedir promesas de accion no verificadas.');
+assert(main.includes('no digas que vas a hacer'), 'Quant no debe prometer ejecutar/observar sin un resultado real.');
+assert(main.includes('swap') && main.includes('overnight'), 'El prompt sistema debe conocer costos swap/overnight MT5.');
 assert(main.includes('Fecha/hora actual obligatoria') && main.includes('bogotaNow'), 'El prompt sistema debe inyectar fecha/hora Colombia actual, no memoria vieja.');
 assert(main.includes('getMt5MarketSession'), 'El backend debe calcular la sesion MT5 actual para el chat.');
 assert.ok(/max_tokens:\s*(1[8-9]\d{2}|[2-9]\d{3,})/.test(main), 'El modelo debe tener presupuesto suficiente para respuestas completas.');
@@ -17,6 +20,9 @@ assert.equal(/max_tokens:\s*900\b/.test(main), false, 'El chat no debe limitar r
 
 assert(renderer.includes('mt5MarketScheduleContext'), 'El renderer debe inyectar horario MT5 al contexto del chat.');
 assert(renderer.includes('Rendimiento/warnings'), 'El contexto del chat debe incluir warnings de rendimiento recientes.');
+assert(renderer.includes('Contrato de veracidad operativa'), 'El renderer debe inyectar contrato anti-promesas al contexto del chat.');
+assert(renderer.includes('acciones_auditadas'), 'El contexto debe exigir acciones auditadas antes de afirmar ejecucion.');
+assert(renderer.includes('mt5_swap_overnight_policy'), 'El contexto debe explicar politica de swap/overnight MT5.');
 assert(renderer.includes('Trading real runtime'), 'El contexto debe reportar estado real runtime sin mezclarlo con Training.');
 assert(renderer.includes('canal real autorizado'), 'El contexto debe aclarar que blockRealExecution no bloquea el canal real autorizado.');
 assert(renderer.includes('ICT/CRT no es requisito global para operar real'), 'El contexto debe aclarar que ICT/CRT es una estrategia y no un bloqueo global.');

@@ -1700,6 +1700,21 @@ function globalOpportunityContext() {
   ].join('\n');
 }
 
+function operationalTruthContractContext() {
+  return [
+    'Contrato de veracidad operativa: no prometas acciones futuras como si ya estuvieran armadas. No digas "voy a observar", "voy a poner SL/TP", "abrire", "cerrare" o "lo hare" salvo que exista una respuesta real de API/bridge/scheduler.',
+    'acciones_auditadas: una accion real solo puede afirmarse como hecha si hay ticket, orderId, commandId, audit log o estado runtime verificable en el contexto. Si no hay evidencia, responde con recomendacion, preflight, condicion o siguiente accion tecnica.',
+    'Si el usuario pide una accion que el chat no puede disparar directamente, indica el endpoint/scheduler/bridge necesario y no inventes ejecucion.'
+  ].join('\n');
+}
+
+function mt5SwapOvernightContext() {
+  return [
+    'mt5_swap_overnight_policy: MT5 real puede cobrar swap/carry por posiciones abiertas durante rollover. Por defecto Quant debe preferir operaciones intradia/corto plazo en MT5 real, evitar horizontes swing/weekly/monthly salvo permiso explicito y considerar cerrar o revisar antes de 22h abierta.',
+    'Si el bridge reporta swap por posicion, incluyelo en el analisis de P&L real; si no lo reporta, dilo como dato pendiente, no lo ignores.'
+  ].join('\n');
+}
+
 async function realExecutionUniverseContext() {
   let universe = null;
   try {
@@ -3474,6 +3489,8 @@ async function askQuant(text, writeToAi) {
     const operationalContext = [
       fullContext,
       globalOpportunityContext(),
+      operationalTruthContractContext(),
+      mt5SwapOvernightContext(),
       realUniverseContext,
       'Trading real runtime: usar estado real actual; blockRealExecution solo protege el training paper y no bloquea el canal real autorizado.',
       mt5MarketScheduleContext(),

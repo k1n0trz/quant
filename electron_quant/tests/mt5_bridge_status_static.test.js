@@ -55,5 +55,7 @@ assert.ok(quantBridge.includes('input string BridgeRatesSymbols'), 'QuantBridge 
 assert.ok(quantBridge.includes('input string BridgeRatesTimeframes'), 'QuantBridge debe permitir configurar timeframes para exportar velas.');
 assert.ok(quantBridge.includes('CopyRates(sym, TfFromName(tf)'), 'QuantBridge debe exportar velas OHLC desde CopyRates.');
 assert.ok(quantBridge.includes('\\\"rates\\\":%s'), 'QuantBridge debe persistir un objeto rates dentro del status JSON.');
+assert.ok(quantBridge.includes('POSITION_SWAP'), 'QuantBridge debe leer swap/carry de posiciones MT5 reales.');
+assert.ok(quantBridge.includes('\\\"swap\\\":%.8f'), 'QuantBridge debe exponer swap por posicion en el status JSON.');
 
 console.log('mt5_bridge_status_static.test.js OK');

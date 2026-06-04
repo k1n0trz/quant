@@ -252,10 +252,11 @@ string PositionJson(int index)
    double profit = PositionGetDouble(POSITION_PROFIT);
    double sl = PositionGetDouble(POSITION_SL);
    double tp = PositionGetDouble(POSITION_TP);
+   double swap = PositionGetDouble(POSITION_SWAP);
    long timeOpen = PositionGetInteger(POSITION_TIME);
    string comment = PositionGetString(POSITION_COMMENT);
-   return StringFormat("{\"ticket\":%I64u,\"symbol\":\"%s\",\"side\":\"%s\",\"volume\":%.8f,\"priceOpen\":%.8f,\"priceCurrent\":%.8f,\"profit\":%.8f,\"sl\":%.8f,\"tp\":%.8f,\"time\":%I64d,\"comment\":\"%s\"}",
-      ticket, Esc(symbol), side, volume, open, current, profit, sl, tp, timeOpen, Esc(comment));
+   return StringFormat("{\"ticket\":%I64u,\"symbol\":\"%s\",\"side\":\"%s\",\"volume\":%.8f,\"priceOpen\":%.8f,\"priceCurrent\":%.8f,\"profit\":%.8f,\"sl\":%.8f,\"tp\":%.8f,\"swap\":%.8f,\"time\":%I64d,\"comment\":\"%s\"}",
+      ticket, Esc(symbol), side, volume, open, current, profit, sl, tp, swap, timeOpen, Esc(comment));
 }
 
 void WriteStatus()

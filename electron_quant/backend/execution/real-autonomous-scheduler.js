@@ -193,7 +193,7 @@ async function buildBinanceCandidates(context, state, limits, opened) {
       continue;
     }
     const signal = index.get(key) || index.get(`BINANCE:${symbol.replace(/USDC$|FDUSD$/, 'USDT')}`) || null;
-    const priorityScore = signal?.score || finiteNumber(row.score) || 50;
+    const priorityScore = signal?.score || finiteNumber(row.score) || limits.minConfidence;
     const bias = signal?.bias || normalizeBias(row.side);
     if (priorityScore < limits.minConfidence) continue;
     if (bias === 'SHORT') continue;

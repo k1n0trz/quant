@@ -196,6 +196,30 @@ test('tick continues to next candidate when the highest ranked preflight is bloc
   assert.deepEqual(executions.map((input) => input.symbol), ['ACXUSDT']);
 });
 
+test('Binance ready universe can trade when persisted training pair has no score yet', async () => {
+  const executions = [];
+  const result = await runRealAutonomousTick(armedContext({
+    env: { REAL_AUTONOMOUS_MIN_CONFIDENCE: '60' },
+    deps: {
+      readTrainingStateSnapshot: () => ({
+        state: { activePairs: [{ venue: 'BINANCE', symbol: 'ACXUSDT' }] }
+      }),
+      discoverBinanceRealUniverse: async () => ({
+        ok: true,
+        ready: [{ venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, requestedNotional: 5 }]
+      }),
+      executeBinanceRealOrder: async ({ input }) => {
+        executions.push(input);
+        return { ok: true, status: 'executed', request: input, order: { orderId: 99 } };
+      }
+    }
+  }));
+
+  assert.equal(result.executedCount, 1);
+  assert.deepEqual(executions.map((input) => input.symbol), ['ACXUSDT']);
+  assert.equal(result.candidates[0].priorityScore, 60);
+});
+
 test('MT5 real candidates run only when explicitly enabled and market is open', async () => {
   const mt5Orders = [];
   const result = await runRealAutonomousTick(armedContext({

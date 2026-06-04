@@ -1,0 +1,205 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const {
+  isRealAutonomousSchedulerEnabled,
+  resolveRealAutonomousLimits,
+  runRealAutonomousTick,
+  createRealAutonomousSchedulerController
+} = require('../backend/execution/real-autonomous-scheduler');
+
+function armedContext(overrides = {}) {
+  return {
+    env: {
+      REAL_TRADING: 'true',
+      BINANCE_API_KEY: 'key',
+      BINANCE_SECRET: 'secret',
+      REAL_AUTONOMOUS_SCHEDULER_ENABLED: 'true',
+      REAL_AUTONOMOUS_MAX_NOTIONAL_USDT: '6',
+      REAL_AUTONOMOUS_MIN_CONFIDENCE: '50',
+      ...overrides.env
+    },
+    botState: {
+      tradingRealEnabled: true,
+      killSwitch: false,
+      paperMode: false,
+      ...overrides.botState
+    },
+    riskConfig: {
+      enabled: true,
+      maxRiskPerTradePct: 1,
+      maxDailyLossPct: 3,
+      maxOpenPositions: 5,
+      requireStopLoss: true,
+      allowRealTrading: false,
+      allowedVenues: ['BINANCE'],
+      trainingCanChangeCriticalRules: false,
+      ...overrides.riskConfig
+    },
+    deps: overrides.deps || {}
+  };
+}
+
+test('autonomous scheduler is opt-in and exposes conservative defaults', () => {
+  assert.equal(isRealAutonomousSchedulerEnabled({}), false);
+  assert.equal(isRealAutonomousSchedulerEnabled({ REAL_AUTONOMOUS_SCHEDULER_ENABLED: 'true' }), true);
+
+  const limits = resolveRealAutonomousLimits({ REAL_TRADING_MAX_NOTIONAL_USDT: '25' }, { maxOpenPositions: 7 });
+  assert.equal(limits.maxOrdersPerTick, 1);
+  assert.equal(limits.maxOpenPositions, 7);
+  assert.equal(limits.maxNotionalUsdt, 5);
+  assert.deepEqual(limits.allowedVenues, ['BINANCE', 'MT5']);
+});
+
+test('tick refuses real execution when real gates are not armed', async () => {
+  let called = false;
+  const result = await runRealAutonomousTick(armedContext({
+    env: { REAL_TRADING: 'false' },
+    deps: {
+      executeBinanceRealOrder: async () => { called = true; return { ok: true }; }
+    }
+  }));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'real_autonomous_gates_not_armed');
+  assert.equal(result.realTradingTouched, false);
+  assert.equal(called, false);
+});
+
+test('tick uses executable USDT universe instead of hardcoded BTC and respects max orders', async () => {
+  const executions = [];
+  const result = await runRealAutonomousTick(armedContext({
+    env: { REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK: '2' },
+    deps: {
+      readTrainingStateSnapshot: () => ({
+        state: {
+          activePairs: [
+            { venue: 'BINANCE', symbol: 'BTCUSDT', bias: 'LONG', confidence: 51, score: 51 },
+            { venue: 'BINANCE', symbol: 'ACXUSDT', bias: 'LONG', confidence: 92, score: 92 },
+            { venue: 'BINANCE', symbol: 'ALLOUSDT', bias: 'LONG', confidence: 88, score: 88 }
+          ],
+          positions: []
+        }
+      }),
+      discoverBinanceRealUniverse: async () => ({
+        ok: true,
+        ready: [
+          { venue: 'BINANCE', symbol: 'BTCUSDT', side: 'BUY', type: 'MARKET', qty: 0.00008, requestedNotional: 5.5 },
+          { venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 140, requestedNotional: 5.7 },
+          { venue: 'BINANCE', symbol: 'ALLOUSDT', side: 'BUY', type: 'MARKET', qty: 30, requestedNotional: 5.2 }
+        ]
+      }),
+      executeBinanceRealOrder: async ({ input }) => {
+        executions.push(input);
+        return { ok: true, status: 'executed', request: input, order: { orderId: executions.length } };
+      }
+    }
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.executedCount, 2);
+  assert.deepEqual(executions.map((input) => input.symbol), ['ACXUSDT', 'ALLOUSDT']);
+  assert.equal(executions.every((input) => input.type === 'MARKET' && input.side === 'BUY'), true);
+});
+
+test('tick avoids symbols already open in real accounts', async () => {
+  const executions = [];
+  const result = await runRealAutonomousTick(armedContext({
+    env: { REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK: '3' },
+    deps: {
+      readTrainingStateSnapshot: () => ({
+        state: { activePairs: [
+          { venue: 'BINANCE', symbol: 'ACXUSDT', bias: 'LONG', confidence: 92 },
+          { venue: 'BINANCE', symbol: 'ALLOUSDT', bias: 'LONG', confidence: 88 }
+        ] }
+      }),
+      getOpenRealPositions: async () => [{ venue: 'BINANCE', symbol: 'ACXUSDT' }],
+      discoverBinanceRealUniverse: async () => ({
+        ok: true,
+        ready: [
+          { venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, requestedNotional: 5 },
+          { venue: 'BINANCE', symbol: 'ALLOUSDT', side: 'BUY', type: 'MARKET', qty: 20, requestedNotional: 5 }
+        ]
+      }),
+      executeBinanceRealOrder: async ({ input }) => {
+        executions.push(input);
+        return { ok: true, status: 'executed', request: input, order: { orderId: 1 } };
+      }
+    }
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.executedCount, 1);
+  assert.deepEqual(executions.map((input) => input.symbol), ['ALLOUSDT']);
+  assert.equal(result.skipped.some((row) => row.symbol === 'ACXUSDT' && row.reason === 'already_open_real_position'), true);
+});
+
+test('tick respects max autonomous orders per day from audit/deps', async () => {
+  let called = false;
+  const result = await runRealAutonomousTick(armedContext({
+    env: { REAL_AUTONOMOUS_MAX_ORDERS_PER_DAY: '10' },
+    deps: {
+      getRealAutonomousOrdersToday: async () => 10,
+      discoverBinanceRealUniverse: async () => ({
+        ok: true,
+        ready: [{ venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, requestedNotional: 5 }]
+      }),
+      executeBinanceRealOrder: async () => { called = true; return { ok: true }; }
+    }
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, 'max_daily_orders_reached');
+  assert.equal(result.executedCount, 0);
+  assert.equal(called, false);
+});
+
+test('MT5 real candidates run only when explicitly enabled and market is open', async () => {
+  const mt5Orders = [];
+  const result = await runRealAutonomousTick(armedContext({
+    env: {
+      REAL_AUTONOMOUS_ALLOWED_VENUES: 'MT5',
+      REAL_AUTONOMOUS_MT5_ENABLED: 'true',
+      MT5_REAL_TRADING_ENABLED: 'true',
+      MT5_CONNECTOR_ENABLED: 'true',
+      MT5_REAL_MAX_LOTS: '0.01'
+    },
+    riskConfig: { allowedVenues: ['BINANCE', 'MT5'] },
+    deps: {
+      readTrainingStateSnapshot: () => ({
+        state: {
+          activePairs: [
+            { venue: 'MT5', symbol: 'XAUUSD', bias: 'LONG', confidence: 91, horizon: 'intraday' }
+          ]
+        }
+      }),
+      getMt5MarketSession: () => ({ open: true, reason: 'open' }),
+      checkMt5RealOrder: async () => ({ ok: true, reason: 'check_ok' }),
+      placeMt5RealOrder: async (input) => {
+        mt5Orders.push(input);
+        return { ok: true, order: input, realTradingTouched: true };
+      }
+    }
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.executedCount, 1);
+  assert.deepEqual(mt5Orders.map((input) => [input.symbol, input.side, input.volume]), [['XAUUSD', 'BUY', 0.01]]);
+});
+
+test('controller prevents overlapping autonomous ticks', async () => {
+  let resolveRun;
+  const controller = createRealAutonomousSchedulerController({
+    runner: () => new Promise((resolve) => { resolveRun = resolve; }),
+    timers: { setInterval: () => 1, clearInterval: () => {} },
+    now: () => Date.parse('2026-06-04T12:00:00.000Z')
+  });
+
+  const first = controller.runNow(armedContext());
+  const second = await controller.runNow(armedContext());
+  resolveRun({ ok: true, executedCount: 0 });
+  await first;
+
+  assert.equal(second.reason, 'real_autonomous_tick_in_progress');
+  assert.equal(controller.status(armedContext()).ticksSkipped, 1);
+});

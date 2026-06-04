@@ -54,6 +54,10 @@ contextBridge.exposeInMainWorld('quant', {
   binanceRealOrderPreflight: (payload) => ipcRenderer.invoke('binance-real-order-preflight', payload),
   binanceRealOrderAudit: (limit) => ipcRenderer.invoke('binance-real-order-audit', limit),
   binanceRealUniverse: (options) => ipcRenderer.invoke('binance-real-universe', options || undefined),
+  realAutonomousStatus: () => ipcRenderer.invoke('real-autonomous-status'),
+  realAutonomousTick: () => ipcRenderer.invoke('real-autonomous-tick'),
+  realAutonomousStart: () => ipcRenderer.invoke('real-autonomous-start'),
+  realAutonomousStop: () => ipcRenderer.invoke('real-autonomous-stop'),
   placeOrder:       (side, symbol, qty, type, price) => ipcRenderer.invoke('place-order', side, symbol, qty, type, price),
   cancelOrder:      (symbol, orderId) => ipcRenderer.invoke('cancel-order', symbol, orderId)
 });

@@ -54,6 +54,7 @@ const {
 } = require('./backend/adapters/mt5/mt5-bridge-fallback');
 const { getMt5MarketSession } = require('./backend/market/mt5-market-hours');
 const { createSystemSelfAuditSchedulerController } = require('./backend/system/system-self-audit-scheduler');
+const { createRealAutonomousSchedulerController } = require('./backend/execution/real-autonomous-scheduler');
 const {
   runSystemSelfAudit,
   writeSystemSelfAuditStatus,
@@ -67,6 +68,7 @@ const BINANCE_DAPI_BASE = 'https://dapi.binance.com';
 let timeOffsetMs = 0;
 let trainingLoopAutoStartAttempted = false;
 let systemSelfAuditAutoStartAttempted = false;
+let realAutonomousAutoStartAttempted = false;
 const logger = createLogger(IS_ELECTRON ? 'quant-desktop' : 'quant-backend');
 const DEFAULT_VPS_PUBLIC_IP = '37.60.227.190';
 const CLOUD_ENV_KEYS = [
@@ -83,6 +85,10 @@ const CLOUD_ENV_KEYS = [
   'TRAINING_BACKEND_LOOP_SCHEDULER_ENABLED','TRAINING_BACKEND_LOOP_INTERVAL_MS',
   'TRAINING_BACKEND_DEMO_ENTRY_ENABLED','TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED',
   'TRAINING_MT5_DEMO_ORDER_SEND_ENABLED','TRAINING_MT5_DEMO_CLOSE_ENABLED','TRAINING_MT5_DEMO_LOT_SIZE',
+  'REAL_AUTONOMOUS_SCHEDULER_ENABLED','REAL_AUTONOMOUS_INTERVAL_MS','REAL_AUTONOMOUS_ALLOWED_VENUES',
+  'REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK','REAL_AUTONOMOUS_MAX_ORDERS_PER_DAY','REAL_AUTONOMOUS_MAX_OPEN_POSITIONS',
+  'REAL_AUTONOMOUS_MAX_NOTIONAL_USDT','REAL_AUTONOMOUS_MIN_CONFIDENCE',
+  'REAL_AUTONOMOUS_MT5_ENABLED','REAL_AUTONOMOUS_MT5_LOTS',
   'SYSTEM_SELF_AUDIT_ENABLED','SYSTEM_SELF_AUDIT_INTERVAL_MS','SYSTEM_SELF_AUDIT_REMEDIATION_ENABLED',
   'QUANT_WEB_PORT','QUANT_WEB_HOST','QUANT_DATA_DIR','QUANT_SYNC_URL','QUANT_SYNC_KEY',
   'QUANT_VPS_PUBLIC_IP',
@@ -377,6 +383,99 @@ async function runPersistentSystemSelfAudit(context = {}) {
 const systemSelfAuditScheduler = createSystemSelfAuditSchedulerController({
   runAudit: runPersistentSystemSelfAudit
 });
+
+const realAutonomousScheduler = createRealAutonomousSchedulerController();
+
+function createBinanceRealExecutionDeps(env) {
+  return {
+    getTicker: (symbol) => ticker(symbol),
+    getSymbolFilters: (symbol) => getSymbolFilters(symbol),
+    getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, env),
+    getBinanceEarnBalance: (asset) => getBinanceEarnBalance(asset, env),
+    testOrderBinance: (side, symbol, qty, type, price) => testOrderBinance(side, symbol, qty, type, price, env),
+    placeOrderBinance: (side, symbol, qty, type, price) => placeOrderBinance(side, symbol, qty, type, price, env)
+  };
+}
+
+async function executeAndAuditBinanceRealOrderRaw(input, env) {
+  const executionDeps = createBinanceRealExecutionDeps(env);
+  const result = await executeBinanceRealOrder({
+    input,
+    env,
+    botState: readBotState(),
+    riskConfig: readRiskConfig(),
+    deps: executionDeps
+  });
+  try {
+    appendBinanceRealOrderAudit(
+      binanceRealOrderAuditFile,
+      summarizeBinanceRealOrderAudit({ request: input, result })
+    );
+  } catch {}
+  return result;
+}
+
+async function getOpenRealPositionsForScheduler(env) {
+  const rows = [];
+  try {
+    const live = await livePositions(env, true);
+    for (const account of (Array.isArray(live?.mt5Accounts) ? live.mt5Accounts : [])) {
+      for (const position of (Array.isArray(account?.positions) ? account.positions : [])) {
+        if (position?.symbol) rows.push({ venue: 'MT5', symbol: position.symbol });
+      }
+    }
+    for (const order of (Array.isArray(live?.binance?.orders) ? live.binance.orders : [])) {
+      if (order?.symbol) rows.push({ venue: 'BINANCE', symbol: order.symbol });
+    }
+  } catch {}
+  return rows;
+}
+
+function getRealAutonomousOrdersToday() {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const audit = readBinanceRealOrderAudit(binanceRealOrderAuditFile, 200);
+    return (Array.isArray(audit.entries) ? audit.entries : []).filter((entry) => (
+      String(entry.ts || '').slice(0, 10) === today
+      && (entry.ok === true || entry.status === 'executed')
+      && entry.realTradingTouched === true
+    )).length;
+  } catch {
+    return 0;
+  }
+}
+
+function createRealAutonomousRuntimeContext(env) {
+  const executionDeps = createBinanceRealExecutionDeps(env);
+  return {
+    env,
+    botState: readBotState(),
+    riskConfig: readRiskConfig(),
+    deps: {
+      ...executionDeps,
+      readTrainingStateSnapshot: () => trainingStateReader.readSnapshot(),
+      getOpenRealPositions: () => getOpenRealPositionsForScheduler(env),
+      getRealAutonomousOrdersToday: () => getRealAutonomousOrdersToday(),
+      discoverBinanceRealUniverse: async (options = {}) => {
+        const symbols = await binanceSymbols();
+        return discoverBinanceRealSpotUniverse({
+          symbols,
+          env,
+          botState: readBotState(),
+          riskConfig: readRiskConfig(),
+          deps: executionDeps,
+          limit: options.limit,
+          maxChecks: options.maxChecks,
+          targetNotional: options.targetNotional
+        });
+      },
+      executeBinanceRealOrder: ({ input }) => executeAndAuditBinanceRealOrderRaw(input, env),
+      checkMt5RealOrder: (input, options = {}) => checkMt5RealOrder(input, { ...options, env }),
+      placeMt5RealOrder: (input, options = {}) => placeMt5RealOrder(input, { ...options, env }),
+      getMt5MarketSession: (nowMs) => getMt5MarketSession(nowMs)
+    }
+  };
+}
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
@@ -2330,6 +2429,9 @@ async function handleApi(req, res, url) {
         systemSelfAuditStatusFile,
         systemSelfAuditHistoryFile,
         systemSelfAuditScheduler,
+        realAutonomousScheduler,
+        getOpenRealPositions: () => getOpenRealPositionsForScheduler(userEnv),
+        getMt5MarketSession: (nowMs) => getMt5MarketSession(new Date(nowMs || Date.now())),
         testServiceStatus: (service) => testAllowedSystemServiceStatus(service),
         restartAllowedService: (service) => restartAllowedSystemService(service)
       },
@@ -3057,6 +3159,22 @@ function startLocalWebServer() {
           });
         }
       }
+      if (!realAutonomousAutoStartAttempted) {
+        realAutonomousAutoStartAttempted = true;
+        const realEnv = { ...effectiveEnvForUser(WEB_AUTH_EMAIL), ...process.env };
+        const started = realAutonomousScheduler.start(createRealAutonomousRuntimeContext(realEnv));
+        logger.info('real.autonomous.autostart', {
+          started: started.ok === true,
+          reason: started.reason || null,
+          active: started.status?.active === true,
+          intervalMs: started.status?.intervalMs || null
+        });
+        if (started.ok) {
+          realAutonomousScheduler.runNow(createRealAutonomousRuntimeContext(realEnv)).catch((error) => {
+            logger.error('real.autonomous.startup_failed', { message: String(error?.message || error) });
+          });
+        }
+      }
     });
   };
   tryListen(basePort, 10);
@@ -3250,6 +3368,19 @@ ipcMain.handle('binance-real-universe', (_e, options = {}) =>
       maxChecks: options?.maxChecks
     }))
     .catch((err) => ({ ok: false, error: err.message, ready: [], blocked: [] }))
+);
+ipcMain.handle('real-autonomous-status', () =>
+  realAutonomousScheduler.status(createRealAutonomousRuntimeContext(ENV))
+);
+ipcMain.handle('real-autonomous-tick', () =>
+  realAutonomousScheduler.runNow(createRealAutonomousRuntimeContext(ENV))
+    .catch((err) => ({ ok: false, reason: 'real_autonomous_ipc_error', error: err.message, realTradingTouched: false }))
+);
+ipcMain.handle('real-autonomous-start', () =>
+  realAutonomousScheduler.start(createRealAutonomousRuntimeContext(ENV))
+);
+ipcMain.handle('real-autonomous-stop', () =>
+  realAutonomousScheduler.stop(createRealAutonomousRuntimeContext(ENV))
 );
 ipcMain.handle('place-order', (_e, side, symbol, qty, type, price) =>
   executeAndAuditBinanceRealOrder({ venue: 'BINANCE', side, symbol, qty, type, price }, ENV)

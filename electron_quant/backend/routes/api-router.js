@@ -36,6 +36,12 @@ const {
   readBinanceRealOrderAudit
 } = require('../execution/binance-real-order-service');
 const {
+  runRealAutonomousTick,
+  startRealAutonomousScheduler,
+  stopRealAutonomousScheduler,
+  getRealAutonomousSchedulerStatus
+} = require('../execution/real-autonomous-scheduler');
+const {
   runSystemSelfAudit,
   writeSystemSelfAuditStatus,
   readSystemSelfAuditStatus,
@@ -97,7 +103,10 @@ function flattenBinanceOrderResult(result) {
 function auditBinanceRealOrder(deps, request, result) {
   if (!deps.binanceRealOrderAuditFile) return;
   try {
-    appendBinanceRealOrderAudit(
+    const appendAudit = typeof deps.appendBinanceRealOrderAudit === 'function'
+      ? deps.appendBinanceRealOrderAudit
+      : appendBinanceRealOrderAudit;
+    appendAudit(
       deps.binanceRealOrderAuditFile,
       summarizeBinanceRealOrderAudit({ request, result })
     );
@@ -116,6 +125,52 @@ function createApiRouter(context) {
       stopTrainingDemoLoopScheduler,
       getTrainingDemoLoopSchedulerStatus
     };
+    const realAutonomousScheduler = deps.realAutonomousScheduler || {
+      start: startRealAutonomousScheduler,
+      stop: stopRealAutonomousScheduler,
+      status: getRealAutonomousSchedulerStatus,
+      runNow: runRealAutonomousTick
+    };
+
+    function realAutonomousContext() {
+      const schedulerDeps = {
+        ...deps,
+        discoverBinanceRealUniverse: async (options = {}) => {
+          if (typeof deps.discoverBinanceRealUniverse === 'function') return deps.discoverBinanceRealUniverse(options);
+          const symbols = typeof deps.getBinanceSymbols === 'function' ? await deps.getBinanceSymbols() : [];
+          return discoverBinanceRealSpotUniverse({
+            symbols,
+            env,
+            botState: context.getBotState(),
+            riskConfig: context.getRiskConfig(),
+            deps,
+            limit: options.limit,
+            maxChecks: options.maxChecks,
+            targetNotional: options.targetNotional
+          });
+        },
+        executeBinanceRealOrder: async (args = {}) => {
+          const runner = typeof deps.executeBinanceRealOrder === 'function' ? deps.executeBinanceRealOrder : executeBinanceRealOrder;
+          const result = await runner({
+            ...args,
+            env,
+            botState: context.getBotState(),
+            riskConfig: context.getRiskConfig(),
+            deps: schedulerDeps
+          });
+          auditBinanceRealOrder(deps, args.input || {}, result);
+          return result;
+        },
+        checkMt5RealOrder: typeof deps.checkMt5RealOrder === 'function' ? deps.checkMt5RealOrder : checkMt5RealOrder,
+        placeMt5RealOrder: typeof deps.placeMt5RealOrder === 'function' ? deps.placeMt5RealOrder : placeMt5RealOrder
+      };
+      return {
+        env,
+        botState: context.getBotState(),
+        riskConfig: context.getRiskConfig(),
+        deps: schedulerDeps
+      };
+    }
 
     try {
       if (method === 'GET' && pathname === '/healthz') {
@@ -304,6 +359,25 @@ function createApiRouter(context) {
 
       if (method === 'GET' && pathname === '/api/binance-real-order-audit') {
         return response(200, readBinanceRealOrderAudit(deps.binanceRealOrderAuditFile, body.limit));
+      }
+
+      if (method === 'GET' && pathname === '/api/real-autonomous/status') {
+        return response(200, realAutonomousScheduler.status(realAutonomousContext()));
+      }
+
+      if (method === 'POST' && pathname === '/api/real-autonomous/tick') {
+        const result = typeof realAutonomousScheduler.runNow === 'function'
+          ? await realAutonomousScheduler.runNow(realAutonomousContext())
+          : await runRealAutonomousTick(realAutonomousContext());
+        return response(result.ok === false && result.reason === 'real_autonomous_gates_not_armed' ? 409 : 200, result);
+      }
+
+      if (method === 'POST' && pathname === '/api/real-autonomous/start') {
+        return response(200, realAutonomousScheduler.start(realAutonomousContext()));
+      }
+
+      if (method === 'POST' && pathname === '/api/real-autonomous/stop') {
+        return response(200, realAutonomousScheduler.stop(realAutonomousContext()));
       }
 
       if (method === 'GET' && pathname === '/api/training/logs') {

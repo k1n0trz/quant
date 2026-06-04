@@ -55,6 +55,7 @@ const {
 const { getMt5MarketSession } = require('./backend/market/mt5-market-hours');
 const { createSystemSelfAuditSchedulerController } = require('./backend/system/system-self-audit-scheduler');
 const { createRealAutonomousSchedulerController } = require('./backend/execution/real-autonomous-scheduler');
+const { applyOperationalTruthGuard } = require('./backend/chat/operational-truth-guard');
 const {
   runSystemSelfAudit,
   writeSystemSelfAuditStatus,
@@ -2336,7 +2337,10 @@ ${memory || 'Aún no hay memoria registrada.'}`;
     max_tokens: 2200
   };
   const data = await requestJson('POST', `${route.base}/chat/completions`, { Authorization: `Bearer ${route.apiKey}` }, payload);
-  return data.choices?.[0]?.message?.content || 'No recibí contenido del modelo.';
+  const rawAnswer = data.choices?.[0]?.message?.content || 'No recibí contenido del modelo.';
+  const guarded = applyOperationalTruthGuard(rawAnswer);
+  if (guarded.changed) logger.warn('operationalTruthGuard.corrected', { reason: guarded.reason });
+  return guarded.text;
 }
 
 function modelRoute(env = ENV) {

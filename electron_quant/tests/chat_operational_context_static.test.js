@@ -12,6 +12,8 @@ assert(main.includes('puedes proponer correcciones concretas para warnings'), 'Q
 assert(main.includes('horario MT5 Colombia'), 'El prompt sistema debe conocer horario MT5 Colombia.');
 assert(main.includes('Regla de veracidad operativa'), 'El prompt sistema debe impedir promesas de accion no verificadas.');
 assert(main.includes('no digas que vas a hacer'), 'Quant no debe prometer ejecutar/observar sin un resultado real.');
+assert(main.includes('applyOperationalTruthGuard'), 'El backend debe aplicar un guard post-respuesta contra promesas operativas no auditadas.');
+assert(main.includes('operationalTruthGuard'), 'El backend debe registrar cuando corrige una promesa operativa no auditada.');
 assert(main.includes('swap') && main.includes('overnight'), 'El prompt sistema debe conocer costos swap/overnight MT5.');
 assert(main.includes('Fecha/hora actual obligatoria') && main.includes('bogotaNow'), 'El prompt sistema debe inyectar fecha/hora Colombia actual, no memoria vieja.');
 assert(main.includes('getMt5MarketSession'), 'El backend debe calcular la sesion MT5 actual para el chat.');

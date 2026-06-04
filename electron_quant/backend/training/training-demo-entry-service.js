@@ -569,6 +569,8 @@ async function evaluateTrainingDemoEntries(input = {}) {
   const swingNeeded = Math.max(0, resolveTargetCount(state, 'swing') - openPositions.filter((position) => position.horizon === 'swing').length);
   const mt5Open = openPositions.filter((position) => position.venue === 'MT5').length;
   const hasMt5EntryPair = pairs.some((pair) => sameText(pair.venue, 'MT5'));
+  const mt5EntryPairCount = pairs.filter((pair) => sameText(pair.venue, 'MT5')).length;
+  const minMt5EntryPairs = resolveMinMt5OpenPositions(state);
   const targetUniverseSize = Math.min(40, Math.max(
     resolveTargetCount(state, 'intraday'),
     resolveTargetCount(state, 'swing'),
@@ -584,6 +586,7 @@ async function evaluateTrainingDemoEntries(input = {}) {
     (pairs.length < targetUniverseSize && (intradayNeeded > 0 || swingNeeded > 0))
     || needsIndicatorRefresh
     || (!hasMt5EntryPair && hasMt5BootstrapSource)
+    || (hasMt5BootstrapSource && mt5EntryPairCount < minMt5EntryPairs)
   )
     ? await buildBackendBootstrapPairs({ deps, env, nowMs })
     : [];

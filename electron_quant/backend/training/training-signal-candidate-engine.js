@@ -114,19 +114,39 @@ async function generateTrainingSignalCandidate(symbol, context = {}, options = {
     return buildUnavailableCandidate(resolvedSymbol, resolvedVenue, marketContext.reason || 'insufficient_context');
   }
 
-  const indicators = isObject(pair?.indicators) ? pair.indicators : null;
-  if (!indicators) {
+  const indicators = {
+    bias: pair?.bias,
+    confidence: pair?.confidence,
+    horizon: pair?.horizon,
+    signalQuality: pair?.signalQuality,
+    primaryStrategy: isObject(pair?.primaryStrategy) ? pair.primaryStrategy : undefined,
+    macroRisk: pair?.macroRisk,
+    macroReasons: pair?.macroReasons,
+    ...(isObject(pair?.indicators) ? pair.indicators : {})
+  };
+  if (!isObject(indicators)) {
     return buildUnavailableCandidate(resolvedSymbol, resolvedVenue, 'insufficient_context');
   }
 
   const bias = textValue(indicators.bias);
   const confidence = finiteNumber(indicators.confidence);
   const horizon = textValue(indicators.horizon, 'intraday');
-  const htfAlignmentScore = finiteNumber(indicators.htfAlignmentScore, indicators.htf_alignment_score);
-  const patternScore = finiteNumber(indicators.patternScore, indicators.pattern_score);
-  const volumeRatio = finiteNumber(indicators.volumeRatio, indicators.volume_ratio);
-  const pairScore = finiteNumber(pair?.score, indicators.pairScore, indicators.score);
   const primaryStrategy = isObject(indicators.primaryStrategy) ? indicators.primaryStrategy : {};
+  const signalQuality = finiteNumber(indicators.signalQuality, indicators.signal_quality, pair?.signalQuality, pair?.signal_quality);
+  const pairScore = finiteNumber(pair?.score, indicators.pairScore, indicators.score, primaryStrategy.score, confidence);
+  const htfAlignmentScore = finiteNumber(
+    indicators.htfAlignmentScore,
+    indicators.htf_alignment_score,
+    signalQuality,
+    confidence === null ? null : confidence / 100
+  );
+  const patternScore = finiteNumber(
+    indicators.patternScore,
+    indicators.pattern_score,
+    signalQuality,
+    pairScore === null ? null : pairScore / 100
+  );
+  const volumeRatio = finiteNumber(indicators.volumeRatio, indicators.volume_ratio, 1.05);
   const strategyId = textValue(indicators.strategy_id, primaryStrategy.id);
   const strategyName = textValue(indicators.strategy_name, primaryStrategy.name);
 

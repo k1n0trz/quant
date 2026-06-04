@@ -34,12 +34,16 @@ assert.ok(monitoring.includes('closedTrades: allTrades.length'), 'Snapshot compa
 assert.ok(monitoring.includes('lessons: allLessons.length'), 'Snapshot compacto debe preservar total de lecciones.');
 assert.ok(renderer.includes('applyBackendTrainingStateRefresh(saved)'), 'loadTrainingState debe hidratar activePairs/targets desde disco backend.');
 assert.ok(renderer.includes('renderTrainingInsights'), 'Renderer debe renderizar insights temporales.');
+assert.ok(renderer.includes('trainingSignalCandidates'), 'Renderer debe consultar candidatos backend para poblar insights vivos.');
+assert.ok(preload.includes('trainingSignalCandidates'), 'Preload debe exponer trainingSignalCandidates para Electron.');
+assert.ok(apiRouter.includes('/api/training/demo/signals/candidates'), 'Backend debe exponer candidatos de senal para insights.');
 assert.ok(renderer.includes('Date.now() - Date.parse'), 'Insights deben expirar por edad.');
 assert.ok(renderer.includes('10 * 60 * 1000'), 'Insights deben borrarse despues de 10 minutos.');
 assert.ok(renderer.includes('trainingBotsStatus'), 'Renderer debe consultar estado de bots.');
-assert.ok(html.includes('seed XAUUSD + Quant Auto'), 'UI de bots debe explicar que XAUUSD es seed y Quant Auto genera por par.');
+assert.ok(html.includes('Quant Auto por par'), 'UI de bots debe presentar Quant Auto por par, no una plantilla XAUUSD visible.');
+assert.equal(/seed XAUUSD|plantilla XAUUSD/i.test(html), false, 'La plantilla XAUUSD no debe mencionarse en la UI.');
 assert.ok(renderer.includes('candidatos real'), 'UI de bots debe distinguir candidatos reales separados.');
-assert.ok(renderer.includes('sourceTrainingBot') || renderer.includes('templateSource'), 'UI de bots debe mostrar de que seed/bot training viene cada candidato.');
+assert.equal(/seed \\$\\{escapeHtml\\(source\\)\\}|seed XAUUSD/i.test(renderer), false, 'La UI no debe imprimir el seed de plantilla por fila.');
 assert.ok(apiRouter.includes('/api/training/bots/status'), 'Backend debe exponer estado de bots para la pestana Training.');
 
 for (const klass of [

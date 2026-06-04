@@ -41,6 +41,7 @@ const {
 const { createReadOnlyTrainingStateReader, normalizeTrainingState } = require('./backend/training/training-state');
 const { normalizeTrainingStateTraceability } = require('./backend/training/training-traceability');
 const { getTrainingDemoLiveSnapshot } = require('./backend/training/training-monitoring-service');
+const { generateTrainingSignalCandidates } = require('./backend/training/training-signal-candidate-engine');
 const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
 const { getTrainingDemoLoopSchedulerStatus } = require('./backend/training/training-loop-scheduler');
 const { placeMt5DemoOrder, closeMt5DemoPosition } = require('./backend/adapters/mt5/mt5-demo-order-service');
@@ -595,6 +596,7 @@ function trainingLessonMergeKey(lesson = {}) {
 }
 
 const TRAINING_CLOSED_TRADES_LIMIT = 5000;
+const TRAINING_LESSONS_LIMIT = 5000;
 
 function mergeTrainingArray(existing = [], incoming = [], keyFn, limit = 400) {
   const out = [];
@@ -627,7 +629,7 @@ function mergeTrainingStateForWrite(incomingState) {
     positions: incomingPositions.length ? incomingPositions : existingPositions,
     activePairs: incomingPairs.length ? incomingPairs : existingPairs,
     closedTrades: mergeTrainingArray(existingClosed, incomingClosed, trainingTradeMergeKey, TRAINING_CLOSED_TRADES_LIMIT),
-    lessons: mergeTrainingArray(existingLessons, incomingLessons, trainingLessonMergeKey, 500),
+    lessons: mergeTrainingArray(existingLessons, incomingLessons, trainingLessonMergeKey, TRAINING_LESSONS_LIMIT),
     strategyStats: {
       ...(existingState.strategyStats || {}),
       ...(incomingState.strategyStats || {})
@@ -3127,6 +3129,35 @@ ipcMain.handle('training-live-snapshot', (_e, options = {}) => getTrainingDemoLi
     logger
   })
 ));
+ipcMain.handle('training-signal-candidates', async () => {
+  const snapshot = readTrainingStateSnapshot();
+  const state = snapshot?.state || null;
+  const symbols = Array.isArray(state?.activePairs)
+    ? state.activePairs.map((pair) => ({ symbol: pair.symbol, venue: pair.venue, ...pair }))
+    : [];
+  const candidates = await generateTrainingSignalCandidates(symbols, {
+    state: snapshot?.raw || state || {},
+    env: ENV,
+    deps: {
+      getTicker: (symbol) => ticker(symbol),
+      getMt5Ticker: async (symbol) => {
+        const result = await mt5Rates(symbol, 'M1', 120, ENV).catch((error) => ({ ok: false, error: error?.message || String(error) }));
+        if (result?.ok && result?.ticker?.price) {
+          return { symbol, venue: 'MT5', ...(result.ticker || {}), price: result.ticker.price, updatedAt: new Date().toISOString() };
+        }
+        return bridgeTickerFromStatus(symbol, readMt5BridgeStatus(ENV));
+      },
+      readMemory
+    }
+  });
+  return {
+    ok: true,
+    available: snapshot?.available === true,
+    reason: snapshot?.available === true ? null : (snapshot?.reason || 'training_state_unavailable'),
+    candidates,
+    safety: { readOnly: true, writesPerformed: false, realTradingTouched: false }
+  };
+});
 ipcMain.handle('custom-instructions-read', () => readCustomInstructions());
 ipcMain.handle('custom-instructions-write', (_e, text) => writeCustomInstructions(text));
 ipcMain.handle('calibration-read',    () => readCalibration());

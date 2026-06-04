@@ -461,3 +461,53 @@ test('entry evaluator keeps open MT5 positions visible in active pairs even when
   assert.equal(result.nextState.activePairs.some((pair) => pair.venue === 'MT5' && pair.symbol === 'EURUSD'), true);
   assert.equal(result.nextState.activePairs.some((pair) => pair.venue === 'MT5' && pair.symbol === 'XAUUSD'), true);
 });
+
+test('entry evaluator expands MT5 active universe when current MT5 coverage is below minimum', async () => {
+  const binanceSymbols = Array.from({ length: 40 }, (_, index) => `B${index + 1}USDT`);
+  const mt5Symbols = ['XAUUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'AUDCAD', 'USDCAD', 'BTCUSD', 'ETHUSD'];
+  const activePairs = [
+    createPair({ symbol: 'EURUSD', venue: 'MT5' }),
+    createPair({ symbol: 'XAUUSD', venue: 'MT5' }),
+    ...binanceSymbols.slice(0, 38).map((symbol) => createPair({ symbol, venue: 'BINANCE' }))
+  ];
+  const positions = activePairs.map((pair, index) => ({
+    id: `pos-${pair.venue}-${pair.symbol}`,
+    venue: pair.venue,
+    symbol: pair.symbol,
+    horizon: index < 20 ? 'intraday' : 'swing',
+    direction: index % 2 ? 'SHORT' : 'LONG',
+    entry_price: pair.venue === 'MT5' ? 1.1 : 100
+  }));
+
+  const result = await evaluateTrainingDemoEntries({
+    state: createState({
+      activePairs,
+      positions,
+      targets: { total: 40, intraday: 20, swing: 20 },
+      targetOpenPositions: 40,
+      targetIntradayPositions: 20,
+      targetSwingPositions: 20,
+      minMt5OpenPositions: 6
+    }),
+    env: { TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true' },
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z'),
+    deps: {
+      getBinanceSymbols: async () => binanceSymbols,
+      getTicker: async () => ({ price: 100, changePct: 1.2, quoteVolume: 80000000 }),
+      getMt5Symbols: async () => ({ ok: true, symbols: mt5Symbols }),
+      getMt5Ticker: async (symbol) => ({
+        price: symbol === 'XAUUSD' ? 2430 : 1.1,
+        bid: symbol === 'XAUUSD' ? 2429.9 : 1.0999,
+        ask: symbol === 'XAUUSD' ? 2430.1 : 1.1001,
+        spread: symbol === 'XAUUSD' ? 0.2 : 0.0002,
+        changePct: symbol === 'GBPUSD' ? 1.4 : -0.7
+      })
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.openedEntries.length, 0);
+  assert.equal(result.nextState.activePairs.length, 40);
+  assert.equal(result.nextState.activePairs.filter((pair) => pair.venue === 'MT5').length >= 6, true);
+  assert.equal(result.nextState.activePairs.some((pair) => pair.venue === 'MT5' && pair.symbol === 'GBPUSD'), true);
+});

@@ -122,6 +122,89 @@ function compactMt5DemoCloseResult(result = {}) {
   };
 }
 
+function requiresMt5DemoBridgeOpen(position = {}, nowMs = Date.now()) {
+  if (!sameText(position.venue, 'MT5')) return false;
+  const execution = isObject(position.mt5_demo_execution) ? position.mt5_demo_execution : position.mt5DemoExecution;
+  const ticket = mt5DemoExecutionTicket(position);
+  if (ticket && ticket > 0 && execution?.ok !== false && execution?.realTradingTouched !== true) return false;
+  const attemptedAt = Date.parse(execution?.attemptedAt || execution?.lastAttemptAt || 0) || 0;
+  if (attemptedAt && nowMs - attemptedAt < 10 * 60 * 1000 && execution?.ok === false && execution?.reason !== 'TRAINING_MT5_DEMO_ORDER_SEND_ENABLED=false') {
+    return false;
+  }
+  return true;
+}
+
+function compactMt5DemoOpenResult(result = {}, volume = null) {
+  return {
+    attempted: true,
+    ok: Boolean(result.ok),
+    reason: result?.ok ? null : (result.reason || result.error || 'mt5_demo_order_failed'),
+    ticket: finiteNumber(result.ticket, result.order?.ticket),
+    deal: finiteNumber(result.deal),
+    retcode: finiteNumber(result.retcode),
+    volume,
+    bridge: Boolean(result.bridge),
+    demoOnly: result.demoOnly !== false,
+    realTradingTouched: false,
+    attemptedAt: new Date().toISOString()
+  };
+}
+
+async function openMt5DemoBridgePosition(openPosition, source = {}, nowMs = Date.now()) {
+  if (!requiresMt5DemoBridgeOpen(openPosition, nowMs)) return { required: false, result: null };
+  const env = source.env || {};
+  const deps = source.deps || {};
+  if (String(env.TRAINING_MT5_DEMO_ORDER_SEND_ENABLED || 'false').toLowerCase() !== 'true') {
+    return {
+      required: true,
+      ok: false,
+      reason: 'TRAINING_MT5_DEMO_ORDER_SEND_ENABLED=false',
+      result: compactMt5DemoOpenResult({ ok: false, reason: 'TRAINING_MT5_DEMO_ORDER_SEND_ENABLED=false', demoOnly: true }, null)
+    };
+  }
+  if (typeof deps.placeMt5DemoOrder !== 'function') {
+    return {
+      required: true,
+      ok: false,
+      reason: 'mt5_demo_order_executor_missing',
+      result: compactMt5DemoOpenResult({ ok: false, reason: 'mt5_demo_order_executor_missing', demoOnly: true }, null)
+    };
+  }
+  const demoSide = openPosition.direction === 'LONG' ? 'BUY' : openPosition.direction === 'SHORT' ? 'SELL' : null;
+  if (!demoSide) {
+    return {
+      required: true,
+      ok: false,
+      reason: 'unsupported_training_direction',
+      result: compactMt5DemoOpenResult({ ok: false, reason: 'unsupported_training_direction', demoOnly: true }, null)
+    };
+  }
+  const demoLots = finiteNumber(env.TRAINING_MT5_DEMO_LOT_SIZE, 0.01) || 0.01;
+  try {
+    const result = await deps.placeMt5DemoOrder({
+      symbol: openPosition.symbol,
+      side: demoSide,
+      volume: demoLots,
+      type: 'MARKET',
+      reason: 'training-demo-existing-position',
+      trainingPositionId: openPosition.id || null
+    });
+    return {
+      required: true,
+      ok: Boolean(result?.ok),
+      reason: result?.ok ? null : (result?.reason || 'mt5_demo_order_failed'),
+      result: compactMt5DemoOpenResult(result || {}, demoLots)
+    };
+  } catch (error) {
+    return {
+      required: true,
+      ok: false,
+      reason: String(error?.message || error),
+      result: compactMt5DemoOpenResult({ ok: false, reason: String(error?.message || error), demoOnly: true }, demoLots)
+    };
+  }
+}
+
 async function closeMt5DemoBridgePosition(openPosition, source = {}) {
   if (!requiresMt5DemoBridgeClose(openPosition)) return { required: false, result: null };
   const env = source.env || {};
@@ -230,6 +313,9 @@ async function runTrainingDemoTick(input = {}) {
   let evaluatedPositions = 0;
   let closedPositions = 0;
   let openedPositions = 0;
+  let mt5DemoOrdersAttempted = 0;
+  let mt5DemoOrdersSent = 0;
+  let mt5DemoOrdersFailed = 0;
   let lessonPendingCount = 0;
   const skippedPositions = [];
   const skippedEntries = [];
@@ -237,28 +323,50 @@ async function runTrainingDemoTick(input = {}) {
 
   const openPositions = (Array.isArray(snapshot.state.positions) ? snapshot.state.positions : []).filter((position) => !position.exit_price);
   for (const openPosition of openPositions) {
-    const context = findPositionContext(openPosition, contexts);
+    let workingPosition = openPosition;
+    const mt5Open = await openMt5DemoBridgePosition(workingPosition, source, nowMs);
+    if (mt5Open.required) {
+      mt5DemoOrdersAttempted += 1;
+      if (mt5Open.ok) mt5DemoOrdersSent += 1;
+      else mt5DemoOrdersFailed += 1;
+      const positions = Array.isArray(nextState.positions) ? nextState.positions.slice() : [];
+      const index = positions.findIndex((position) => (
+        (workingPosition.id && sameText(position.id, workingPosition.id))
+        || (workingPosition.signal_id && sameText(position.signal_id, workingPosition.signal_id))
+        || (sameText(position.venue, workingPosition.venue) && sameText(position.symbol, workingPosition.symbol) && sameText(position.horizon || 'intraday', workingPosition.horizon || 'intraday'))
+      ));
+      if (index >= 0) {
+        positions[index] = {
+          ...positions[index],
+          mt5_demo_execution: mt5Open.result
+        };
+        nextState = { ...nextState, positions };
+        workingPosition = positions[index];
+      }
+    }
+
+    const context = findPositionContext(workingPosition, contexts);
     if (!context) {
-      skippedPositions.push({ id: openPosition.id || null, signal_id: openPosition.signal_id || null, reason: 'missing_context' });
+      skippedPositions.push({ id: workingPosition.id || null, signal_id: workingPosition.signal_id || null, reason: 'missing_context' });
       continue;
     }
 
     evaluatedPositions += 1;
-    const decision = evaluateCloseDecision(openPosition, context, nextState, nowMs);
+    const decision = evaluateCloseDecision(workingPosition, context, nextState, nowMs);
     if (!decision.ok) {
-      skippedPositions.push({ id: openPosition.id || null, signal_id: openPosition.signal_id || null, reason: decision.reason });
+      skippedPositions.push({ id: workingPosition.id || null, signal_id: workingPosition.signal_id || null, reason: decision.reason });
       continue;
     }
     if (!decision.shouldClose) {
-      skippedPositions.push({ id: openPosition.id || null, signal_id: openPosition.signal_id || null, reason: decision.reason });
+      skippedPositions.push({ id: workingPosition.id || null, signal_id: workingPosition.signal_id || null, reason: decision.reason });
       continue;
     }
 
-    const mt5Close = await closeMt5DemoBridgePosition(openPosition, source);
+    const mt5Close = await closeMt5DemoBridgePosition(workingPosition, source);
     if (mt5Close.required && !mt5Close.ok) {
       skippedPositions.push({
-        id: openPosition.id || null,
-        signal_id: openPosition.signal_id || null,
+        id: workingPosition.id || null,
+        signal_id: workingPosition.signal_id || null,
         reason: mt5Close.reason || 'mt5_demo_close_failed',
         mt5_demo_close: mt5Close.result || null
       });
@@ -267,7 +375,7 @@ async function runTrainingDemoTick(input = {}) {
 
     const atomicResult = applyAtomicTrainingDemoClose({
       state: nextState,
-      openPosition,
+      openPosition: workingPosition,
       exitContext: decision.exitContext,
       signal: decision.signal,
       options: {
@@ -317,6 +425,9 @@ async function runTrainingDemoTick(input = {}) {
     evaluatedPositions,
     closedPositions,
     openedPositions,
+    mt5DemoOrdersAttempted,
+    mt5DemoOrdersSent,
+    mt5DemoOrdersFailed,
     skippedPositions,
     skippedEntries,
     balanceBefore,

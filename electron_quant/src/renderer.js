@@ -21,6 +21,7 @@ if (!window.quant) {
     trainingLiveSnapshot:  (options = {})              => apiGet(`training/demo/live-snapshot?limit=${options.limit || 80}`),
     trainingLoopStatus:    ()                          => apiGet('training/demo/loop/status'),
     trainingLoopStart:     ()                          => apiPost('training/demo/loop/start', {}),
+    trainingSignalCandidates: ()                       => apiGet('training/demo/signals/candidates'),
     trainingBotsStatus:    ()                          => apiGet('training/bots/status'),
     systemSelfAuditStatus: ()                          => apiGet('system/self-audit/status'),
     systemSelfAuditRun:    ()                          => apiPost('system/self-audit/run', {}),
@@ -2095,6 +2096,38 @@ async function loadTrainingState() {
   }
 }
 
+function activePairsProjection(p = {}) {
+  const i = p.indicators || {};
+  return {
+    venue: p.venue,
+    symbol: p.symbol,
+    score: p.score,
+    price: p.price,
+    spreadPct: p.spreadPct,
+    bias: i.bias,
+    confidence: i.confidence,
+    horizon: i.horizon,
+    signalQuality: i.signalQuality,
+    primaryStrategy: i.primaryStrategy ? {
+      id: i.primaryStrategy.id,
+      name: i.primaryStrategy.name,
+      score: i.primaryStrategy.score
+    } : null,
+    macroRisk: i.macroRisk,
+    macroReasons: i.macroReasons,
+    indicators: {
+      bias: i.bias,
+      confidence: i.confidence,
+      horizon: i.horizon,
+      signalQuality: i.signalQuality,
+      htfAlignmentScore: i.htfAlignmentScore,
+      patternScore: i.patternScore,
+      volumeRatio: i.volumeRatio,
+      primaryStrategy: i.primaryStrategy || null
+    }
+  };
+}
+
 async function saveTrainingState() {
   try {
     const payload = {
@@ -2105,8 +2138,8 @@ async function saveTrainingState() {
       balanceStart: state.training.balanceStart,
       balance: state.training.balance,
       positions: state.training.positions,
-      closedTrades: state.training.closedTrades.slice(0, 200),
-      lessons: state.training.lessons.slice(0, 300),
+      closedTrades: state.training.closedTrades.slice(0, 5000),
+      lessons: state.training.lessons.slice(0, 5000),
       strategyStats: state.training.strategyStats,
       pairCooldowns: state.training.pairCooldowns,
       xp: state.training.xp,
@@ -2116,7 +2149,7 @@ async function saveTrainingState() {
         swing: state.training.targetSwingPositions
       },
       strategies: state.strategies,
-      activePairs: state.training.activePairs.map((p) => ({ venue: p.venue, symbol: p.symbol, score: p.score, price: p.price }))
+      activePairs: state.training.activePairs.map(activePairsProjection)
     };
     const res = await window.quant.trainingStateWrite(payload);
     state.training.lastPersistedAt = res.persistedAt;
@@ -3041,7 +3074,7 @@ function updateTrainingInsightsFromAdvice(advice = []) {
     const confidence = Number(row.confidence || 0);
     const action = row.bias === 'LONG' ? 'BUY' : row.bias === 'SHORT' ? 'SELL' : null;
     if (!action || confidence < 60) continue;
-    if (String(row.recommendation || '').includes('evitar')) continue;
+    if (String(row.recommendation || '').includes('evitar') && confidence < 80) continue;
     const key = `${row.venue}:${row.symbol}:${action}:${row.horizon}`;
     const existing = active.get(key);
     active.set(key, {
@@ -3061,6 +3094,21 @@ function updateTrainingInsightsFromAdvice(advice = []) {
     .filter((item) => Date.now() - Date.parse(item.createdAt) < ttlMs)
     .sort((a, b) => b.confidence - a.confidence)
     .slice(0, 12);
+}
+
+function updateTrainingInsightsFromBackendCandidates(candidates = []) {
+  const advice = (Array.isArray(candidates) ? candidates : [])
+    .filter((candidate) => candidate && candidate.available !== false)
+    .map((candidate) => ({
+      venue: candidate.venue || 'BINANCE',
+      symbol: candidate.symbol,
+      bias: candidate.bias,
+      horizon: candidate.horizon || 'observacion',
+      confidence: Number(candidate.confidence || 0),
+      reason: `${candidate.strategy_name || 'Quant signal'} · ${(candidate.reason_codes || []).slice(0, 3).join(' · ') || 'contexto backend'}`,
+      recommendation: candidate.source === 'backend_signal_candidate' ? 'candidato vivo backend' : 'candidato vivo'
+    }));
+  updateTrainingInsightsFromAdvice(advice);
 }
 
 function renderTrainingInsights() {
@@ -3094,14 +3142,14 @@ function renderTrainingBots() {
     const rows = bots.map((bot) => {
       const pnl = Number(bot.realizedPnl || 0);
       const pnlClass = pnl >= 0 ? 'train-status' : 'train-bad';
-      const source = bot.templateSource || bot.sourceTrainingBot || bot.sourceTrainingTemplate || '';
+      const source = '';
       const statusLabel = String(bot.status || '').replace(/_/g, ' ');
-      return `<div class="training-bot-row"><b>${escapeHtml(bot.name || bot.id)}<small>${bot.venue}:${bot.symbol}${source ? ` · seed ${escapeHtml(source)}` : ''}</small></b><span>${escapeHtml(bot.mode || '')}</span><span>${escapeHtml(statusLabel)}</span><span>${bot.openPositions || 0} open</span><span>${bot.closedTrades || 0} trades</span><span class="${pnlClass}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</span></div>`;
+      return `<div class="training-bot-row"><b>${escapeHtml(bot.name || bot.id)}<small>${bot.venue}:${bot.symbol}${source ? ` · ${escapeHtml(source)}` : ''}</small></b><span>${escapeHtml(bot.mode || '')}</span><span>${escapeHtml(statusLabel)}</span><span>${bot.openPositions || 0} open</span><span>${bot.closedTrades || 0} trades</span><span class="${pnlClass}">${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</span></div>`;
     }).join('');
     return `<h3>${label}</h3><div class="training-bot-head"><span>BOT</span><span>MODO</span><span>ESTADO</span><span>OPEN</span><span>OPS</span><span>P&L</span></div>${rows || '<div class="empty-state">Sin bots en esta categoria.</div>'}`;
   };
   box.innerHTML = [
-    `<div class="training-bot-summary">Plantillas seed: ${status.templatesCount || 0} - training/demo: ${status.totals?.training || 0} - candidatos real: ${status.totals?.real || 0}</div>`,
+    `<div class="training-bot-summary">Plantillas internas: ${status.templatesCount || 0} - training/demo: ${status.totals?.training || 0} - candidatos real: ${status.totals?.real || 0}</div>`,
     renderGroup('Training / Demo', status.trainingBots || []),
     renderGroup('Real separado', status.realBots || [])
   ].join('');
@@ -3123,6 +3171,10 @@ async function loadTrainingLiveSnapshot(manual = false) {
       state.training.botsStatus = bots;
     }
     buildTrainingAdvice();
+    if (window.quant.trainingSignalCandidates) {
+      const signals = await window.quant.trainingSignalCandidates().catch((err) => ({ ok: false, error: err.message }));
+      if (signals?.ok && Array.isArray(signals.candidates)) updateTrainingInsightsFromBackendCandidates(signals.candidates);
+    }
     renderTraining();
     if (manual) logEvent('OK', 'Training live snapshot refrescado');
   } catch (err) {

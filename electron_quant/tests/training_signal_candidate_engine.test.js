@@ -99,6 +99,65 @@ test('signal candidate can be generated from active pair indicators and preserve
   assert.match(result.signal_id, /^sig_/);
 });
 
+test('signal candidate degrades gracefully from persisted activePair projection', async () => {
+  const result = await generateTrainingSignalCandidate('XAUUSD', {
+    state: createState({
+      activePairs: [{
+        symbol: 'XAUUSD',
+        venue: 'MT5',
+        score: 74,
+        signalQuality: 0.78,
+        indicators: {
+          bias: 'SHORT',
+          confidence: 77,
+          horizon: 'swing',
+          signalQuality: 0.78,
+          primaryStrategy: { id: 'trendMomentum', name: 'Trend Momentum', score: 83 }
+        }
+      }]
+    }),
+    marketContext: { available: true, symbol: 'XAUUSD', venue: 'MT5', price: 2430, source: 'mt5_bridge_rates', stale: false, ageMs: 0 },
+    env: { TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED: 'true' },
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z')
+  });
+
+  assert.equal(result.available, true);
+  assert.equal(result.symbol, 'XAUUSD');
+  assert.equal(result.venue, 'MT5');
+  assert.equal(result.bias, 'SHORT');
+  assert.equal(result.confidence, 77);
+  assert.equal(result.horizon, 'swing');
+  assert.equal(result.htfAlignmentScore > 0, true);
+  assert.equal(result.patternScore > 0, true);
+  assert.equal(result.volumeRatio >= 1, true);
+});
+
+test('signal candidate accepts flat persisted activePair fields without indicators object', async () => {
+  const result = await generateTrainingSignalCandidate('ETHUSDT', {
+    state: createState({
+      activePairs: [{
+        symbol: 'ETHUSDT',
+        venue: 'BINANCE',
+        score: 76,
+        price: 1900,
+        bias: 'LONG',
+        confidence: 81,
+        horizon: 'intraday',
+        signalQuality: 0.82,
+        primaryStrategy: { id: 'breakoutRetest', name: 'Breakout Retest', score: 86 }
+      }]
+    }),
+    marketContext: { available: true, symbol: 'ETHUSDT', venue: 'BINANCE', price: 1900, source: 'ticker', stale: false, ageMs: 0 },
+    env: { TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED: 'true' },
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z')
+  });
+
+  assert.equal(result.available, true);
+  assert.equal(result.symbol, 'ETHUSDT');
+  assert.equal(result.bias, 'LONG');
+  assert.equal(result.strategy_id, 'breakoutRetest');
+});
+
 test('signal candidate batch generation stays read-only and returns per-symbol results', async () => {
   const results = await generateTrainingSignalCandidates(['BTCUSDT', 'ETHUSDT'], {
     state: createState({

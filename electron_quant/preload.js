@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('quant', {
   trainingStateRead: () => ipcRenderer.invoke('training-state-read'),
   trainingStateWrite: (payload) => ipcRenderer.invoke('training-state-write', payload),
   trainingLiveSnapshot: (options) => ipcRenderer.invoke('training-live-snapshot', options || undefined),
+  trainingSignalCandidates: () => ipcRenderer.invoke('training-signal-candidates'),
   finnhub: () => ipcRenderer.invoke('news-finnhub'),
   finnhubEconomic: () => ipcRenderer.invoke('calendar-finnhub-economic'),
   alpha: () => ipcRenderer.invoke('news-alpha'),

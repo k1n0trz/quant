@@ -13,7 +13,9 @@ assert.ok(main.includes('existingLessons.length > incomingLessons.length'), 'Un 
 assert.ok(main.includes('positions: incomingPositions.length ? incomingPositions : existingPositions'), 'Un payload vacio no debe borrar posiciones abiertas.');
 assert.ok(main.includes('activePairs: incomingPairs.length ? incomingPairs : existingPairs'), 'Un payload vacio no debe borrar activePairs.');
 assert.ok(main.includes('const TRAINING_CLOSED_TRADES_LIMIT = 5000'), 'closedTrades no debe quedar congelado en el limite historico de 400.');
+assert.ok(main.includes('const TRAINING_LESSONS_LIMIT = 5000'), 'lessons no debe quedar congelado en el limite historico de 500.');
 assert.ok(main.includes('closedTrades: mergeTrainingArray(existingClosed, incomingClosed, trainingTradeMergeKey, TRAINING_CLOSED_TRADES_LIMIT)'), 'closedTrades debe usar el limite ampliado y nombrado.');
+assert.ok(main.includes('lessons: mergeTrainingArray(existingLessons, incomingLessons, trainingLessonMergeKey, TRAINING_LESSONS_LIMIT)'), 'lessons debe usar el limite ampliado y nombrado.');
 assert.ok(main.includes('xp: Math.max'), 'XP no debe retroceder por un cliente stale.');
 assert.ok(main.includes('balance: staleHistoryWrite ? existingState.balance : incomingState.balance'), 'El balance no debe retroceder cuando el historial entrante es stale.');
 

@@ -232,6 +232,65 @@ test('tick closes MT5 demo bridge position before removing it from training stat
   assert.equal(result.nextState.closedTrades[0].mt5_demo_close.realTradingTouched, false);
 });
 
+test('tick sends existing MT5 paper positions to demo bridge when order_send becomes enabled', async () => {
+  const open = {
+    id: 'pos-mt5-pending-demo-send',
+    signal_id: 'sig-mt5-pending-demo-send',
+    symbol: 'AUDCAD',
+    venue: 'MT5',
+    direction: 'SHORT',
+    entry_price: 0.902,
+    size_demo: 1000,
+    opened_tick: Date.parse('2026-05-10T11:00:00.000Z'),
+    min_hold_ms: 90 * 60 * 1000,
+    max_hold_ms: 12 * 60 * 60 * 1000,
+    horizon: 'intraday',
+    mt5_demo_execution: {
+      attempted: true,
+      ok: false,
+      reason: 'TRAINING_MT5_DEMO_ORDER_SEND_ENABLED=false',
+      demoOnly: true,
+      realTradingTouched: false
+    }
+  };
+  const calls = [];
+
+  const result = await runTrainingDemoTick({
+    state: createState({ positions: [open], targetOpenPositions: 1 }),
+    positionContexts: [{
+      positionId: 'pos-mt5-pending-demo-send',
+      pair: { symbol: 'AUDCAD', venue: 'MT5', price: 0.901 },
+      signal: { bias: 'SHORT', confidence: 80 }
+    }],
+    env: {
+      TRAINING_MT5_DEMO_ORDER_SEND_ENABLED: 'true',
+      TRAINING_MT5_DEMO_LOT_SIZE: '0.01'
+    },
+    deps: {
+      placeMt5DemoOrder: async (payload) => {
+        calls.push(payload);
+        return { ok: true, ticket: 991001, retcode: 10009, bridge: true, demoOnly: true, realTradingTouched: false };
+      }
+    },
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z')
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0], {
+    symbol: 'AUDCAD',
+    side: 'SELL',
+    volume: 0.01,
+    type: 'MARKET',
+    reason: 'training-demo-existing-position',
+    trainingPositionId: 'pos-mt5-pending-demo-send'
+  });
+  assert.equal(result.mt5DemoOrdersSent, 1);
+  assert.equal(result.nextState.positions[0].mt5_demo_execution.ok, true);
+  assert.equal(result.nextState.positions[0].mt5_demo_execution.ticket, 991001);
+  assert.equal(result.nextState.positions[0].mt5_demo_execution.realTradingTouched, false);
+});
+
 test('tick does not mutate input state', async () => {
   const open = {
     id: 'pos-immutable-loop',

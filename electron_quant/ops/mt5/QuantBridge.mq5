@@ -310,7 +310,7 @@ void ProcessCommand()
    FileDelete(BridgeCommandFile);
 
    string action = Kv(text, "action");
-   if(action != "ORDER" && action != "CLOSE" && action != "CHECK")
+   if(action != "ORDER" && action != "CLOSE" && action != "CHECK" && action != "MODIFY")
    {
       WriteResult(id, StringFormat("{\"ok\":false,\"reason\":\"unsupported_action\",\"commandId\":\"%s\"}", Esc(id)));
       return;
@@ -365,6 +365,33 @@ void ProcessCommand()
       return;
    }
 
+   if(action == "MODIFY")
+   {
+      ulong ticket = (ulong)IntNum(Kv(text, "ticket"), 0);
+      double modifySl = Num(Kv(text, "sl"), 0);
+      double modifyTp = Num(Kv(text, "tp"), 0);
+      if(ticket <= 0 || (modifySl <= 0 && modifyTp <= 0))
+      {
+         WriteResult(id, StringFormat("{\"ok\":false,\"reason\":\"invalid_modify_payload\",\"commandId\":\"%s\"}", Esc(id)));
+         return;
+      }
+      if(!PositionSelectByTicket(ticket))
+      {
+         WriteResult(id, StringFormat("{\"ok\":false,\"reason\":\"position_not_found\",\"commandId\":\"%s\",\"ticket\":%I64u}", Esc(id), ticket));
+         return;
+      }
+      string modifySymbol = PositionGetString(POSITION_SYMBOL);
+      Trade.SetExpertMagicNumber(magic);
+      Trade.SetDeviationInPoints(deviation);
+      bool modifyOk = Trade.PositionModify(ticket, modifySl, modifyTp);
+      long modifyRetcode = Trade.ResultRetcode();
+      string modifyResult = StringFormat("{\"ok\":%s,\"commandId\":\"%s\",\"action\":\"MODIFY\",\"retcode\":%I64d,\"ticket\":%I64u,\"comment\":\"%s\",\"symbol\":\"%s\",\"sl\":%.8f,\"tp\":%.8f,\"account\":{\"login\":%I64d,\"server\":\"%s\",\"tradeMode\":%I64d}}",
+         BoolJson(modifyOk), Esc(id), modifyRetcode, ticket, Esc(Trade.ResultComment()), Esc(modifySymbol), modifySl, modifyTp, AccountInfoInteger(ACCOUNT_LOGIN), Esc(AccountInfoString(ACCOUNT_SERVER)), AccountInfoInteger(ACCOUNT_TRADE_MODE));
+      WriteResult(id, modifyResult);
+      WriteStatus();
+      return;
+   }
+
    if(StringLen(symbol) < 3 || volume <= 0 || (side != "BUY" && side != "SELL"))
    {
       WriteResult(id, StringFormat("{\"ok\":false,\"reason\":\"invalid_order_payload\",\"commandId\":\"%s\"}", Esc(id)));
@@ -375,6 +402,8 @@ void ProcessCommand()
    double ask = SymbolInfoDouble(symbol, SYMBOL_ASK);
    double bid = SymbolInfoDouble(symbol, SYMBOL_BID);
    double marketPrice = side == "BUY" ? ask : bid;
+   double sl = Num(Kv(text, "sl"), 0);
+   double tp = Num(Kv(text, "tp"), 0);
    if(action == "CHECK")
    {
       MqlTradeRequest request;
@@ -391,6 +420,8 @@ void ProcessCommand()
       request.type_time = ORDER_TIME_GTC;
       request.type_filling = ORDER_FILLING_IOC;
       request.price = type == "LIMIT" ? price : marketPrice;
+      request.sl = sl;
+      request.tp = tp;
       if(type == "LIMIT")
          request.type = side == "BUY" ? ORDER_TYPE_BUY_LIMIT : ORDER_TYPE_SELL_LIMIT;
       bool checkOk = OrderCheck(request, check);
@@ -411,14 +442,14 @@ void ProcessCommand()
          return;
       }
       ok = side == "BUY"
-         ? Trade.BuyLimit(volume, price, symbol, 0, 0, ORDER_TIME_GTC, 0, comment)
-         : Trade.SellLimit(volume, price, symbol, 0, 0, ORDER_TIME_GTC, 0, comment);
+         ? Trade.BuyLimit(volume, price, symbol, sl, tp, ORDER_TIME_GTC, 0, comment)
+         : Trade.SellLimit(volume, price, symbol, sl, tp, ORDER_TIME_GTC, 0, comment);
    }
    else
    {
       ok = side == "BUY"
-         ? Trade.Buy(volume, symbol, 0, 0, 0, comment)
-         : Trade.Sell(volume, symbol, 0, 0, 0, comment);
+         ? Trade.Buy(volume, symbol, 0, sl, tp, comment)
+         : Trade.Sell(volume, symbol, 0, sl, tp, comment);
    }
    long retcode = Trade.ResultRetcode();
    string result = StringFormat("{\"ok\":%s,\"commandId\":\"%s\",\"retcode\":%I64d,\"ticket\":%I64u,\"deal\":%I64u,\"comment\":\"%s\",\"symbol\":\"%s\",\"side\":\"%s\",\"volume\":%.8f,\"type\":\"%s\",\"account\":{\"login\":%I64d,\"server\":\"%s\",\"tradeMode\":%I64d}}",

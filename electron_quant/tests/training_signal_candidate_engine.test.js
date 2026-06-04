@@ -158,6 +158,32 @@ test('signal candidate accepts flat persisted activePair fields without indicato
   assert.equal(result.strategy_id, 'breakoutRetest');
 });
 
+test('signal candidate falls back to persisted active pair price when live context is stale', async () => {
+  const result = await generateTrainingSignalCandidate('AUDCAD', {
+    state: createState({
+      activePairs: [{
+        symbol: 'AUDCAD',
+        venue: 'MT5',
+        score: 79,
+        price: 0.9012,
+        bias: 'SHORT',
+        confidence: 84,
+        horizon: 'intraday',
+        signalQuality: 0.81,
+        primaryStrategy: { id: 'trendMomentum', name: 'Trend Momentum', score: 88 }
+      }]
+    }),
+    marketContext: { available: false, symbol: 'AUDCAD', venue: 'MT5', reason: 'mt5_rates_timeout' },
+    env: { TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED: 'true' },
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z')
+  });
+
+  assert.equal(result.available, true);
+  assert.equal(result.symbol, 'AUDCAD');
+  assert.equal(result.venue, 'MT5');
+  assert.equal(result.reason_codes.includes('market_source:active_pair_projection'), true);
+});
+
 test('signal candidate batch generation stays read-only and returns per-symbol results', async () => {
   const results = await generateTrainingSignalCandidates(['BTCUSDT', 'ETHUSDT'], {
     state: createState({

@@ -104,12 +104,22 @@ async function generateTrainingSignalCandidate(symbol, context = {}, options = {
     return buildUnavailableCandidate(resolvedSymbol, resolvedVenue, 'signal_candidates_disabled');
   }
 
-  const marketContext = context.marketContext || await resolveTrainingMarketContext(resolvedSymbol, {
+  let marketContext = context.marketContext || await resolveTrainingMarketContext(resolvedSymbol, {
     venue: resolvedVenue,
     state,
     deps,
     nowMs
   });
+  const projectedPrice = finiteNumber(pair?.price, pair?.entry_price, pair?.mark_price, pair?.lastPrice);
+  if ((!marketContext.available || !Number.isFinite(Number(marketContext.price))) && projectedPrice !== null) {
+    marketContext = {
+      available: true,
+      price: projectedPrice,
+      source: 'active_pair_projection',
+      stale: true,
+      ageMs: null
+    };
+  }
   if (!marketContext.available || !Number.isFinite(Number(marketContext.price))) {
     return buildUnavailableCandidate(resolvedSymbol, resolvedVenue, marketContext.reason || 'insufficient_context');
   }

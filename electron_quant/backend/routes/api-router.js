@@ -442,7 +442,10 @@ function createApiRouter(context) {
           });
         }
 
-        const shouldPersist = tickResult.closedPositions > 0 || tickResult.openedPositions > 0 || tickResult.activeUniverseChanged === true;
+        const shouldPersist = tickResult.closedPositions > 0
+          || tickResult.openedPositions > 0
+          || tickResult.activeUniverseChanged === true
+          || Number(tickResult.mt5DemoOrdersAttempted || 0) > 0;
         let persistence = null;
         if (shouldPersist) {
           if (typeof deps.writeTrainingState !== 'function') {
@@ -473,6 +476,9 @@ function createApiRouter(context) {
           balanceBefore: tickResult.balanceBefore,
           balanceAfter: tickResult.balanceAfter,
           lessonPendingCount: tickResult.lessonPendingCount,
+          mt5DemoOrdersAttempted: tickResult.mt5DemoOrdersAttempted,
+          mt5DemoOrdersSent: tickResult.mt5DemoOrdersSent,
+          mt5DemoOrdersFailed: tickResult.mt5DemoOrdersFailed,
           contextSource: hasManualContexts ? 'manual' : 'backend',
           entryEnabled: tickResult.entryEnabled,
           persistence,

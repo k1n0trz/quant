@@ -3001,13 +3001,37 @@ function startLocalWebServer() {
       logger.info('server.listen.ready', { host: listenHost, port });
       if (!trainingLoopAutoStartAttempted) {
         trainingLoopAutoStartAttempted = true;
+        const schedulerEnv = { ...effectiveEnvForUser(WEB_AUTH_EMAIL), ...process.env };
         autoStartTrainingDemoLoopScheduler({
-          env: { ...ENV, ...process.env },
+          env: schedulerEnv,
           deps: {
             readTrainingStateSnapshot: () => trainingStateReader.readSnapshot(),
             writeTrainingState: (nextState) => writeTrainingState(nextState),
             getBinanceSymbols: () => binanceSymbols(),
             getTicker: (symbol) => ticker(symbol),
+            getMt5Symbols: async () => {
+              const result = await mt5Symbols(schedulerEnv).catch((error) => ({ ok: false, symbols: [], error: error?.message || String(error) }));
+              if (result?.ok && Array.isArray(result.symbols) && result.symbols.length) return result;
+              return mt5BridgeSymbols(schedulerEnv);
+            },
+            getMt5Ticker: async (symbol) => {
+              const result = await mt5Rates(symbol, 'M1', 120, schedulerEnv).catch((error) => ({ ok: false, error: error?.message || String(error) }));
+              if (result?.ok && result?.ticker?.price) {
+                return {
+                  symbol,
+                  venue: 'MT5',
+                  ...(result.ticker || {}),
+                  price: result.ticker.price,
+                  updatedAt: new Date().toISOString()
+                };
+              }
+              return bridgeTickerFromStatus(symbol, readMt5BridgeStatus(schedulerEnv));
+            },
+            getSymbolFilters: (symbol) => getSymbolFilters(symbol),
+            getBinanceSpotBalance: (asset) => getBinanceSpotBalance(asset, schedulerEnv),
+            getBinanceEarnBalance: (asset) => getBinanceEarnBalance(asset, schedulerEnv),
+            placeMt5DemoOrder: (input) => placeMt5DemoOrder(input, { env: schedulerEnv }),
+            closeMt5DemoPosition: (input) => closeMt5DemoPosition(input, { env: schedulerEnv }),
             readMt5Snapshot: () => readMt5Snapshot(),
             readMemory: (limit) => readMemory(limit)
           },

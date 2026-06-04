@@ -146,6 +146,33 @@ function sortByScoreThenSymbol(left, right) {
   return `${left.venue}:${left.symbol}`.localeCompare(`${right.venue}:${right.symbol}`);
 }
 
+function balanceCandidateQueueByVenue(candidates = [], allowedVenues = []) {
+  const buckets = new Map();
+  for (const candidate of candidates) {
+    const venue = normalizeVenue(candidate.venue);
+    if (!venue) continue;
+    if (!buckets.has(venue)) buckets.set(venue, []);
+    buckets.get(venue).push(candidate);
+  }
+  const venues = allowedVenues.filter((venue) => buckets.has(venue));
+  for (const venue of buckets.keys()) {
+    if (!venues.includes(venue)) venues.push(venue);
+  }
+  const out = [];
+  let moved = true;
+  while (moved) {
+    moved = false;
+    for (const venue of venues) {
+      const bucket = buckets.get(venue);
+      if (bucket?.length) {
+        out.push(bucket.shift());
+        moved = true;
+      }
+    }
+  }
+  return out;
+}
+
 async function buildBinanceCandidates(context, state, limits, opened) {
   const deps = context.deps || {};
   if (!limits.allowedVenues.includes('BINANCE')) return [];
@@ -328,10 +355,10 @@ async function runRealAutonomousTick(context = {}) {
     symbol: candidate.symbol,
     reason: candidate.reason
   }));
-  const executable = candidates
+  const executable = balanceCandidateQueueByVenue(candidates
     .filter((candidate) => !candidate.skipOnly)
-    .sort(sortByScoreThenSymbol)
-    .slice(0, Math.max(limits.maxOrdersPerTick * 5, limits.maxOrdersPerTick));
+    .sort(sortByScoreThenSymbol), limits.allowedVenues)
+    .slice(0, Math.max(limits.maxOrdersPerTick * 10, 20));
 
   const executed = [];
   const successLimit = Math.min(

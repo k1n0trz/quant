@@ -218,6 +218,37 @@ test('signal candidate can use open MT5 position metadata when active pair has n
   assert.equal(result.reason_codes.includes('open_position_context'), true);
 });
 
+test('signal candidate uses persisted pair price without blocking on live ticker', async () => {
+  let tickerCalls = 0;
+  const result = await generateTrainingSignalCandidate('BTCUSDT', {
+    state: createState({
+      activePairs: [{
+        symbol: 'BTCUSDT',
+        venue: 'BINANCE',
+        score: 91,
+        price: 62500,
+        bias: 'SHORT',
+        confidence: 89,
+        horizon: 'intraday',
+        signalQuality: 0.86,
+        primaryStrategy: { id: 'trendMomentum', name: 'Trend Momentum', score: 94 }
+      }]
+    }),
+    env: { TRAINING_BACKEND_SIGNAL_CANDIDATES_ENABLED: 'true' },
+    deps: {
+      getTicker: async () => {
+        tickerCalls += 1;
+        return { ok: false, reason: 'should_not_be_called' };
+      }
+    },
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z')
+  });
+
+  assert.equal(result.available, true);
+  assert.equal(result.reason_codes.includes('market_source:active_pair_projection'), true);
+  assert.equal(tickerCalls, 0);
+});
+
 test('signal candidate batch generation stays read-only and returns per-symbol results', async () => {
   const results = await generateTrainingSignalCandidates(['BTCUSDT', 'ETHUSDT'], {
     state: createState({

@@ -331,14 +331,16 @@ async function runRealAutonomousTick(context = {}) {
   const executable = candidates
     .filter((candidate) => !candidate.skipOnly)
     .sort(sortByScoreThenSymbol)
-    .slice(0, Math.min(
-      limits.maxOrdersPerTick,
-      Math.max(0, limits.maxOpenPositions - opened.size),
-      Math.max(0, limits.maxOrdersPerDay - ordersToday)
-    ));
+    .slice(0, Math.max(limits.maxOrdersPerTick * 5, limits.maxOrdersPerTick));
 
   const executed = [];
+  const successLimit = Math.min(
+    limits.maxOrdersPerTick,
+    Math.max(0, limits.maxOpenPositions - opened.size),
+    Math.max(0, limits.maxOrdersPerDay - ordersToday)
+  );
   for (const candidate of executable) {
+    if (executed.filter((row) => row.ok).length >= successLimit) break;
     const result = await executeCandidate(candidate, context);
     executed.push({
       ok: result?.ok === true,

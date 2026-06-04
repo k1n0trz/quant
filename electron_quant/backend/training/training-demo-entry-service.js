@@ -216,6 +216,42 @@ function hasActionableEntryIndicators(pair = {}) {
   );
 }
 
+function mt5FallbackTicker(symbol, fallbackChangePct = 0) {
+  const key = String(symbol || '').trim().toUpperCase();
+  const knownPrices = {
+    XAUUSD: 4450,
+    XAGUSD: 32,
+    EURUSD: 1.16,
+    GBPUSD: 1.34,
+    USDJPY: 156,
+    AUDCAD: 0.90,
+    USDCAD: 1.37,
+    GBPJPY: 210,
+    EURJPY: 181,
+    BTCUSD: 62000,
+    ETHUSD: 1800,
+    NAS100: 21500,
+    US30: 42500,
+    SPX500: 5900
+  };
+  let price = knownPrices[key];
+  if (!Number.isFinite(price)) {
+    if (/JPY$/.test(key)) price = 150;
+    else if (/USD$/.test(key) || /CAD$/.test(key) || /CHF$/.test(key) || /AUD$/.test(key) || /NZD$/.test(key)) price = 1;
+    else price = 100;
+  }
+  const spread = Math.max(price * 0.0002, key === 'XAUUSD' ? 0.25 : 0.0002);
+  return {
+    price,
+    bid: price - spread / 2,
+    ask: price + spread / 2,
+    spread,
+    changePct: fallbackChangePct,
+    quoteVolume: 35000000,
+    source: 'mt5_training_fallback'
+  };
+}
+
 async function buildBackendBootstrapPairs(input = {}) {
   const deps = input.deps || {};
   const nowMs = Number.isFinite(Number(input.nowMs)) ? Number(input.nowMs) : Date.now();
@@ -316,6 +352,7 @@ async function buildBackendBootstrapPairs(input = {}) {
     }
     const hash = parseInt(stableTraceHash(symbol), 36);
     const fallbackChangePct = (hash % 2 === 0 ? 1 : -1) * (0.35 + (hash % 7) * 0.08);
+    if (!ticker) ticker = mt5FallbackTicker(symbol, fallbackChangePct);
     const pair = buildPair({ venue: 'MT5', symbol, ticker, fallbackChangePct });
     if (pair) mt5Pairs.push(pair);
   }

@@ -336,6 +336,34 @@ test('backend bootstrap caps to 40 and balances Binance with MT5 when both venue
   assert.equal(pairs.filter((pair) => pair.venue === 'MT5').length, 20);
 });
 
+test('backend bootstrap keeps diverse MT5 candidates when only one live MT5 chart has ticker', async () => {
+  const mt5Symbols = ['EURUSD', 'XAUUSD', 'GBPUSD', 'USDJPY', 'AUDCAD', 'USDCAD', 'GBPJPY', 'EURJPY'];
+
+  const pairs = await buildBackendBootstrapPairs({
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z'),
+    deps: {
+      getBinanceSymbols: async () => ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'LINKUSDT'],
+      getTicker: async (symbol) => ({
+        price: 100 + symbol.length,
+        changePct: -1.2,
+        quoteVolume: 90000000
+      }),
+      getMt5Symbols: async () => ({ ok: true, symbols: mt5Symbols }),
+      getMt5Ticker: async (symbol) => (
+        symbol === 'EURUSD'
+          ? { price: 1.16, bid: 1.1599, ask: 1.1601, spread: 0.0002, changePct: 0.4 }
+          : null
+      )
+    }
+  });
+
+  const mt5Pairs = pairs.filter((pair) => pair.venue === 'MT5');
+  assert.equal(mt5Pairs.length >= 6, true);
+  assert.equal(mt5Pairs.some((pair) => pair.symbol === 'AUDCAD'), true);
+  assert.equal(mt5Pairs.every((pair) => Number.isFinite(pair.price) && pair.price > 0), true);
+  assert.equal(mt5Pairs.every((pair) => pair.indicators?.confidence >= 72), true);
+});
+
 test('entry evaluator refreshes stale active pairs that no longer carry actionable indicators', async () => {
   const state = createState({
     activePairs: [

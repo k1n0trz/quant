@@ -1,6 +1,13 @@
-const OPERATIONAL_TERMS = /\b(sl|tp|stop|take\s*profit|orden|order|trade|operaci[oó]n|posici[oó]n|binance|mt5|xauusd|oro|gold|compr|vend|abrir|cerrar|modificar|monitorear|observar|vigilar)\b/i;
-const PROMISE_TERMS = /\b(voy a|vamos a|procedo a|procedere|har[eé]|pondre|pondr[eé]|abrir[eé]|cerrar[eé]|modificar[eé]|observare|observar[eé]|monitoreare|monitorear[eé]|vigilar[eé]|enviar[eé]|comprar[eé]|vender[eé]|ejecutar[eé]|colocar[eé]|lo hare)(?=\s|$|[.,;:!?])/i;
-const EVIDENCE_TERMS = /\b(ticket|orderId|commandId|deal|retcode|orden\s*#|order\s*#|auditad[ao]s?|entrada auditada)\s*[:=#-]?\s*[\w.-]*/i;
+const OPERATIONAL_TERMS = /\b(sl|tp|stop|take\s*profit|orden|order|trade|operacion|posicion|setup|senal|signal|binance|mt5|xauusd|oro|gold|compr|vend|abrir|cerrar|modificar|monitorear|observar|vigilar)\b/i;
+const PROMISE_TERMS = /\b(voy a|vamos a|procedo a|procedere|hare|pondre|abrire|cerrare|modificare|observare|monitoreare|vigilare|enviare|comprare|vendere|ejecutare|colocare|lo hare|lo ejecutare|lo abrire|lo cerrare)(?=\s|$|[.,;:!?])/i;
+const IMPERATIVE_PLAN_TERMS = /^(cerrar|abrir|activar|iniciar|programar|colocar|poner|modificar|ejecutar|enviar|comprar|vender|monitorear|observar|vigilar)\b/i;
+const EVIDENCE_TERMS = /\b(ticket|orderId|commandId|deal|retcode|orden\s*#|order\s*#|auditado|auditada|entrada auditada)\s*[:=#-]?\s*[\w.-]*/i;
+
+function normalizeText(text) {
+  return String(text || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
 
 function splitSentences(text) {
   return String(text || '')
@@ -10,8 +17,8 @@ function splitSentences(text) {
 }
 
 function isOperationalPromiseSentence(sentence) {
-  const text = String(sentence || '');
-  return PROMISE_TERMS.test(text) && OPERATIONAL_TERMS.test(text);
+  const text = normalizeText(sentence);
+  return (PROMISE_TERMS.test(text) || IMPERATIVE_PLAN_TERMS.test(text)) && OPERATIONAL_TERMS.test(text);
 }
 
 function hasOperationalPromise(text) {
@@ -19,7 +26,7 @@ function hasOperationalPromise(text) {
 }
 
 function hasOperationalEvidence(text) {
-  return EVIDENCE_TERMS.test(String(text || ''));
+  return EVIDENCE_TERMS.test(normalizeText(text));
 }
 
 function stripUnauditedPromises(text) {

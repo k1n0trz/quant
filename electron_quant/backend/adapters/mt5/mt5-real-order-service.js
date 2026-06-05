@@ -103,6 +103,7 @@ function buildBridgeRealCommand(order, action) {
   return {
     id: `qr${Date.now().toString(36)}${crypto.randomBytes(4).toString('hex')}`,
     action,
+    ticket: order.ticket || '',
     symbol: order.symbol,
     side: order.side,
     volume: order.volume,
@@ -113,6 +114,37 @@ function buildBridgeRealCommand(order, action) {
     deviation: order.deviation,
     magic: order.magic,
     comment: order.comment
+  };
+}
+
+function buildMt5RealCloseRequest(input = {}, env = {}) {
+  if (!isMt5RealTradingEnabled(env)) {
+    return { ok: false, reason: 'mt5_real_trading_disabled', safety: { realTradingTouched: false } };
+  }
+  const ticket = finiteNumber(input.ticket, input.positionTicket, input.order);
+  if (!ticket || ticket <= 0) {
+    return { ok: false, reason: 'invalid_close_ticket', safety: { realTradingTouched: false } };
+  }
+  return {
+    ok: true,
+    close: {
+      ticket: Math.trunc(ticket),
+      symbol: safeMt5Symbol(input.symbol) || '',
+      side: normalizeSide(input.side) || '',
+      volume: finiteNumber(input.volume, input.lots, input.qty) || '',
+      type: 'MARKET',
+      price: '',
+      sl: '',
+      tp: '',
+      deviation: Math.max(1, Math.min(100, finiteNumber(input.deviation, env.MT5_REAL_DEVIATION, 20) || 20)),
+      magic: finiteNumber(env.MT5_REAL_MAGIC, 260531) || 260531,
+      comment: safeComment(input.reason || 'close', input.requestId)
+    },
+    safety: {
+      realTradingTouched: true,
+      demoOnly: false,
+      accountSlot: 'MT5_ACCOUNT1'
+    }
   };
 }
 
@@ -267,11 +299,31 @@ async function placeMt5RealOrder(input = {}, options = {}) {
   };
 }
 
+async function closeMt5RealPosition(input = {}, options = {}) {
+  const env = options.env || {};
+  const built = buildMt5RealCloseRequest(input, env);
+  if (!built.ok) return { ok: false, reason: built.reason, realTradingTouched: false };
+  const result = await executeBridgeRealCommand(buildBridgeRealCommand(built.close, 'CLOSE'), env);
+  return {
+    ...result,
+    action: result.action || 'CLOSE',
+    ticket: result.ticket || built.close.ticket,
+    close: {
+      ticket: built.close.ticket,
+      server: textValue(env.MT5_ACCOUNT1_SERVER),
+      login: finiteNumber(env.MT5_ACCOUNT1_LOGIN) || null
+    },
+    realTradingTouched: result.ok === true
+  };
+}
+
 module.exports = {
   isMt5RealTradingEnabled,
   buildMt5RealOrderRequest,
+  buildMt5RealCloseRequest,
   checkMt5RealOrder,
   placeMt5RealOrder,
+  closeMt5RealPosition,
   bridgeCommandText,
   buildBridgeRealCommand
 };

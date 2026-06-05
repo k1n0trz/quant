@@ -8,7 +8,8 @@ const {
   isMt5RealTradingEnabled,
   buildMt5RealOrderRequest,
   checkMt5RealOrder,
-  placeMt5RealOrder
+  placeMt5RealOrder,
+  closeMt5RealPosition
 } = require('../backend/adapters/mt5/mt5-real-order-service');
 
 const realEnv = {
@@ -149,4 +150,41 @@ test('MT5 real order blocks demo bridge status', async () => {
   assert.equal(result.reason, 'mt5_real_bridge_requires_real_account');
   assert.equal(result.realTradingTouched, false);
   assert.equal(fs.existsSync(path.join(dir, 'quant_bridge_command.txt')), false);
+});
+
+test('MT5 real close writes CLOSE command by ticket through the real bridge', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'quant-mt5-real-close-'));
+  const statusFile = writeBridgeStatus(dir);
+  const env = { ...realEnv, MT5_REAL_BRIDGE_STATUS_FILE: statusFile, MT5_REAL_ORDER_TIMEOUT_MS: '5000' };
+  const watcher = (async () => {
+    const commandFile = path.join(dir, 'quant_bridge_command.txt');
+    for (let i = 0; i < 20; i++) {
+      if (fs.existsSync(commandFile)) {
+        const text = fs.readFileSync(commandFile, 'utf8');
+        const id = text.match(/^id=(.+)$/m)?.[1];
+        assert.ok(id);
+        assert.match(text, /^action=CLOSE$/m);
+        assert.match(text, /^ticket=445566$/m);
+        fs.writeFileSync(path.join(dir, `quant_bridge_result_${id}.json`), JSON.stringify({
+          ok: true,
+          action: 'CLOSE',
+          retcode: 10009,
+          ticket: 445566,
+          deal: 998877,
+          comment: 'closed'
+        }));
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error('real close command not written');
+  })();
+
+  const result = await closeMt5RealPosition({ ticket: 445566, reason: 'autonomous-close' }, { env });
+  await watcher;
+
+  assert.equal(result.ok, true);
+  assert.equal(result.action, 'CLOSE');
+  assert.equal(result.ticket, 445566);
+  assert.equal(result.realTradingTouched, true);
 });

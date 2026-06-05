@@ -45,7 +45,7 @@ const { generateTrainingSignalCandidates } = require('./backend/training/trainin
 const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
 const { getTrainingDemoLoopSchedulerStatus } = require('./backend/training/training-loop-scheduler');
 const { placeMt5DemoOrder, closeMt5DemoPosition } = require('./backend/adapters/mt5/mt5-demo-order-service');
-const { checkMt5RealOrder, placeMt5RealOrder } = require('./backend/adapters/mt5/mt5-real-order-service');
+const { checkMt5RealOrder, placeMt5RealOrder, closeMt5RealPosition } = require('./backend/adapters/mt5/mt5-real-order-service');
 const {
   bridgeSymbolsFromStatus,
   bridgeTickerFromStatus,
@@ -97,6 +97,7 @@ const CLOUD_ENV_KEYS = [
   'QUANT_VPS_PUBLIC_IP',
   'QUANT_DESKTOP_DOWNLOAD_URL','DEFAULT_PROVIDER','QUANT_PRIMARY_MODEL',
   'DEEPSEEK_MODEL','DEEPSEEK_BASE_URL','DEEPINFRA_MODEL','DEEPINFRA_BASE_URL',
+  'ANTHROPIC_API_KEY','ANTHROPIC_MODEL','ANTHROPIC_BASE_URL',
   'MATEO_WEB_AUTH_PASSWORD'
 ];
 
@@ -205,6 +206,7 @@ const USER_API_FIELDS = [
   'BINANCE_API_KEY','BINANCE_SECRET','DEEPSEEK_API_KEY','DEEPINFRA_API_KEY',
   'DEFAULT_PROVIDER','QUANT_PRIMARY_MODEL','DEEPSEEK_MODEL','DEEPSEEK_BASE_URL',
   'DEEPINFRA_MODEL','DEEPINFRA_BASE_URL','FINNHUB_API_KEY','ALPHA_VANTAGE_API_KEY',
+  'ANTHROPIC_API_KEY','ANTHROPIC_MODEL','ANTHROPIC_BASE_URL',
   'REAL_TRADING','MT5_CONNECTOR_ENABLED','MT5_ACCOUNT1_LOGIN','MT5_ACCOUNT1_PASSWORD',
   'MT5_ACCOUNT1_SERVER','MT5_ACCOUNT2_LOGIN','MT5_ACCOUNT2_PASSWORD','MT5_ACCOUNT2_SERVER',
   'MT5_PYTHON_COMMAND',
@@ -426,7 +428,7 @@ async function getOpenRealPositionsForScheduler(env) {
     for (const account of (Array.isArray(live?.mt5Accounts) ? live.mt5Accounts : [])) {
       if (account?.is_demo === true) continue;
       for (const position of (Array.isArray(account?.positions) ? account.positions : [])) {
-        if (position?.symbol) rows.push({ venue: 'MT5', symbol: position.symbol });
+        if (position?.symbol) rows.push({ venue: 'MT5', ...position, symbol: position.symbol });
       }
     }
     for (const order of (Array.isArray(live?.binance?.orders) ? live.binance.orders : [])) {
@@ -477,6 +479,7 @@ function createRealAutonomousRuntimeContext(env) {
       executeBinanceRealOrder: ({ input }) => executeAndAuditBinanceRealOrderRaw(input, env),
       checkMt5RealOrder: (input, options = {}) => checkMt5RealOrder(input, { ...options, env }),
       placeMt5RealOrder: (input, options = {}) => placeMt5RealOrder(input, { ...options, env }),
+      closeMt5RealPosition: (input, options = {}) => closeMt5RealPosition(input, { ...options, env }),
       getMt5MarketSession: (nowMs) => getMt5MarketSession(nowMs)
     }
   };
@@ -2336,8 +2339,30 @@ ${memory || 'Aún no hay memoria registrada.'}`;
     temperature: 0.55,
     max_tokens: 2200
   };
-  const data = await requestJson('POST', `${route.base}/chat/completions`, { Authorization: `Bearer ${route.apiKey}` }, payload);
-  const rawAnswer = data.choices?.[0]?.message?.content || 'No recibí contenido del modelo.';
+  let rawAnswer = '';
+  if (route.provider === 'anthropic') {
+    const anthropicPayload = {
+      model: route.model,
+      system: finalSystem,
+      messages: messages.map((message) => ({
+        role: message.role === 'assistant' ? 'assistant' : 'user',
+        content: String(message.content || '')
+      })),
+      temperature: payload.temperature,
+      max_tokens: payload.max_tokens
+    };
+    const data = await requestJson('POST', `${route.base}/messages`, {
+      'x-api-key': route.apiKey,
+      'anthropic-version': '2023-06-01'
+    }, anthropicPayload);
+    rawAnswer = Array.isArray(data.content)
+      ? data.content.filter((part) => part?.type === 'text' && part.text).map((part) => part.text).join('\n').trim()
+      : '';
+  } else {
+    const data = await requestJson('POST', `${route.base}/chat/completions`, { Authorization: `Bearer ${route.apiKey}` }, payload);
+    rawAnswer = data.choices?.[0]?.message?.content || '';
+  }
+  if (!rawAnswer) rawAnswer = 'No recibí contenido del modelo.';
   const guarded = applyOperationalTruthGuard(rawAnswer);
   if (guarded.changed) logger.warn('operationalTruthGuard.corrected', { reason: guarded.reason });
   return guarded.text;
@@ -2345,6 +2370,14 @@ ${memory || 'Aún no hay memoria registrada.'}`;
 
 function modelRoute(env = ENV) {
   const provider = String(env.DEFAULT_PROVIDER || 'deepseek').toLowerCase();
+  if ((provider.includes('anthropic') || provider.includes('claude')) && env.ANTHROPIC_API_KEY) {
+    return {
+      provider: 'anthropic',
+      base: (env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1').replace(/\/$/, ''),
+      model: env.ANTHROPIC_MODEL || env.QUANT_PRIMARY_MODEL || 'claude-opus-4-8',
+      apiKey: env.ANTHROPIC_API_KEY
+    };
+  }
   if (provider.includes('deepinfra') && env.DEEPINFRA_API_KEY) {
     return {
       provider: 'deepinfra',
@@ -2483,6 +2516,9 @@ async function handleApi(req, res, url) {
         testOrderBinance: (side, symbol, qty, type, price) => testOrderBinance(side, symbol, qty, type, price, userEnv),
         placeMt5DemoOrder: (input) => placeMt5DemoOrder(input, { env: userEnv }),
         closeMt5DemoPosition: (input) => closeMt5DemoPosition(input, { env: userEnv }),
+        checkMt5RealOrder: (input, options = {}) => checkMt5RealOrder(input, { ...options, env: userEnv }),
+        placeMt5RealOrder: (input, options = {}) => placeMt5RealOrder(input, { ...options, env: userEnv }),
+        closeMt5RealPosition: (input, options = {}) => closeMt5RealPosition(input, { ...options, env: userEnv }),
         syncBinanceTime: () => syncBinanceTime(),
         mt5AccountInfo: (envArg) => mt5Info(envArg),
         botTemplatesRoot: path.join(__dirname, 'bots', 'templates'),
@@ -2523,6 +2559,7 @@ async function handleApi(req, res, url) {
       binance: Boolean(userEnv.BINANCE_API_KEY && userEnv.BINANCE_SECRET),
       deepseek: Boolean(userEnv.DEEPSEEK_API_KEY),
       deepinfra: Boolean(userEnv.DEEPINFRA_API_KEY),
+      anthropic: Boolean(userEnv.ANTHROPIC_API_KEY),
       modelProvider: modelRoute(userEnv).provider,
       model: modelRoute(userEnv).model,
       finnhub: Boolean(userEnv.FINNHUB_API_KEY),
@@ -3283,6 +3320,7 @@ ipcMain.handle('env-status', () => {
     binance: Boolean(ENV.BINANCE_API_KEY && ENV.BINANCE_SECRET),
     deepseek: Boolean(ENV.DEEPSEEK_API_KEY),
     deepinfra: Boolean(ENV.DEEPINFRA_API_KEY),
+    anthropic: Boolean(ENV.ANTHROPIC_API_KEY),
     modelProvider: modelRoute().provider,
     model: modelRoute().model,
     finnhub: Boolean(ENV.FINNHUB_API_KEY),
@@ -3377,6 +3415,10 @@ ipcMain.handle('mt5-real-order-preflight', (_e, payload) =>
 ipcMain.handle('mt5-real-order', (_e, payload) =>
   placeMt5RealOrder(payload || {}, { env: ENV })
     .catch((err) => ({ ok: false, reason: 'mt5_real_order_error', error: err.message, realTradingTouched: false }))
+);
+ipcMain.handle('mt5-real-close', (_e, payload) =>
+  closeMt5RealPosition(payload || {}, { env: ENV })
+    .catch((err) => ({ ok: false, reason: 'mt5_real_close_error', error: err.message, realTradingTouched: false }))
 );
 ipcMain.handle('conversations-list',              () => listConversations());
 ipcMain.handle('conversation-load',   (_e, id)   => loadConversation(id));

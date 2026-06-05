@@ -111,3 +111,33 @@ test('POST /api/mt5-real/order returns blocked response safely', async () => {
   assert.equal(res.body.ok, false);
   assert.equal(res.body.safety.realTradingTouched, false);
 });
+
+test('POST /api/mt5-real/close delegates to MT5 real close channel', async () => {
+  const calls = [];
+  const router = createApiRouter(armedContext({
+    deps: {
+      closeMt5RealPosition: async (payload) => {
+        calls.push(payload);
+        return {
+          ok: true,
+          action: 'CLOSE',
+          ticket: 991122,
+          retcode: 10009,
+          realTradingTouched: true
+        };
+      }
+    }
+  }));
+
+  const res = await router.dispatch({
+    method: 'POST',
+    pathname: '/api/mt5-real/close',
+    body: { ticket: 991122, reason: 'manual-close' }
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.ok, true);
+  assert.equal(res.body.ticket, 991122);
+  assert.equal(res.body.safety.realTradingTouched, true);
+  assert.deepEqual(calls, [{ ticket: 991122, reason: 'manual-close' }]);
+});

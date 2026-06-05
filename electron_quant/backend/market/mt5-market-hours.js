@@ -23,10 +23,10 @@ function getBogotaMarketClock(date = new Date()) {
 function getMt5MarketSession(date = new Date()) {
   const bogota = getBogotaMarketClock(date);
   const minutes = bogota.hour * 60 + bogota.minute;
-  const dailyStart = 16 * 60;
-  const dailyEnd = 17 * 60;
-  const fridayCut = 15 * 60;
-  const sundayResume = 16 * 60;
+  const dailyStart = 15 * 60;
+  const dailyEnd = 16 * 60;
+  const fridayCut = 16 * 60;
+  const sundayResume = 17 * 60;
 
   const weekendCut =
     (bogota.day === 5 && minutes >= fridayCut)
@@ -37,7 +37,7 @@ function getMt5MarketSession(date = new Date()) {
       open: false,
       reason: 'weekend_cut',
       bogota,
-      message: 'MT5 cerrado por corte de fin de semana: viernes 15:00 a domingo 16:00 hora Colombia.'
+      message: 'MT5 cerrado por corte de fin de semana: viernes 16:00 a domingo 17:00 hora Colombia.'
     };
   }
 
@@ -46,7 +46,7 @@ function getMt5MarketSession(date = new Date()) {
       open: false,
       reason: 'daily_maintenance',
       bogota,
-      message: 'MT5 cerrado por mantenimiento diario: 16:00 a 17:00 hora Colombia.'
+      message: 'MT5 cerrado por mantenimiento diario: 15:00 a 16:00 hora Colombia.'
     };
   }
 

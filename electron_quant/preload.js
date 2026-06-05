@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('quant', {
   mt5DemoOrder:       (payload) => ipcRenderer.invoke('mt5-demo-order', payload),
   mt5RealOrderPreflight: (payload) => ipcRenderer.invoke('mt5-real-order-preflight', payload),
   mt5RealOrder:       (payload) => ipcRenderer.invoke('mt5-real-order', payload),
+  mt5RealClose:       (payload) => ipcRenderer.invoke('mt5-real-close', payload),
   conversationsList:   ()                     => ipcRenderer.invoke('conversations-list'),
   conversationLoad:    (id)                   => ipcRenderer.invoke('conversation-load', id),
   conversationSave:    (id, name, messages)   => ipcRenderer.invoke('conversation-save', id, name, messages),

@@ -378,3 +378,43 @@ test('controller prevents overlapping autonomous ticks', async () => {
   assert.equal(second.reason, 'real_autonomous_tick_in_progress');
   assert.equal(controller.status(armedContext()).ticksSkipped, 1);
 });
+
+test('scheduler autonomously closes stale MT5 real positions before opening more risk', async () => {
+  const closed = [];
+  const result = await runRealAutonomousTick(armedContext({
+    env: {
+      REAL_AUTONOMOUS_ALLOWED_VENUES: 'MT5',
+      REAL_AUTONOMOUS_MT5_ENABLED: 'true',
+      MT5_REAL_TRADING_ENABLED: 'true',
+      MT5_CONNECTOR_ENABLED: 'true',
+      REAL_AUTONOMOUS_MT5_MAX_HOLD_HOURS: '22',
+      REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK: '2'
+    },
+    riskConfig: { allowedVenues: ['BINANCE', 'MT5'], maxOpenPositions: 4 },
+    deps: {
+      readTrainingStateSnapshot: () => ({ state: { activePairs: [] } }),
+      getMt5MarketSession: () => ({ open: true, reason: 'open' }),
+      getOpenRealPositions: async () => [
+        {
+          venue: 'MT5',
+          symbol: 'USDCAD',
+          ticket: 445566,
+          openedAt: '2026-06-03T10:00:00.000Z',
+          swap: -0.42
+        }
+      ],
+      closeMt5RealPosition: async (input) => {
+        closed.push(input);
+        return { ok: true, action: 'CLOSE', ticket: input.ticket, realTradingTouched: true };
+      }
+    },
+    nowMs: Date.parse('2026-06-04T10:30:00.000Z')
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.executedCount, 1);
+  assert.equal(result.executed[0].action, 'CLOSE');
+  assert.equal(result.executed[0].symbol, 'USDCAD');
+  assert.deepEqual(closed.map((input) => input.ticket), [445566]);
+  assert.equal(closed[0].reason, 'real-autonomous-stale-mt5-close');
+});

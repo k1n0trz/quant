@@ -168,9 +168,13 @@ function realPositionKey(position = {}) {
   return venue && symbol ? `${venue}:${symbol}` : '';
 }
 
-async function openRealPositionSet(deps = {}) {
-  if (typeof deps.getOpenRealPositions !== 'function') return new Set();
+async function openRealPositionRows(deps = {}) {
+  if (typeof deps.getOpenRealPositions !== 'function') return [];
   const rows = await deps.getOpenRealPositions().catch(() => []);
+  return Array.isArray(rows) ? rows : [];
+}
+
+function openRealPositionSet(rows = []) {
   return new Set((Array.isArray(rows) ? rows : []).map(realPositionKey).filter(Boolean));
 }
 
@@ -262,6 +266,91 @@ function mt5HorizonRequiresOvernight(horizon) {
   if (!text) return false;
   if (text.includes('intraday') || text.includes('scalp') || text.includes('minute') || text.includes('m1') || text.includes('m5') || text.includes('m15') || text.includes('h1')) return false;
   return /swing|weekly|week|monthly|month|medium|long|position|daily|multi.?day/.test(text);
+}
+
+function positionTicket(position = {}) {
+  const ticket = finiteNumber(position.ticket ?? position.positionTicket ?? position.order);
+  return ticket && ticket > 0 ? Math.trunc(ticket) : null;
+}
+
+function positionOpenTimeMs(position = {}) {
+  const raw = position.openedAt ?? position.openTime ?? position.entryAt ?? position.createdAt ?? position.time;
+  if (raw === null || raw === undefined || raw === '') return null;
+  if (typeof raw === 'number' || /^\d+(\.\d+)?$/.test(String(raw))) {
+    const number = Number(raw);
+    if (!Number.isFinite(number)) return null;
+    return number < 100000000000 ? number * 1000 : number;
+  }
+  const parsed = Date.parse(String(raw));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function mt5RealPositionAgeHours(position = {}, nowMs = Date.now()) {
+  const openedMs = positionOpenTimeMs(position);
+  if (!openedMs) return null;
+  return Math.max(0, (nowMs - openedMs) / 3600000);
+}
+
+function shouldCloseMt5RealPosition(position = {}, limits = {}, nowMs = Date.now()) {
+  if (normalizeVenue(position.venue || position.platform) !== 'MT5') return null;
+  const ticket = positionTicket(position);
+  if (!ticket) return null;
+  const ageHours = mt5RealPositionAgeHours(position, nowMs);
+  const swap = finiteNumber(position.swap ?? position.swapValue ?? position.storage);
+  if (ageHours !== null && ageHours >= limits.mt5MaxHoldHours) {
+    return { ticket, reason: 'mt5_max_hold_hours_exceeded', ageHours, swap };
+  }
+  if (swap !== null && swap < 0 && ageHours !== null && ageHours >= Math.min(22, limits.mt5MaxHoldHours)) {
+    return { ticket, reason: 'mt5_negative_swap_review', ageHours, swap };
+  }
+  return null;
+}
+
+async function closeStaleMt5RealPositions(context, limits, openRows, maxCount) {
+  const deps = context.deps || {};
+  if (!limits.allowedVenues.includes('MT5')) return [];
+  if (!boolFlag((context.env || {}).REAL_AUTONOMOUS_MT5_ENABLED)) return [];
+  if (typeof deps.closeMt5RealPosition !== 'function') return [];
+  const session = mt5MarketOpen(context);
+  if (!session.open) {
+    return [{
+      ok: false,
+      status: 'skipped',
+      action: 'CLOSE',
+      venue: 'MT5',
+      symbol: '',
+      reason: `mt5_market_closed:${session.reason}`,
+      realTradingTouched: false
+    }];
+  }
+  const stale = (Array.isArray(openRows) ? openRows : [])
+    .map((position) => ({ position, closeReason: shouldCloseMt5RealPosition(position, limits, context.nowMs || Date.now()) }))
+    .filter((row) => row.closeReason)
+    .sort((a, b) => (b.closeReason.ageHours || 0) - (a.closeReason.ageHours || 0))
+    .slice(0, Math.max(0, maxCount));
+  const out = [];
+  for (const row of stale) {
+    const symbol = normalizeSymbol(row.position.symbol || row.position.pair);
+    const input = {
+      ticket: row.closeReason.ticket,
+      symbol,
+      reason: 'real-autonomous-stale-mt5-close'
+    };
+    const result = await deps.closeMt5RealPosition(input, { env: context.env || {} });
+    out.push({
+      ok: result?.ok === true,
+      status: result?.ok ? 'executed' : (result?.status || 'blocked'),
+      action: 'CLOSE',
+      venue: 'MT5',
+      symbol,
+      side: 'CLOSE',
+      reason: result?.reason || row.closeReason.reason,
+      ticket: result?.ticket || input.ticket,
+      orderId: result?.commandId || null,
+      realTradingTouched: result?.realTradingTouched === true
+    });
+  }
+  return out;
 }
 
 async function buildMt5Candidates(context, state, limits, opened) {
@@ -380,7 +469,27 @@ async function runRealAutonomousTick(context = {}) {
     ? context.deps.readTrainingStateSnapshot()
     : null;
   const state = stateFromSnapshot(snapshot);
-  const opened = await openRealPositionSet(context.deps || {});
+  const openRows = await openRealPositionRows(context.deps || {});
+  const opened = openRealPositionSet(openRows);
+  const closeExecutions = await closeStaleMt5RealPositions(context, limits, openRows, limits.maxOrdersPerTick);
+  const successfulCloseKeys = new Set(closeExecutions
+    .filter((row) => row.ok)
+    .map((row) => `${row.venue}:${row.symbol}`)
+    .filter((key) => key !== 'MT5:'));
+  for (const key of successfulCloseKeys) opened.delete(key);
+  if (closeExecutions.filter((row) => row.ok).length >= limits.maxOrdersPerTick) {
+    return {
+      ok: true,
+      ranAt: new Date(context.nowMs || Date.now()).toISOString(),
+      limits,
+      openRealPositions: opened.size,
+      candidates: [],
+      executed: closeExecutions,
+      executedCount: closeExecutions.filter((row) => row.ok).length,
+      skipped: [],
+      realTradingTouched: closeExecutions.some((row) => row.realTradingTouched)
+    };
+  }
   const ordersToday = typeof context.deps?.getRealAutonomousOrdersToday === 'function'
     ? Math.max(0, Math.floor(Number(await context.deps.getRealAutonomousOrdersToday()) || 0))
     : 0;
@@ -391,10 +500,10 @@ async function runRealAutonomousTick(context = {}) {
       limits,
       ordersToday,
       candidates: [],
-      executed: [],
-      executedCount: 0,
+      executed: closeExecutions,
+      executedCount: closeExecutions.filter((row) => row.ok).length,
       skipped: [],
-      realTradingTouched: false
+      realTradingTouched: closeExecutions.some((row) => row.realTradingTouched)
     };
   }
   if (opened.size >= limits.maxOpenPositions) {
@@ -404,10 +513,10 @@ async function runRealAutonomousTick(context = {}) {
       limits,
       openRealPositions: opened.size,
       candidates: [],
-      executed: [],
-      executedCount: 0,
+      executed: closeExecutions,
+      executedCount: closeExecutions.filter((row) => row.ok).length,
       skipped: [],
-      realTradingTouched: false
+      realTradingTouched: closeExecutions.some((row) => row.realTradingTouched)
     };
   }
 
@@ -425,14 +534,15 @@ async function runRealAutonomousTick(context = {}) {
     .sort(sortByScoreThenSymbol), limits.allowedVenues)
     .slice(0, Math.max(limits.maxOrdersPerTick * 10, 20));
 
-  const executed = [];
+  const executed = [...closeExecutions];
+  const closeSuccessCount = closeExecutions.filter((row) => row.ok).length;
   const successLimit = Math.min(
-    limits.maxOrdersPerTick,
+    Math.max(0, limits.maxOrdersPerTick - closeSuccessCount),
     Math.max(0, limits.maxOpenPositions - opened.size),
     Math.max(0, limits.maxOrdersPerDay - ordersToday)
   );
   for (const candidate of executable) {
-    if (executed.filter((row) => row.ok).length >= successLimit) break;
+    if (executed.filter((row) => row.ok && row.action !== 'CLOSE').length >= successLimit) break;
     const result = await executeCandidate(candidate, context);
     executed.push({
       ok: result?.ok === true,

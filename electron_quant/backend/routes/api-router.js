@@ -26,7 +26,7 @@ const { resolveTrainingSignalContext } = require('../training/training-signal-co
 const { generateTrainingSignalCandidates } = require('../training/training-signal-candidate-engine');
 const { buildTrainingBotsStatus } = require('../training/bot-registry-service');
 const { placeMt5DemoOrder, closeMt5DemoPosition } = require('../adapters/mt5/mt5-demo-order-service');
-const { checkMt5RealOrder, placeMt5RealOrder } = require('../adapters/mt5/mt5-real-order-service');
+const { checkMt5RealOrder, placeMt5RealOrder, closeMt5RealPosition } = require('../adapters/mt5/mt5-real-order-service');
 const {
   executeBinanceRealOrder,
   preflightBinanceRealOrder,
@@ -163,7 +163,8 @@ function createApiRouter(context) {
           return result;
         },
         checkMt5RealOrder: typeof deps.checkMt5RealOrder === 'function' ? deps.checkMt5RealOrder : checkMt5RealOrder,
-        placeMt5RealOrder: typeof deps.placeMt5RealOrder === 'function' ? deps.placeMt5RealOrder : placeMt5RealOrder
+        placeMt5RealOrder: typeof deps.placeMt5RealOrder === 'function' ? deps.placeMt5RealOrder : placeMt5RealOrder,
+        closeMt5RealPosition: typeof deps.closeMt5RealPosition === 'function' ? deps.closeMt5RealPosition : closeMt5RealPosition
       };
       return {
         env,
@@ -782,6 +783,20 @@ function createApiRouter(context) {
         const executor = typeof deps.placeMt5RealOrder === 'function'
           ? deps.placeMt5RealOrder
           : (input) => placeMt5RealOrder(input, { env });
+        const result = await executor(body);
+        return response(result.ok ? 200 : 409, {
+          ...result,
+          safety: {
+            realTradingTouched: result.realTradingTouched === true,
+            demoOnly: false
+          }
+        });
+      }
+
+      if (method === 'POST' && pathname === '/api/mt5-real/close') {
+        const executor = typeof deps.closeMt5RealPosition === 'function'
+          ? deps.closeMt5RealPosition
+          : (input) => closeMt5RealPosition(input, { env });
         const result = await executor(body);
         return response(result.ok ? 200 : 409, {
           ...result,

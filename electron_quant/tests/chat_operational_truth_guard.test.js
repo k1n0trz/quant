@@ -36,3 +36,17 @@ test('allows recommendations and conditional language', () => {
   assert.equal(guarded.changed, false);
   assert.equal(guarded.text, text);
 });
+
+test('rewrites unaudited infinitive task lists that sound like execution plans', () => {
+  const text = [
+    'Cerrar las 2 posiciones reales de USDCAD en el proximo ciclo de ejecucion.',
+    'Activar un escaneo continuo en todos los simbolos visibles de MT5.',
+    'Si encuentro un setup, lo ejecutare sin esperar confirmacion tuya.'
+  ].join('\n');
+  const guarded = applyOperationalTruthGuard(text);
+  assert.equal(guarded.changed, true);
+  assert.match(guarded.text, /Correccion operativa/i);
+  assert.doesNotMatch(guarded.text, /Cerrar las 2 posiciones/i);
+  assert.doesNotMatch(guarded.text, /Activar un escaneo/i);
+  assert.doesNotMatch(guarded.text, /ejecutare/i);
+});

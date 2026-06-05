@@ -388,6 +388,7 @@ test('scheduler autonomously closes stale MT5 real positions before opening more
       MT5_REAL_TRADING_ENABLED: 'true',
       MT5_CONNECTOR_ENABLED: 'true',
       REAL_AUTONOMOUS_MT5_MAX_HOLD_HOURS: '22',
+      REAL_AUTONOMOUS_MT5_ORPHAN_MAX_HOLD_HOURS: '72',
       REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK: '2'
     },
     riskConfig: { allowedVenues: ['BINANCE', 'MT5'], maxOpenPositions: 4 },
@@ -417,6 +418,87 @@ test('scheduler autonomously closes stale MT5 real positions before opening more
   assert.equal(result.executed[0].symbol, 'USDCAD');
   assert.deepEqual(closed.map((input) => input.ticket), [445566]);
   assert.equal(closed[0].reason, 'real-autonomous-stale-mt5-close');
+});
+
+test('scheduler autonomously closes MT5 real position when live signal flips against it', async () => {
+  const closed = [];
+  const result = await runRealAutonomousTick(armedContext({
+    env: {
+      REAL_AUTONOMOUS_ALLOWED_VENUES: 'MT5',
+      REAL_AUTONOMOUS_MT5_ENABLED: 'true',
+      MT5_REAL_TRADING_ENABLED: 'true',
+      MT5_CONNECTOR_ENABLED: 'true',
+      REAL_AUTONOMOUS_MIN_CONFIDENCE: '60',
+      REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK: '1'
+    },
+    riskConfig: { allowedVenues: ['BINANCE', 'MT5'], maxOpenPositions: 4 },
+    deps: {
+      readTrainingStateSnapshot: () => ({
+        state: {
+          activePairs: [
+            { venue: 'MT5', symbol: 'EURUSD', bias: 'SHORT', confidence: 84, horizon: 'intraday', price: 1.081 }
+          ]
+        }
+      }),
+      getMt5MarketSession: () => ({ open: true, reason: 'open' }),
+      getOpenRealPositions: async () => [
+        { venue: 'MT5', symbol: 'EURUSD', ticket: 11001, side: 'BUY', openedAt: '2026-06-05T05:00:00.000Z' }
+      ],
+      closeMt5RealPosition: async (input) => {
+        closed.push(input);
+        return { ok: true, ticket: input.ticket, commandId: 'cmd-close-1', realTradingTouched: true };
+      }
+    },
+    nowMs: Date.parse('2026-06-05T06:00:00.000Z')
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.executedCount, 1);
+  assert.equal(result.executed[0].action, 'CLOSE');
+  assert.equal(result.executed[0].reason, 'mt5_signal_flipped');
+  assert.equal(result.executed[0].signalBias, 'SHORT');
+  assert.deepEqual(closed, [{ ticket: 11001, symbol: 'EURUSD', reason: 'real-autonomous-mt5_signal_flipped' }]);
+});
+
+test('scheduler autonomously closes MT5 real position when hold signal collapses', async () => {
+  const closed = [];
+  const result = await runRealAutonomousTick(armedContext({
+    env: {
+      REAL_AUTONOMOUS_ALLOWED_VENUES: 'MT5',
+      REAL_AUTONOMOUS_MT5_ENABLED: 'true',
+      MT5_REAL_TRADING_ENABLED: 'true',
+      MT5_CONNECTOR_ENABLED: 'true',
+      REAL_AUTONOMOUS_MIN_CONFIDENCE: '60',
+      REAL_AUTONOMOUS_MIN_HOLD_CONFIDENCE: '45',
+      REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK: '1'
+    },
+    riskConfig: { allowedVenues: ['BINANCE', 'MT5'], maxOpenPositions: 4 },
+    deps: {
+      readTrainingStateSnapshot: () => ({
+        state: {
+          activePairs: [
+            { venue: 'MT5', symbol: 'USDCAD', bias: 'LONG', confidence: 32, horizon: 'intraday', price: 1.36 }
+          ]
+        }
+      }),
+      getMt5MarketSession: () => ({ open: true, reason: 'open' }),
+      getOpenRealPositions: async () => [
+        { venue: 'MT5', symbol: 'USDCAD', ticket: 22002, side: 'BUY', openedAt: '2026-06-05T04:00:00.000Z' }
+      ],
+      closeMt5RealPosition: async (input) => {
+        closed.push(input);
+        return { ok: true, ticket: input.ticket, commandId: 'cmd-close-2', realTradingTouched: true };
+      }
+    },
+    nowMs: Date.parse('2026-06-05T06:00:00.000Z')
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.executedCount, 1);
+  assert.equal(result.executed[0].action, 'CLOSE');
+  assert.equal(result.executed[0].reason, 'mt5_signal_below_hold_confidence');
+  assert.equal(result.executed[0].signalScore, 32);
+  assert.deepEqual(closed, [{ ticket: 22002, symbol: 'USDCAD', reason: 'real-autonomous-mt5_signal_below_hold_confidence' }]);
 });
 
 test('scheduler repairs unprotected Binance spot balances before opening more risk', async () => {

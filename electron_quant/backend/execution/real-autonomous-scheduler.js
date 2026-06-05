@@ -65,8 +65,15 @@ function resolveRealAutonomousLimits(env = {}, riskConfig = {}) {
   const mt5Lots = clampNumber(env.REAL_AUTONOMOUS_MT5_LOTS ?? env.MT5_REAL_MAX_LOTS, 0.01, 0.01, 0.05);
   const stopLossPct = clampNumber(env.REAL_AUTONOMOUS_STOP_LOSS_PCT, 2, 0.1, 20);
   const takeProfitPct = clampNumber(env.REAL_AUTONOMOUS_TAKE_PROFIT_PCT, 3, 0.1, 50);
+  const minHoldConfidence = clampNumber(
+    env.REAL_AUTONOMOUS_MIN_HOLD_CONFIDENCE,
+    Math.max(35, (clampNumber(env.REAL_AUTONOMOUS_MIN_CONFIDENCE, 78, 1, 100) - 20)),
+    1,
+    100
+  );
   const mt5AllowOvernight = boolFlag(env.REAL_AUTONOMOUS_MT5_ALLOW_OVERNIGHT);
   const mt5MaxHoldHours = Math.floor(clampNumber(env.REAL_AUTONOMOUS_MT5_MAX_HOLD_HOURS, 22, 1, 168));
+  const mt5OrphanMaxHoldHours = Math.floor(clampNumber(env.REAL_AUTONOMOUS_MT5_ORPHAN_MAX_HOLD_HOURS, 6, 1, 72));
   return {
     allowedVenues: resolveAllowedVenues(env),
     autonomyMode: 'opportunity_only',
@@ -79,8 +86,10 @@ function resolveRealAutonomousLimits(env = {}, riskConfig = {}) {
     mt5Lots,
     stopLossPct,
     takeProfitPct,
+    minHoldConfidence,
     mt5AllowOvernight,
-    mt5MaxHoldHours
+    mt5MaxHoldHours,
+    mt5OrphanMaxHoldHours
   };
 }
 
@@ -278,6 +287,23 @@ function positionTicket(position = {}) {
   return ticket && ticket > 0 ? Math.trunc(ticket) : null;
 }
 
+function positionSideBias(position = {}) {
+  const raw = String(position.side ?? position.direction ?? position.positionSide ?? position.orderSide ?? '').trim().toUpperCase();
+  if (raw.includes('BUY') || raw.includes('LONG')) return 'LONG';
+  if (raw.includes('SELL') || raw.includes('SHORT')) return 'SHORT';
+  const typeText = String(position.type ?? position.positionType ?? position.orderType ?? '').trim().toUpperCase();
+  if (typeText.includes('BUY') || typeText.includes('LONG')) return 'LONG';
+  if (typeText.includes('SELL') || typeText.includes('SHORT')) return 'SHORT';
+  const typeNumber = finiteNumber(position.type ?? position.positionType);
+  if (typeNumber === 0) return 'LONG';
+  if (typeNumber === 1) return 'SHORT';
+  return '';
+}
+
+function oppositeBias(left, right) {
+  return (left === 'LONG' && right === 'SHORT') || (left === 'SHORT' && right === 'LONG');
+}
+
 function positionOpenTimeMs(position = {}) {
   const raw = position.openedAt ?? position.openTime ?? position.entryAt ?? position.createdAt ?? position.time;
   if (raw === null || raw === undefined || raw === '') return null;
@@ -309,6 +335,83 @@ function shouldCloseMt5RealPosition(position = {}, limits = {}, nowMs = Date.now
     return { ticket, reason: 'mt5_negative_swap_review', ageHours, swap };
   }
   return null;
+}
+
+function shouldCloseMt5RealPositionBySignal(position = {}, signalIndex = new Map(), limits = {}, nowMs = Date.now()) {
+  if (normalizeVenue(position.venue || position.platform) !== 'MT5') return null;
+  const ticket = positionTicket(position);
+  const symbol = normalizeSymbol(position.symbol || position.pair);
+  if (!ticket || !symbol) return null;
+  const side = positionSideBias(position);
+  if (!side) return null;
+  const signal = signalIndex.get(`MT5:${symbol}`);
+  const ageHours = mt5RealPositionAgeHours(position, nowMs);
+  if (!signal) {
+    if (ageHours !== null && ageHours >= limits.mt5OrphanMaxHoldHours) {
+      return { ticket, reason: 'mt5_no_current_signal', ageHours, signalScore: null, signalBias: 'NONE' };
+    }
+    return null;
+  }
+  if (oppositeBias(side, signal.bias) && signal.score >= limits.minConfidence) {
+    return { ticket, reason: 'mt5_signal_flipped', ageHours, signalScore: signal.score, signalBias: signal.bias, positionSide: side };
+  }
+  if (signal.score < limits.minHoldConfidence) {
+    return { ticket, reason: 'mt5_signal_below_hold_confidence', ageHours, signalScore: signal.score, signalBias: signal.bias, positionSide: side };
+  }
+  return null;
+}
+
+async function closeSignalManagedMt5RealPositions(context, limits, openRows, state, maxCount) {
+  const deps = context.deps || {};
+  if (!limits.allowedVenues.includes('MT5')) return [];
+  if (!boolFlag((context.env || {}).REAL_AUTONOMOUS_MT5_ENABLED)) return [];
+  if (typeof deps.closeMt5RealPosition !== 'function') return [];
+  const session = mt5MarketOpen(context);
+  if (!session.open) {
+    return [{
+      ok: false,
+      status: 'skipped',
+      action: 'CLOSE',
+      venue: 'MT5',
+      symbol: '',
+      reason: `mt5_market_closed:${session.reason}`,
+      realTradingTouched: false
+    }];
+  }
+  const signalIndex = buildTrainingSignalIndex(state);
+  const closable = (Array.isArray(openRows) ? openRows : [])
+    .map((position) => ({
+      position,
+      closeReason: shouldCloseMt5RealPositionBySignal(position, signalIndex, limits, context.nowMs || Date.now())
+    }))
+    .filter((row) => row.closeReason)
+    .sort((a, b) => (b.closeReason.signalScore || 0) - (a.closeReason.signalScore || 0))
+    .slice(0, Math.max(0, maxCount));
+  const out = [];
+  for (const row of closable) {
+    const symbol = normalizeSymbol(row.position.symbol || row.position.pair);
+    const input = {
+      ticket: row.closeReason.ticket,
+      symbol,
+      reason: `real-autonomous-${row.closeReason.reason}`
+    };
+    const result = await deps.closeMt5RealPosition(input, { env: context.env || {} });
+    out.push({
+      ok: result?.ok === true,
+      status: result?.ok ? 'executed' : (result?.status || 'blocked'),
+      action: 'CLOSE',
+      venue: 'MT5',
+      symbol,
+      side: 'CLOSE',
+      reason: result?.reason || row.closeReason.reason,
+      ticket: result?.ticket || input.ticket,
+      orderId: result?.commandId || null,
+      signalScore: row.closeReason.signalScore,
+      signalBias: row.closeReason.signalBias,
+      realTradingTouched: result?.realTradingTouched === true
+    });
+  }
+  return out;
 }
 
 async function closeStaleMt5RealPositions(context, limits, openRows, maxCount) {
@@ -571,13 +674,22 @@ async function runRealAutonomousTick(context = {}) {
   const openRows = await openRealPositionRows(context.deps || {});
   const opened = openRealPositionSet(openRows);
   const protectionExecutions = await repairUnprotectedBinanceSpotPositions(context, limits, openRows, limits.maxOrdersPerTick);
+  const signalCloseExecutions = await closeSignalManagedMt5RealPositions(
+    context,
+    limits,
+    openRows,
+    state,
+    Math.max(0, limits.maxOrdersPerTick - protectionExecutions.filter((row) => row.ok).length)
+  );
   const closeExecutions = await closeStaleMt5RealPositions(
     context,
     limits,
     openRows,
-    Math.max(0, limits.maxOrdersPerTick - protectionExecutions.filter((row) => row.ok).length)
+    Math.max(0, limits.maxOrdersPerTick
+      - protectionExecutions.filter((row) => row.ok).length
+      - signalCloseExecutions.filter((row) => row.ok).length)
   );
-  const managementExecutions = [...protectionExecutions, ...closeExecutions];
+  const managementExecutions = [...protectionExecutions, ...signalCloseExecutions, ...closeExecutions];
   const successfulCloseKeys = new Set(managementExecutions
     .filter((row) => row.ok)
     .filter((row) => row.action === 'CLOSE')

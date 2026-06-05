@@ -418,3 +418,90 @@ test('scheduler autonomously closes stale MT5 real positions before opening more
   assert.deepEqual(closed.map((input) => input.ticket), [445566]);
   assert.equal(closed[0].reason, 'real-autonomous-stale-mt5-close');
 });
+
+test('scheduler repairs unprotected Binance spot balances before opening more risk', async () => {
+  const protections = [];
+  const openings = [];
+  const result = await runRealAutonomousTick(armedContext({
+    env: {
+      REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK: '2',
+      REAL_AUTONOMOUS_MAX_NOTIONAL_USDT: '5'
+    },
+    deps: {
+      readTrainingStateSnapshot: () => ({
+        state: {
+          activePairs: [
+            { venue: 'BINANCE', symbol: 'ALLOUSDT', bias: 'LONG', confidence: 90 }
+          ]
+        }
+      }),
+      getOpenRealPositions: async () => [
+        {
+          venue: 'BINANCE',
+          source: 'SPOT_BALANCE',
+          symbol: '1000CHEEMSUSDT',
+          quantity: 1000,
+          price: 0.005,
+          valueQuote: 5,
+          hasOpenOrders: false
+        }
+      ],
+      placeProtectionBinance: async (request, order) => {
+        protections.push({ request, order });
+        return { ok: true, orderListId: 991 };
+      },
+      discoverBinanceRealUniverse: async () => ({
+        ok: true,
+        ready: [{ venue: 'BINANCE', symbol: 'ALLOUSDT', side: 'BUY', type: 'MARKET', qty: 30, requestedNotional: 5.2, price: 0.17 }]
+      }),
+      executeBinanceRealOrder: async ({ input }) => {
+        openings.push(input);
+        return { ok: true, status: 'executed', request: input, order: { orderId: 44 } };
+      }
+    }
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.executedCount, 2);
+  assert.equal(result.executed[0].action, 'PROTECT');
+  assert.equal(result.executed[0].symbol, '1000CHEEMSUSDT');
+  assert.equal(protections[0].request.stopLoss > 0, true);
+  assert.equal(protections[0].request.takeProfit > protections[0].request.stopLoss, true);
+  assert.deepEqual(openings.map((input) => input.symbol), ['ALLOUSDT']);
+});
+
+test('scheduler closes small unprotected Binance spot balance when OCO repair fails', async () => {
+  const sells = [];
+  const result = await runRealAutonomousTick(armedContext({
+    env: {
+      REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK: '1',
+      REAL_AUTONOMOUS_MAX_NOTIONAL_USDT: '5'
+    },
+    deps: {
+      readTrainingStateSnapshot: () => ({ state: { activePairs: [] } }),
+      getOpenRealPositions: async () => [
+        {
+          venue: 'BINANCE',
+          source: 'SPOT_BALANCE',
+          symbol: 'ACTUSDT',
+          quantity: 20,
+          price: 0.25,
+          valueQuote: 5,
+          hasOpenOrders: false
+        }
+      ],
+      placeProtectionBinance: async () => ({ ok: false, error: 'oco_rejected' }),
+      placeOrderBinance: async (side, symbol, qty, type) => {
+        sells.push({ side, symbol, qty, type });
+        return { ok: true, orderId: 1234, symbol, side, qty };
+      },
+      discoverBinanceRealUniverse: async () => ({ ok: true, ready: [] })
+    }
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.executedCount, 1);
+  assert.equal(result.executed[0].action, 'CLOSE');
+  assert.equal(result.executed[0].status, 'closed_unprotected');
+  assert.deepEqual(sells, [{ side: 'SELL', symbol: 'ACTUSDT', qty: 20, type: 'MARKET' }]);
+});

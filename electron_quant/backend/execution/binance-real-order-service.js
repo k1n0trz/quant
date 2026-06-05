@@ -339,13 +339,25 @@ async function executeBinanceRealOrder({ input = {}, env = {}, botState = {}, ri
         protection = { ok: false, error: sanitizeText(error?.message || error) };
       }
       if (!protection || protection.ok !== true) {
+        let emergencyExit = null;
+        if (isAutonomousRequest(request) && typeof deps.placeOrderBinance === 'function') {
+          try {
+            const exitQty = finiteNumber(order.qty || order.executedQty || request.qty);
+            if (exitQty && exitQty > 0) {
+              emergencyExit = await deps.placeOrderBinance('SELL', request.symbol, exitQty, 'MARKET', null);
+            }
+          } catch (error) {
+            emergencyExit = { ok: false, error: sanitizeText(error?.message || error) };
+          }
+        }
         return {
           ok: false,
-          status: 'protection_failed',
+          status: emergencyExit?.ok === true ? 'protection_failed_closed' : 'protection_failed',
           error: sanitizeText(protection?.error || protection?.reason || 'No se pudo colocar proteccion SL/TP.'),
           request,
           order,
           protection,
+          emergencyExit,
           safety: {
             realTradingTouched: true,
             binanceSpotOnly: true

@@ -165,7 +165,8 @@ test('manual Binance SL TP request blocks before entry when protection handler i
   assert.match(result.error, /proteccion/i);
 });
 
-test('autonomous Binance real order reports protection_failed when OCO placement fails after entry', async () => {
+test('autonomous Binance real order exits immediately when OCO placement fails after entry', async () => {
+  const calls = [];
   const result = await executeBinanceRealOrder({
     input: {
       venue: 'BINANCE',
@@ -180,16 +181,26 @@ test('autonomous Binance real order reports protection_failed when OCO placement
     },
     ...armedContext({
       deps: {
-        placeOrderBinance: async () => ({ ok: true, orderId: 654, status: 'FILLED', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, price: 0.041 }),
+        placeOrderBinance: async (...args) => {
+          calls.push(args);
+          return calls.length === 1
+            ? { ok: true, orderId: 654, status: 'FILLED', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, price: 0.041 }
+            : { ok: true, orderId: 655, status: 'FILLED', symbol: 'ACXUSDT', side: 'SELL', type: 'MARKET', qty: 100, price: 0.0409 };
+        },
         placeProtectionBinance: async () => { throw new Error('oco_rejected'); }
       }
     })
   });
 
   assert.equal(result.ok, false);
-  assert.equal(result.status, 'protection_failed');
+  assert.equal(result.status, 'protection_failed_closed');
   assert.equal(result.order.orderId, 654);
+  assert.equal(result.emergencyExit.orderId, 655);
   assert.equal(result.protection.ok, false);
+  assert.deepEqual(calls, [
+    ['BUY', 'ACXUSDT', 100, 'MARKET', null],
+    ['SELL', 'ACXUSDT', 100, 'MARKET', null]
+  ]);
   assert.match(result.error, /oco_rejected/);
   assert.equal(result.safety.realTradingTouched, true);
 });

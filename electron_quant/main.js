@@ -435,7 +435,52 @@ async function getOpenRealPositionsForScheduler(env) {
       if (order?.symbol) rows.push({ venue: 'BINANCE', symbol: order.symbol });
     }
   } catch {}
+  try {
+    rows.push(...(await getBinanceSpotExposureRows(env)));
+  } catch {}
   return rows;
+}
+
+async function getBinanceSpotExposureRows(env = ENV) {
+  if (!env.BINANCE_API_KEY || !env.BINANCE_SECRET) return [];
+  const account = await signedBinance('/api/v3/account', {}, 'GET', env);
+  const openOrders = await binanceOpenOrders(env).catch(() => ({ ok: false, orders: [] }));
+  const openOrderSymbols = new Set((Array.isArray(openOrders.orders) ? openOrders.orders : []).map((order) => order.symbol).filter(Boolean));
+  const quoteAssets = ['USDT', 'USDC', 'FDUSD'];
+  const minValue = Math.max(0.5, Number(env.REAL_AUTONOMOUS_MIN_POSITION_VALUE_USDT || 1) || 1);
+  const out = [];
+  for (const balance of (account.balances || [])) {
+    const asset = String(balance.asset || '').toUpperCase();
+    if (!asset || quoteAssets.includes(asset)) continue;
+    const qty = Number(balance.free || 0) + Number(balance.locked || 0);
+    if (!Number.isFinite(qty) || qty <= 0) continue;
+    for (const quote of quoteAssets) {
+      const symbol = `${asset}${quote}`;
+      try {
+        const filters = await getSymbolFilters(symbol);
+        const market = await ticker(symbol);
+        const price = Number(market?.price ?? market?.lastPrice ?? market);
+        const valueQuote = qty * price;
+        if (!Number.isFinite(valueQuote) || valueQuote < minValue) break;
+        out.push({
+          venue: 'BINANCE',
+          source: 'SPOT_BALANCE',
+          symbol,
+          asset,
+          quantity: qty,
+          free: Number(balance.free || 0),
+          locked: Number(balance.locked || 0),
+          price,
+          quoteAsset: quote,
+          valueQuote,
+          hasOpenOrders: openOrderSymbols.has(symbol),
+          minNotional: filters.minNotional
+        });
+        break;
+      } catch {}
+    }
+  }
+  return out;
 }
 
 function getRealAutonomousOrdersToday() {
@@ -2174,6 +2219,14 @@ async function livePositions(env = ENV, passive = true) {
     const snap = readMt5Snapshot();
     if (snap?.positions?.mt5?.length) {
       mt5Accounts = [{ fromSnapshot: true, syncedAt: snap.syncedAt, positions: snap.positions.mt5 }];
+    } else if (Array.isArray(snap?.positions)) {
+      mt5Accounts = [{
+        fromSnapshot: true,
+        syncedAt: snap.syncedAt,
+        wallet: snap.wallet || null,
+        is_demo: snap.wallet?.is_demo,
+        positions: snap.positions
+      }];
     }
   }
   return { mt5Accounts, binance: binanceResult };

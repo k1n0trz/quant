@@ -178,6 +178,11 @@ function openRealPositionSet(rows = []) {
   return new Set((Array.isArray(rows) ? rows : []).map(realPositionKey).filter(Boolean));
 }
 
+function isBinanceSpotExposure(position = {}) {
+  return normalizeVenue(position.venue || position.platform) === 'BINANCE'
+    && String(position.source || position.kind || '').toUpperCase() === 'SPOT_BALANCE';
+}
+
 function sortByScoreThenSymbol(left, right) {
   if (right.priorityScore !== left.priorityScore) return right.priorityScore - left.priorityScore;
   return `${left.venue}:${left.symbol}`.localeCompare(`${right.venue}:${right.symbol}`);
@@ -353,6 +358,100 @@ async function closeStaleMt5RealPositions(context, limits, openRows, maxCount) {
   return out;
 }
 
+async function repairUnprotectedBinanceSpotPositions(context, limits, openRows, maxCount) {
+  const deps = context.deps || {};
+  if (!limits.allowedVenues.includes('BINANCE')) return [];
+  if (typeof deps.placeProtectionBinance !== 'function') return [];
+  const rows = (Array.isArray(openRows) ? openRows : [])
+    .filter((position) => isBinanceSpotExposure(position) && position.hasOpenOrders !== true)
+    .filter((position) => finiteNumber(position.quantity ?? position.qty ?? position.free) > 0)
+    .sort((a, b) => (finiteNumber(b.valueQuote ?? b.valueUsdt) || 0) - (finiteNumber(a.valueQuote ?? a.valueUsdt) || 0))
+    .slice(0, Math.max(0, maxCount));
+  const out = [];
+  for (const position of rows) {
+    const symbol = normalizeSymbol(position.symbol || position.pair);
+    const qty = finiteNumber(position.quantity ?? position.qty ?? position.free);
+    const price = finiteNumber(position.price ?? position.mark ?? position.price_current);
+    const valueQuote = finiteNumber(position.valueQuote ?? position.valueUsdt) || (qty && price ? qty * price : null);
+    const protection = buildProtection('BUY', price, limits);
+    if (!symbol || !qty || qty <= 0 || !protection) {
+      out.push({
+        ok: false,
+        status: 'skipped',
+        action: 'PROTECT',
+        venue: 'BINANCE',
+        symbol,
+        reason: 'missing_spot_exposure_protection_context',
+        realTradingTouched: false
+      });
+      continue;
+    }
+    const request = {
+      venue: 'BINANCE',
+      symbol,
+      side: 'BUY',
+      type: 'MARKET',
+      qty,
+      stopLoss: protection.stopLoss,
+      takeProfit: protection.takeProfit,
+      reason: 'real-autonomous-spot-protection-repair'
+    };
+    const syntheticOrder = { ok: true, symbol, side: 'BUY', qty, executedQty: qty, price };
+    let result = null;
+    try {
+      result = await deps.placeProtectionBinance(request, syntheticOrder);
+    } catch (error) {
+      result = { ok: false, error: error?.message || String(error) };
+    }
+    if (result?.ok === true) {
+      out.push({
+        ok: true,
+        status: 'protected',
+        action: 'PROTECT',
+        venue: 'BINANCE',
+        symbol,
+        side: 'SELL_OCO',
+        reason: 'spot_balance_oco_repaired',
+        orderId: result.orderListId || null,
+        realTradingTouched: true
+      });
+      continue;
+    }
+    const smallEnoughToExit = valueQuote !== null && valueQuote <= limits.maxNotionalUsdt * 1.5;
+    if (smallEnoughToExit && typeof deps.placeOrderBinance === 'function') {
+      let close = null;
+      try {
+        close = await deps.placeOrderBinance('SELL', symbol, qty, 'MARKET', null);
+      } catch (error) {
+        close = { ok: false, error: error?.message || String(error) };
+      }
+      out.push({
+        ok: close?.ok === true,
+        status: close?.ok ? 'closed_unprotected' : 'protection_failed',
+        action: 'CLOSE',
+        venue: 'BINANCE',
+        symbol,
+        side: 'SELL',
+        reason: close?.ok ? 'small_unprotected_spot_closed' : (close?.error || result?.error || 'spot_protection_failed'),
+        orderId: close?.orderId || null,
+        realTradingTouched: close?.ok === true
+      });
+      continue;
+    }
+    out.push({
+      ok: false,
+      status: 'protection_failed',
+      action: 'PROTECT',
+      venue: 'BINANCE',
+      symbol,
+      side: 'SELL_OCO',
+      reason: result?.error || result?.reason || 'spot_protection_failed',
+      realTradingTouched: false
+    });
+  }
+  return out;
+}
+
 async function buildMt5Candidates(context, state, limits, opened) {
   const env = context.env || {};
   if (!limits.allowedVenues.includes('MT5')) return [];
@@ -471,23 +570,31 @@ async function runRealAutonomousTick(context = {}) {
   const state = stateFromSnapshot(snapshot);
   const openRows = await openRealPositionRows(context.deps || {});
   const opened = openRealPositionSet(openRows);
-  const closeExecutions = await closeStaleMt5RealPositions(context, limits, openRows, limits.maxOrdersPerTick);
-  const successfulCloseKeys = new Set(closeExecutions
+  const protectionExecutions = await repairUnprotectedBinanceSpotPositions(context, limits, openRows, limits.maxOrdersPerTick);
+  const closeExecutions = await closeStaleMt5RealPositions(
+    context,
+    limits,
+    openRows,
+    Math.max(0, limits.maxOrdersPerTick - protectionExecutions.filter((row) => row.ok).length)
+  );
+  const managementExecutions = [...protectionExecutions, ...closeExecutions];
+  const successfulCloseKeys = new Set(managementExecutions
     .filter((row) => row.ok)
+    .filter((row) => row.action === 'CLOSE')
     .map((row) => `${row.venue}:${row.symbol}`)
     .filter((key) => key !== 'MT5:'));
   for (const key of successfulCloseKeys) opened.delete(key);
-  if (closeExecutions.filter((row) => row.ok).length >= limits.maxOrdersPerTick) {
+  if (managementExecutions.filter((row) => row.ok).length >= limits.maxOrdersPerTick) {
     return {
       ok: true,
       ranAt: new Date(context.nowMs || Date.now()).toISOString(),
       limits,
       openRealPositions: opened.size,
       candidates: [],
-      executed: closeExecutions,
-      executedCount: closeExecutions.filter((row) => row.ok).length,
+      executed: managementExecutions,
+      executedCount: managementExecutions.filter((row) => row.ok).length,
       skipped: [],
-      realTradingTouched: closeExecutions.some((row) => row.realTradingTouched)
+      realTradingTouched: managementExecutions.some((row) => row.realTradingTouched)
     };
   }
   const ordersToday = typeof context.deps?.getRealAutonomousOrdersToday === 'function'
@@ -500,10 +607,10 @@ async function runRealAutonomousTick(context = {}) {
       limits,
       ordersToday,
       candidates: [],
-      executed: closeExecutions,
-      executedCount: closeExecutions.filter((row) => row.ok).length,
+      executed: managementExecutions,
+      executedCount: managementExecutions.filter((row) => row.ok).length,
       skipped: [],
-      realTradingTouched: closeExecutions.some((row) => row.realTradingTouched)
+      realTradingTouched: managementExecutions.some((row) => row.realTradingTouched)
     };
   }
   if (opened.size >= limits.maxOpenPositions) {
@@ -513,10 +620,10 @@ async function runRealAutonomousTick(context = {}) {
       limits,
       openRealPositions: opened.size,
       candidates: [],
-      executed: closeExecutions,
-      executedCount: closeExecutions.filter((row) => row.ok).length,
+      executed: managementExecutions,
+      executedCount: managementExecutions.filter((row) => row.ok).length,
       skipped: [],
-      realTradingTouched: closeExecutions.some((row) => row.realTradingTouched)
+      realTradingTouched: managementExecutions.some((row) => row.realTradingTouched)
     };
   }
 
@@ -534,15 +641,15 @@ async function runRealAutonomousTick(context = {}) {
     .sort(sortByScoreThenSymbol), limits.allowedVenues)
     .slice(0, Math.max(limits.maxOrdersPerTick * 10, 20));
 
-  const executed = [...closeExecutions];
-  const closeSuccessCount = closeExecutions.filter((row) => row.ok).length;
+  const executed = [...managementExecutions];
+  const closeSuccessCount = managementExecutions.filter((row) => row.ok).length;
   const successLimit = Math.min(
     Math.max(0, limits.maxOrdersPerTick - closeSuccessCount),
     Math.max(0, limits.maxOpenPositions - opened.size),
     Math.max(0, limits.maxOrdersPerDay - ordersToday)
   );
   for (const candidate of executable) {
-    if (executed.filter((row) => row.ok && row.action !== 'CLOSE').length >= successLimit) break;
+    if (executed.filter((row) => row.ok && !row.action).length >= successLimit) break;
     const result = await executeCandidate(candidate, context);
     executed.push({
       ok: result?.ok === true,

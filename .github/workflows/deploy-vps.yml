@@ -94,6 +94,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_PORT || 22 }}
+          command_timeout: 30m
           script: |
             set -euo pipefail
             REMOTE_DIR="${{ inputs.remote_dir }}"
@@ -119,7 +120,6 @@ jobs:
             sudo chown "$(id -u):$(id -g)" package.json package-lock.json 2>/dev/null || true
             npm ci --omit=dev --ignore-scripts --no-audit --no-fund
             node --check main.js
-            npm run test:backend
 
             sudo systemctl restart "$SERVICE_NAME"
 

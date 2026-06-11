@@ -56,6 +56,8 @@ const { getMt5MarketSession } = require('./backend/market/mt5-market-hours');
 const { createSystemSelfAuditSchedulerController } = require('./backend/system/system-self-audit-scheduler');
 const { createRealAutonomousSchedulerController } = require('./backend/execution/real-autonomous-scheduler');
 const { applyOperationalTruthGuard } = require('./backend/chat/operational-truth-guard');
+const { buildLiveTelemetry, renderLiveTelemetryBlock } = require('./backend/chat/live-telemetry');
+const { buildTrainingBotsStatus } = require('./backend/training/bot-registry-service');
 const {
   runSystemSelfAudit,
   writeSystemSelfAuditStatus,
@@ -2352,6 +2354,24 @@ async function chat(messages, context = '', env = ENV) {
   const memory = readMemory(120)
     .map((m) => `${m.ts} ${m.kind}: ${JSON.stringify(m.payload).slice(0, 500)}`)
     .join('\n');
+  let liveTelemetryBlock = '';
+  try {
+    const trainingStateForChat = readTrainingState();
+    let botsStatusForChat = null;
+    try { botsStatusForChat = buildTrainingBotsStatus({ state: trainingStateForChat || {} }); } catch {}
+    const telemetry = buildLiveTelemetry({
+      env,
+      nowMs: now.getTime(),
+      botState: readBotState(),
+      trainingState: trainingStateForChat,
+      mt5DemoBridge: readMt5BridgeStatus(env),
+      mt5RealBridge: readMt5RealBridgeStatus(env),
+      botsStatus: botsStatusForChat
+    });
+    liveTelemetryBlock = renderLiveTelemetryBlock(telemetry);
+  } catch (err) {
+    logger.warn('chat.liveTelemetry.failed', { error: err?.message });
+  }
   const system = `Eres Quant, una IA de escritorio para un sistema de trading. Tienes memoria permanente local guardada en disco; no digas que tu memoria solo dura la sesión. Puedes recordar mensajes, observaciones, señales, errores y trades de sesiones anteriores usando el contexto de memoria que recibes. Respondes como asistente general, elocuente y prudente. No haces análisis de trading salvo que el usuario lo pida. Si hay riesgo real, adviertes y validas.
 
 Fecha/hora actual obligatoria: ${bogotaNow} hora Colombia. No uses fechas viejas del historial de chat. Estado horario MT5 actual: ${mt5Session.open ? 'ABIERTO' : 'CERRADO'} (${mt5Session.reason}) - ${mt5Session.message}
@@ -2395,7 +2415,7 @@ Evita respuestas con asteriscos Markdown como separadores. Usa titulos cortos, p
 Auto-auditoria:
 Debes tratarte como un agente de IAs de trading: revisa vulnerabilidades operativas, estado de adapters, memoria, macro/news, training y riesgo. Puedes auto-corregir guardas runtime y configuraciones internas que el contexto indique; si una correccion requiere cambio de codigo, dilo como accion tecnica concreta.
 
-Contexto operativo:
+${liveTelemetryBlock ? `${liveTelemetryBlock}\n\n` : ''}Contexto operativo:
 ${context}
 
 Memoria permanente reciente:

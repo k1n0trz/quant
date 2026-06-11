@@ -32,6 +32,9 @@ function writeBridgeStatus(dir, overrides = {}) {
     tradeMode: 2,
     login: 110994506,
     server: 'FBS-REAL',
+    balance: 5000,
+    equity: 5000,
+    positions: [],
     ...overrides
   }));
   return file;
@@ -193,6 +196,73 @@ test('MT5 real order blocks demo bridge status', async () => {
   assert.equal(result.ok, false);
   assert.equal(result.reason, 'mt5_real_bridge_requires_real_account');
   assert.equal(result.realTradingTouched, false);
+  assert.equal(fs.existsSync(path.join(dir, 'quant_bridge_command.txt')), false);
+});
+
+test('MT5 real order blocks risk above the per-trade equity budget', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'quant-mt5-real-risk-trade-'));
+  // $25 account: XAUUSD 0.01 lots with a $10 stop distance risks $10, far above 10% of equity
+  const statusFile = writeBridgeStatus(dir, { balance: 25, equity: 25 });
+  const result = await placeMt5RealOrder(
+    { symbol: 'XAUUSD', side: 'BUY', volume: 0.01, entryPrice: 3300, stopLoss: 3290, takeProfit: 3320 },
+    { env: { ...realEnv, MT5_REAL_BRIDGE_STATUS_FILE: statusFile } }
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'risk_exceeds_per_trade_budget');
+  assert.equal(result.realTradingTouched, false);
+  assert.ok(result.riskCheck.riskUsd > result.riskCheck.perTradeBudgetUsd);
+  assert.equal(fs.existsSync(path.join(dir, 'quant_bridge_command.txt')), false);
+});
+
+test('MT5 real order blocks when open positions already consume the total risk budget', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'quant-mt5-real-risk-total-'));
+  const statusFile = writeBridgeStatus(dir, {
+    balance: 1000,
+    equity: 1000,
+    positions: [
+      { ticket: 1, symbol: 'XAUUSD', side: 'BUY', volume: 0.05, priceOpen: 3300, sl: 3260, tp: 3350 }
+    ]
+  });
+  const result = await placeMt5RealOrder(
+    { symbol: 'EURUSD', side: 'BUY', volume: 0.01, entryPrice: 1.09, stopLoss: 1.087, takeProfit: 1.096 },
+    { env: { ...realEnv, MT5_REAL_BRIDGE_STATUS_FILE: statusFile, MT5_REAL_TOTAL_RISK_PCT: '20' } }
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'risk_exceeds_total_budget');
+  assert.ok(result.riskCheck.openRiskUsd > 180);
+  assert.equal(fs.existsSync(path.join(dir, 'quant_bridge_command.txt')), false);
+});
+
+test('MT5 real order blocks new risk while an unprotected position is open', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'quant-mt5-real-risk-unprotected-'));
+  const statusFile = writeBridgeStatus(dir, {
+    positions: [
+      { ticket: 42, symbol: 'XAUUSD', side: 'BUY', volume: 0.01, priceOpen: 3300, sl: 0, tp: 0 }
+    ]
+  });
+  const result = await placeMt5RealOrder(
+    { symbol: 'EURUSD', side: 'BUY', volume: 0.01, entryPrice: 1.09, stopLoss: 1.087, takeProfit: 1.096 },
+    { env: { ...realEnv, MT5_REAL_BRIDGE_STATUS_FILE: statusFile } }
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'unprotected_position_blocks_new_risk');
+  assert.equal(result.position.ticket, 42);
+  assert.equal(fs.existsSync(path.join(dir, 'quant_bridge_command.txt')), false);
+});
+
+test('MT5 real order blocks when bridge status carries no equity', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'quant-mt5-real-risk-no-equity-'));
+  const statusFile = writeBridgeStatus(dir, { balance: null, equity: null });
+  const result = await placeMt5RealOrder(
+    { symbol: 'EURUSD', side: 'BUY', volume: 0.01, entryPrice: 1.09, stopLoss: 1.087, takeProfit: 1.096 },
+    { env: { ...realEnv, MT5_REAL_BRIDGE_STATUS_FILE: statusFile } }
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'mt5_equity_unavailable');
   assert.equal(fs.existsSync(path.join(dir, 'quant_bridge_command.txt')), false);
 });
 

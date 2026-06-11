@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { validateMt5Protection } = require('./mt5-protection-policy');
+const { validateMt5Protection, estimateMt5RiskUsd } = require('./mt5-protection-policy');
 
 function textValue(...values) {
   for (const value of values) {
@@ -252,6 +252,7 @@ function buildMt5RealOrderRequest(input = {}, env = {}) {
       volume,
       type,
       price: price || null,
+      entryPrice: protection.entryPrice,
       sl: protection.sl,
       tp: protection.tp,
       deviation: Math.max(1, Math.min(100, finiteNumber(input.deviation, env.MT5_REAL_DEVIATION, 20) || 20)),
@@ -288,14 +289,94 @@ async function checkMt5RealOrder(input = {}, options = {}) {
   };
 }
 
+function clampPct(value, fallback, min, max) {
+  const number = finiteNumber(value);
+  const resolved = number === null ? fallback : number;
+  return Math.max(min, Math.min(max, resolved));
+}
+
+function applyMt5EquityRiskGate(order, env = {}) {
+  if (boolFlag(env.MT5_REAL_EQUITY_GATE_DISABLED)) {
+    return { ok: true, skipped: true, reason: 'equity_gate_disabled' };
+  }
+  const status = bridgeStatus(env);
+  // Without a fresh bridge status the execution layer already rejects the
+  // order; let it produce its usual mt5_real_bridge_unavailable error.
+  if (!status?.fresh || !status.connected) return { ok: true, skipped: true, reason: 'bridge_status_unavailable' };
+
+  const equity = finiteNumber(status.equity, status.balance);
+  if (equity === null || equity <= 0) {
+    return { ok: false, reason: 'mt5_equity_unavailable' };
+  }
+  const estimate = estimateMt5RiskUsd(order, env);
+  if (!estimate.ok) {
+    return { ok: false, reason: estimate.reason };
+  }
+  const perTradePct = clampPct(env.MT5_REAL_RISK_PER_TRADE_PCT, 10, 0.1, 50);
+  const totalPct = clampPct(env.MT5_REAL_TOTAL_RISK_PCT, 25, 0.1, 100);
+  const perTradeBudgetUsd = equity * perTradePct / 100;
+  const totalBudgetUsd = equity * totalPct / 100;
+  const riskCheck = {
+    equity,
+    riskUsd: estimate.riskUsd,
+    perTradePct,
+    perTradeBudgetUsd,
+    totalPct,
+    totalBudgetUsd,
+    openRiskUsd: 0
+  };
+  if (estimate.riskUsd > perTradeBudgetUsd) {
+    return { ok: false, reason: 'risk_exceeds_per_trade_budget', riskCheck };
+  }
+
+  const allowUnprotected = boolFlag(env.MT5_REAL_ALLOW_UNPROTECTED_OPEN);
+  const positions = Array.isArray(status.positions) ? status.positions : [];
+  let openRiskUsd = 0;
+  for (const position of positions) {
+    const positionSl = finiteNumber(position.sl);
+    if (positionSl === null || positionSl <= 0) {
+      if (allowUnprotected) continue;
+      return {
+        ok: false,
+        reason: 'unprotected_position_blocks_new_risk',
+        riskCheck,
+        position: { ticket: position.ticket || null, symbol: position.symbol || null }
+      };
+    }
+    const positionRisk = estimateMt5RiskUsd({
+      symbol: position.symbol,
+      entryPrice: position.priceOpen,
+      stopLoss: positionSl,
+      volume: position.volume
+    }, env);
+    if (positionRisk.ok) openRiskUsd += positionRisk.riskUsd;
+  }
+  riskCheck.openRiskUsd = openRiskUsd;
+  if (openRiskUsd + estimate.riskUsd > totalBudgetUsd) {
+    return { ok: false, reason: 'risk_exceeds_total_budget', riskCheck };
+  }
+  return { ok: true, riskCheck };
+}
+
 async function placeMt5RealOrder(input = {}, options = {}) {
   const env = options.env || {};
   const built = buildMt5RealOrderRequest(input, env);
   if (!built.ok) return { ok: false, reason: built.reason, realTradingTouched: false };
+  const gate = applyMt5EquityRiskGate(built.order, env);
+  if (!gate.ok) {
+    return {
+      ok: false,
+      reason: gate.reason,
+      riskCheck: gate.riskCheck || null,
+      position: gate.position || null,
+      realTradingTouched: false
+    };
+  }
   const result = await executeBridgeRealCommand(buildBridgeRealCommand(built.order, 'ORDER'), env);
   return {
     ...result,
     action: result.action || 'ORDER',
+    riskCheck: gate.riskCheck || null,
     order: {
       symbol: built.order.symbol,
       side: built.order.side,
@@ -331,6 +412,7 @@ module.exports = {
   isMt5RealTradingEnabled,
   buildMt5RealOrderRequest,
   buildMt5RealCloseRequest,
+  applyMt5EquityRiskGate,
   checkMt5RealOrder,
   placeMt5RealOrder,
   closeMt5RealPosition,

@@ -146,9 +146,57 @@ function buildMt5ProtectionLevels(input = {}, env = {}) {
   };
 }
 
+function mt5ContractSize(symbol, env = {}) {
+  const normalized = normalizeSymbol(symbol);
+  const override = finiteNumber(env[`MT5_CONTRACT_SIZE_${normalized}`]);
+  if (override !== null && override > 0) return override;
+  switch (symbolKey(normalized)) {
+    case 'XAU':
+      return 100;
+    case 'XAG':
+      return 5000;
+    case 'INDEX_CRYPTO':
+      return 1;
+    default:
+      return 100000;
+  }
+}
+
+function estimateMt5RiskUsd(input = {}, env = {}) {
+  const symbol = normalizeSymbol(input.symbol);
+  const entryPrice = finiteNumber(input.entryPrice, input.entry_price, input.priceOpen, input.price);
+  const stopLoss = finiteNumber(input.stopLoss, input.sl, input.stop_loss);
+  const volume = finiteNumber(input.volume, input.lots);
+  if (!symbol || entryPrice === null || entryPrice <= 0 || volume === null || volume <= 0) {
+    return { ok: false, reason: 'risk_inputs_missing' };
+  }
+  if (stopLoss === null || stopLoss <= 0) {
+    return { ok: false, reason: 'risk_stop_loss_missing' };
+  }
+  const contractSize = mt5ContractSize(symbol, env);
+  const riskQuote = Math.abs(entryPrice - stopLoss) * contractSize * volume;
+  const letters = symbol.replace(/[^A-Z]/g, '');
+  const quote = letters.length >= 6 ? letters.slice(3, 6) : 'USD';
+  const base = letters.slice(0, 3);
+  let riskUsd = riskQuote;
+  if (quote !== 'USD' && (base === 'USD' || quote === 'JPY')) {
+    riskUsd = riskQuote / entryPrice;
+  }
+  return {
+    ok: true,
+    symbol,
+    contractSize,
+    riskQuote,
+    riskUsd,
+    quoteCurrency: quote
+  };
+}
+
 module.exports = {
   validateMt5Protection,
   buildMt5ProtectionLevels,
   resolveMaxStopLossPct,
-  defaultMaxStopLossPct
+  defaultMaxStopLossPct,
+  mt5ContractSize,
+  estimateMt5RiskUsd
 };

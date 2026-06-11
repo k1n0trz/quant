@@ -94,6 +94,9 @@ function buildLiveTelemetry(input = {}) {
     bots: {
       templates: finiteNumber(botsStatus?.templatesCount) ?? 0,
       training: finiteNumber(botsStatus?.totals?.training) ?? 0,
+      generated: finiteNumber(botsStatus?.totals?.generated) ?? 0,
+      needsCompile: finiteNumber(botsStatus?.totals?.needsCompile) ?? 0,
+      compiledReady: finiteNumber(botsStatus?.totals?.compiledReady) ?? 0,
       realCandidates: finiteNumber(botsStatus?.totals?.real) ?? 0,
       deployedReal: 0
     }
@@ -127,7 +130,7 @@ function renderLiveTelemetryBlock(telemetry) {
     bridgeLine('MT5 demo', t.mt5Demo),
     bridgeLine('MT5 real', t.mt5Real),
     `Training: ${t.training.present ? `modo=${t.training.mode || 'n/d'}, posiciones demo abiertas=${t.training.openPositions}, balance demo=${t.training.balance ?? 'n/d'}` : 'sin estado de training cargado'}.`,
-    `Bots: plantillas=${t.bots.templates}, bots de training=${t.bots.training}, candidatos a real=${t.bots.realCandidates}, desplegados en real=${t.bots.deployedReal}.`,
+    `Bots: plantillas=${t.bots.templates}, bots de training=${t.bots.training} (generados=${t.bots.generated}, pendientes de compilar=${t.bots.needsCompile}, compilados listos=${t.bots.compiledReady}), candidatos a real=${t.bots.realCandidates}, desplegados y operando en real=${t.bots.deployedReal}. Un bot generado tiene fuente pero NO esta compilado ni operando; no lo cuentes como activo.`,
     'Regla: responde sobre estado operativo (real activado, bots, posiciones, SL/TP, conexion MT5) SOLO con estos datos. Si algo no aparece aqui, di que no tienes telemetria de eso; nunca inventes cifras, bots ni ejecuciones. Si el historial de chat contradice este bloque, este bloque manda.'
   ];
   return lines.join('\n');

@@ -58,6 +58,7 @@ const { createRealAutonomousSchedulerController } = require('./backend/execution
 const { applyOperationalTruthGuard } = require('./backend/chat/operational-truth-guard');
 const { buildLiveTelemetry, renderLiveTelemetryBlock } = require('./backend/chat/live-telemetry');
 const { buildTrainingBotsStatus } = require('./backend/training/bot-registry-service');
+const { generateDerivedBot } = require('./backend/training/bot-generation-service');
 const {
   runSystemSelfAudit,
   writeSystemSelfAuditStatus,
@@ -187,6 +188,8 @@ const trainingStateReader = createReadOnlyTrainingStateReader(trainingStateFile)
 const customInstructionsFile = path.join(memoryDir, 'custom_instructions.json');
 const calibrationFile        = path.join(memoryDir, 'calibration.json');
 const conversationsDir       = path.join(memoryDir, 'conversations');
+const botsSeedRoot           = path.join(__dirname, 'bots', 'templates');
+const botsGeneratedRoot      = path.join(memoryDir, 'bots', 'generated');
 const mt5SnapshotFile        = path.join(memoryDir, 'mt5_snapshot.json');
 const backendStateFile       = path.join(memoryDir, 'backend_state.json');
 const riskConfigFile         = path.join(memoryDir, 'risk_config.json');
@@ -2358,7 +2361,7 @@ async function chat(messages, context = '', env = ENV) {
   try {
     const trainingStateForChat = readTrainingState();
     let botsStatusForChat = null;
-    try { botsStatusForChat = buildTrainingBotsStatus({ state: trainingStateForChat || {} }); } catch {}
+    try { botsStatusForChat = buildTrainingBotsStatus({ state: trainingStateForChat || {}, templatesRoot: botsSeedRoot, generatedRoots: [botsGeneratedRoot] }); } catch {}
     const telemetry = buildLiveTelemetry({
       env,
       nowMs: now.getTime(),
@@ -2678,6 +2681,30 @@ async function handleApi(req, res, url) {
     if (url.pathname === '/api/mt5-rates') return sendJson(res, String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? await mt5Rates(q.symbol, q.timeframe, Number(q.count || 180), userEnv) : { ok: false, candles: [], error: 'MT5 adapter disabled' });
     if (url.pathname === '/api/mt5-demo-order' && req.method === 'POST') return sendJson(res, await placeMt5DemoOrder(body, { env: userEnv }));
     if (url.pathname === '/api/mt5-demo-close' && req.method === 'POST') return sendJson(res, await closeMt5DemoPosition(body, { env: userEnv }));
+    if (url.pathname === '/api/bots-status') {
+      return sendJson(res, buildTrainingBotsStatus({
+        state: readTrainingState() || {},
+        templatesRoot: botsSeedRoot,
+        generatedRoots: [botsGeneratedRoot]
+      }));
+    }
+    if (url.pathname === '/api/bots-generate' && req.method === 'POST') {
+      const seedId = (String(body.seedId || '').trim().replace(/[^a-zA-Z0-9_-]/g, '')) || 'EdiLearningBot_XAUUSD';
+      const result = generateDerivedBot({
+        symbol: body.symbol,
+        venue: body.venue || 'MT5',
+        magicNumber: body.magicNumber,
+        overwrite: body.overwrite === true,
+        seedDir: path.join(botsSeedRoot, seedId),
+        outputRoot: botsGeneratedRoot
+      });
+      if (result.ok) {
+        logger.info('bots.generate', { symbol: result.symbol, botId: result.botId, magic: result.magic });
+      } else {
+        logger.warn('bots.generate.failed', { symbol: body.symbol, reason: result.reason });
+      }
+      return sendJson(res, result);
+    }
     if (url.pathname === '/api/ticker') return sendJson(res, await ticker(q.symbol));
     if (url.pathname === '/api/klines') return sendJson(res, await klines(q.symbol, q.interval, Number(q.limit || 180)));
     if (url.pathname === '/api/wallet') return sendJson(res, await fullWallet(userEnv));

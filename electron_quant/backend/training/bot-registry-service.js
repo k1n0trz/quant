@@ -25,8 +25,8 @@ function sourceSummary(dir, sourceFiles = []) {
   return { hasSource, hasCompiled };
 }
 
-function readBotTemplates(templatesRoot = path.join(process.cwd(), 'bots', 'templates')) {
-  if (!fs.existsSync(templatesRoot)) return [];
+function readTemplatesFromRoot(templatesRoot) {
+  if (!templatesRoot || !fs.existsSync(templatesRoot)) return [];
   return fs.readdirSync(templatesRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => {
@@ -47,11 +47,24 @@ function readBotTemplates(templatesRoot = path.join(process.cwd(), 'bots', 'temp
         relativePath: path.relative(process.cwd(), dir).replace(/\\/g, '/'),
         hasSource: summary.hasSource,
         hasCompiled: summary.hasCompiled,
-        importedAt: safeString(manifest.importedAt, null)
+        needsCompilation: manifest.needsCompilation === true,
+        importedAt: safeString(manifest.importedAt, null),
+        generatedAt: safeString(manifest.generatedAt, null)
       };
     })
-    .filter(Boolean)
-    .sort((a, b) => a.id.localeCompare(b.id));
+    .filter(Boolean);
+}
+
+function readBotTemplates(templatesRoot = path.join(process.cwd(), 'bots', 'templates'), extraRoots = []) {
+  const roots = [templatesRoot, ...(Array.isArray(extraRoots) ? extraRoots : [extraRoots])].filter(Boolean);
+  const byId = new Map();
+  for (const root of roots) {
+    for (const template of readTemplatesFromRoot(root)) {
+      // Later roots (e.g. persisted generated bots) win over earlier ones.
+      byId.set(template.id, template);
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => a.id.localeCompare(b.id));
 }
 
 function sameSymbol(left = {}, right = {}) {
@@ -72,11 +85,18 @@ function botFinancials(bot, state = {}) {
   };
 }
 
+function templateStatus(template = {}) {
+  if (!template.hasSource) return 'template_missing_source';
+  if (template.templateRole === 'generated' && !template.hasCompiled) return 'generated_needs_compile';
+  if (!template.hasCompiled) return 'source_needs_compile';
+  return 'template_ready';
+}
+
 function buildTrainingBotFromTemplate(template, state = {}) {
   return {
     ...template,
     mode: 'training',
-    status: template.hasSource ? 'template_ready' : 'template_missing_source',
+    status: templateStatus(template),
     scope: 'demo_training',
     ...botFinancials(template, state)
   };
@@ -142,7 +162,9 @@ function activePairsFromState(state = {}) {
 
 function buildTrainingBotsStatus(options = {}) {
   const state = options.state || {};
-  const templates = Array.isArray(options.templates) ? options.templates : readBotTemplates(options.templatesRoot);
+  const templates = Array.isArray(options.templates)
+    ? options.templates
+    : readBotTemplates(options.templatesRoot, options.generatedRoots);
   const seed = templates[0] || null;
   const trainingBots = templates.map((template) => buildTrainingBotFromTemplate(template, state));
   const activePairs = activePairsFromState(state);
@@ -160,6 +182,9 @@ function buildTrainingBotsStatus(options = {}) {
     totals: {
       training: trainingBots.length,
       real: realBots.length,
+      generated: trainingBots.filter((bot) => bot.templateRole === 'generated').length,
+      needsCompile: trainingBots.filter((bot) => bot.status === 'generated_needs_compile' || bot.status === 'source_needs_compile').length,
+      compiledReady: trainingBots.filter((bot) => bot.status === 'template_ready').length,
       realizedPnl: Number(trainingBots.reduce((sum, bot) => sum + numberOrZero(bot.realizedPnl), 0).toFixed(2))
     },
     safety: {

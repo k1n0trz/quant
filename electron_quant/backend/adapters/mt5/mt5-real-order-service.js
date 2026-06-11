@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { validateMt5Protection } = require('./mt5-protection-policy');
 
 function textValue(...values) {
   for (const value of values) {
@@ -231,6 +232,15 @@ function buildMt5RealOrderRequest(input = {}, env = {}) {
   if ((sl !== null && sl <= 0) || (tp !== null && tp <= 0)) {
     return { ok: false, reason: 'invalid_sl_tp', safety: { realTradingTouched: false } };
   }
+  const protection = validateMt5Protection({
+    ...input,
+    side,
+    symbol,
+    entryPrice: finiteNumber(input.entryPrice, input.entry_price, price)
+  }, env);
+  if (!protection.ok) {
+    return { ok: false, reason: protection.reason, safety: { realTradingTouched: false }, protection };
+  }
 
   return {
     ok: true,
@@ -242,8 +252,8 @@ function buildMt5RealOrderRequest(input = {}, env = {}) {
       volume,
       type,
       price: price || null,
-      sl,
-      tp,
+      sl: protection.sl,
+      tp: protection.tp,
       deviation: Math.max(1, Math.min(100, finiteNumber(input.deviation, env.MT5_REAL_DEVIATION, 20) || 20)),
       magic: finiteNumber(env.MT5_REAL_MAGIC, 260531) || 260531,
       comment: safeComment(input.reason, input.requestId)

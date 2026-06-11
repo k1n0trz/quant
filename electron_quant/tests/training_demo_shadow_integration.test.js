@@ -19,15 +19,16 @@ test('training close PnL remains unchanged by shadow-writer transition', () => {
   assert.equal(result.pnl, 8.25);
 });
 
-test('renderer threshold contract remains unchanged for close logic', () => {
+test('renderer threshold contract preserves entry and close gates', () => {
   const { readFileSync } = require('node:fs');
   const { join } = require('node:path');
   const renderer = readFileSync(join(__dirname, '..', 'src', 'renderer.js'), 'utf8');
 
-  assert.match(renderer, /signal\.confidence >= 74/);
+  assert.match(renderer, /Number\(signal\.confidence \|\| 0\) >= 74/);
   assert.match(renderer, /signal\.confidence < 55/);
   assert.match(renderer, /-0\.018 : -0\.009/);
   assert.match(renderer, /0\.035 : 0\.012/);
+  assert.doesNotMatch(renderer, /protectContinuousTraining|protected_continuous_training/);
 });
 
 test('renderer preserves explicit backend atomic preferred opt-in and fallback paths', () => {

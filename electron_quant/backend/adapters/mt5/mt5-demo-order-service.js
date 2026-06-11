@@ -2,6 +2,7 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { validateMt5Protection } = require('./mt5-protection-policy');
 
 function textValue(...values) {
   for (const value of values) {
@@ -118,6 +119,8 @@ function buildBridgeOrderCommand(order) {
     volume: order.volume,
     type: order.type,
     price: order.price || '',
+    sl: order.sl || '',
+    tp: order.tp || '',
     deviation: order.deviation,
     magic: order.magic,
     comment: order.comment
@@ -213,6 +216,15 @@ function buildMt5DemoOrderRequest(input = {}, env = {}) {
   if (type === 'LIMIT' && (!price || price <= 0)) {
     return { ok: false, reason: 'limit_price_required', safety: { demoOnly: true, realTradingTouched: false } };
   }
+  const protection = validateMt5Protection({
+    ...input,
+    side,
+    symbol,
+    entryPrice: finiteNumber(input.entryPrice, input.entry_price, price)
+  }, env);
+  if (!protection.ok) {
+    return { ok: false, reason: protection.reason, safety: { demoOnly: true, realTradingTouched: false }, protection };
+  }
 
   const order = {
     login: Number(env.MT5_ACCOUNT2_LOGIN),
@@ -222,6 +234,8 @@ function buildMt5DemoOrderRequest(input = {}, env = {}) {
     volume,
     type,
     price: price || null,
+    sl: protection.sl,
+    tp: protection.tp,
     deviation: Math.max(1, Math.min(100, finiteNumber(input.deviation, env.MT5_DEMO_DEVIATION, 20) || 20)),
     magic: finiteNumber(env.MT5_DEMO_MAGIC, 260530) || 260530,
     comment: safeComment(input.reason, input.trainingPositionId)
@@ -325,6 +339,10 @@ try:
     if typ == "LIMIT":
         request["price"] = float(order.get("price"))
         request["type"] = mt5.ORDER_TYPE_BUY_LIMIT if side == "BUY" else mt5.ORDER_TYPE_SELL_LIMIT
+    if order.get("sl"):
+        request["sl"] = float(order.get("sl"))
+    if order.get("tp"):
+        request["tp"] = float(order.get("tp"))
     result = mt5.order_send(request)
     if result is None:
         print(json.dumps({"ok": False, "reason": "order_send_failed", "error": str(mt5.last_error())}))

@@ -552,7 +552,7 @@ test('training demo tick endpoint closes eligible position and persists next sta
   assert.equal(writes[0].closedTrades[0].signal_id, 'sig-tick-1');
 });
 
-test('training demo tick endpoint can build backend contexts when request omits them', async () => {
+test('training demo tick endpoint builds backend contexts without refilling after a close', async () => {
   const writes = [];
   const context = createBackendContext({
     env: { TRAINING_BACKEND_LOOP_ENABLED: 'true', TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true' },
@@ -634,8 +634,9 @@ test('training demo tick endpoint can build backend contexts when request omits 
   assert.equal(res.body.ok, true);
   assert.equal(res.body.evaluatedPositions, 1);
   assert.equal(res.body.closedPositions, 1);
-  assert.equal(res.body.openedPositions, 1);
+  assert.equal(res.body.openedPositions, 0);
   assert.equal(res.body.entryEnabled, true);
+  assert.equal(res.body.skippedEntries.some((entry) => entry.reason === 'entry_paused_after_close'), true);
   assert.equal(res.body.contextSource, 'backend');
   assert.equal(writes.length, 1);
 });

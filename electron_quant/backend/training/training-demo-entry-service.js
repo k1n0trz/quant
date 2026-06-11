@@ -1,5 +1,6 @@
 const { resolveTrainingMarketContext } = require('./training-market-context-service');
 const { resolveTrainingSignalContext } = require('./training-signal-context-service');
+const { buildMt5ProtectionLevels } = require('../adapters/mt5/mt5-protection-policy');
 
 function textValue(...values) {
   for (const value of values) {
@@ -462,15 +463,26 @@ function evaluateTrainingDemoEntry(input = {}) {
     && sameText(position.horizon || 'intraday', forcedHorizon)
     && sameText(position.strategy_id || 'unknown', mergedSignal.primaryStrategy?.id || mergedSignal.strategy_id || 'unknown')
   ));
+  const duplicateSymbol = (Array.isArray(state.positions) ? state.positions : []).some((position) => (
+    !position.exit_price
+    && sameText(position.symbol, pair.symbol)
+    && sameText(position.venue, pair.venue)
+  ));
 
   if (!market.available || !Number.isFinite(Number(market.price))) {
     return { ok: true, shouldOpen: false, reason: market.reason || 'missing_price', signal: mergedSignal };
+  }
+  if (pair.backendBootstrap === true && String(env.TRAINING_BACKEND_DEMO_ENTRY_ALLOW_BOOTSTRAP || 'false').toLowerCase() !== 'true') {
+    return { ok: true, shouldOpen: false, reason: 'bootstrap_context_only', signal: mergedSignal };
   }
   if (rawSignal.missing_signal && !allowDefensive) {
     return { ok: true, shouldOpen: false, reason: 'defensive_signal_not_allowed', signal: mergedSignal };
   }
   if (duplicatePosition) {
     return { ok: true, shouldOpen: false, reason: 'duplicate_open_position', signal: mergedSignal };
+  }
+  if (duplicateSymbol) {
+    return { ok: true, shouldOpen: false, reason: 'duplicate_open_symbol', signal: mergedSignal };
   }
   if (cooldownUntil > nowMs) {
     return { ok: true, shouldOpen: false, reason: 'cooldown_active', signal: mergedSignal };
@@ -602,8 +614,6 @@ async function evaluateTrainingDemoEntries(input = {}) {
   const nowMs = Number.isFinite(Number(input.nowMs)) ? Number(input.nowMs) : Date.now();
   let pairs = collectTrainingEntryPairs(state);
   const openPositions = (Array.isArray(state.positions) ? state.positions : []).filter((position) => !position.exit_price);
-  const intradayNeeded = Math.max(0, resolveTargetCount(state, 'intraday') - openPositions.filter((position) => position.horizon !== 'swing').length);
-  const swingNeeded = Math.max(0, resolveTargetCount(state, 'swing') - openPositions.filter((position) => position.horizon === 'swing').length);
   const mt5Open = openPositions.filter((position) => position.venue === 'MT5').length;
   const hasMt5EntryPair = pairs.some((pair) => sameText(pair.venue, 'MT5'));
   const mt5EntryPairCount = pairs.filter((pair) => sameText(pair.venue, 'MT5')).length;
@@ -620,7 +630,7 @@ async function evaluateTrainingDemoEntries(input = {}) {
     || String(env.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true'
   );
   const bootstrappedPairs = (
-    (pairs.length < targetUniverseSize && (intradayNeeded > 0 || swingNeeded > 0))
+    pairs.length < targetUniverseSize
     || needsIndicatorRefresh
     || (!hasMt5EntryPair && hasMt5BootstrapSource)
     || (hasMt5BootstrapSource && mt5EntryPairCount < minMt5EntryPairs)
@@ -656,10 +666,9 @@ async function evaluateTrainingDemoEntries(input = {}) {
   const skippedEntries = [];
   const openedEntries = [];
 
-  async function openBucket(horizon, needed) {
-    let opened = 0;
+  async function openEligiblePairs() {
     for (const pair of ranked) {
-      if (opened >= needed) break;
+      const horizon = textValue(pair.indicators?.horizon) || 'intraday';
       const marketContext = await resolveTrainingMarketContext(pair.symbol, {
         venue: pair.venue,
         state: nextState,
@@ -713,15 +722,25 @@ async function evaluateTrainingDemoEntries(input = {}) {
         const demoSide = position.direction === 'LONG' ? 'BUY' : position.direction === 'SHORT' ? 'SELL' : null;
         const demoLots = finiteNumber(env.TRAINING_MT5_DEMO_LOT_SIZE, 0.01) || 0.01;
         try {
+          const protection = buildMt5ProtectionLevels({
+            symbol: position.symbol,
+            side: demoSide,
+            entryPrice: position.entry_price
+          }, env);
           const demoResult = demoSide
-            ? await deps.placeMt5DemoOrder({
+            ? protection.ok
+              ? await deps.placeMt5DemoOrder({
               symbol: position.symbol,
               side: demoSide,
               volume: demoLots,
               type: 'MARKET',
+              entryPrice: position.entry_price,
+              stopLoss: protection.stopLoss,
+              takeProfit: protection.takeProfit,
               reason: 'training-demo-entry',
               trainingPositionId: position.id
             })
+              : { ok: false, reason: protection.reason }
             : { ok: false, reason: 'unsupported_training_direction' };
           position.mt5_demo_execution = {
             attempted: true,
@@ -730,6 +749,8 @@ async function evaluateTrainingDemoEntries(input = {}) {
             ticket: demoResult?.ticket || null,
             retcode: demoResult?.retcode || null,
             volume: demoLots,
+            stopLoss: protection?.stopLoss || null,
+            takeProfit: protection?.takeProfit || null,
             demoOnly: demoResult?.demoOnly !== false,
             realTradingTouched: false
           };
@@ -758,12 +779,10 @@ async function evaluateTrainingDemoEntries(input = {}) {
         positions: nextState.positions.concat(position)
       };
       openedEntries.push(position);
-      opened += 1;
     }
   }
 
-  await openBucket('intraday', intradayNeeded);
-  await openBucket('swing', swingNeeded);
+  await openEligiblePairs();
 
   return {
     ok: true,

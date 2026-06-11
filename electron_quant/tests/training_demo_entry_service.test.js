@@ -197,6 +197,28 @@ test('duplicate position does not open', () => {
   assert.equal(result.reason, 'duplicate_open_position');
 });
 
+test('same symbol on another horizon does not open a second position', () => {
+  const state = createState({
+    positions: [{
+      symbol: 'XAUUSD',
+      venue: 'MT5',
+      horizon: 'intraday',
+      strategy_id: 'trendMomentum'
+    }]
+  });
+  const result = evaluateTrainingDemoEntry({
+    state,
+    pair: createPair({ symbol: 'XAUUSD', venue: 'MT5' }),
+    marketContext: createMarketContext({ symbol: 'XAUUSD', venue: 'MT5', price: 2300 }),
+    signalContext: createSignalContext({ symbol: 'XAUUSD', venue: 'MT5', horizon: 'swing' }),
+    env: { TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true' },
+    horizon: 'swing'
+  });
+
+  assert.equal(result.shouldOpen, false);
+  assert.equal(result.reason, 'duplicate_open_symbol');
+});
+
 test('valid demo entry opens traceable simulated position', () => {
   const evaluation = evaluateTrainingDemoEntry({
     state: createState(),
@@ -290,6 +312,62 @@ test('entry evaluator can send MT5 demo order only when demo flags are armed', a
   assert.equal(result.nextState.positions[0].mt5_demo_execution.ok, true);
   assert.equal(result.nextState.positions[0].mt5_demo_execution.ticket, 777);
   assert.equal(result.nextState.positions[0].mt5_demo_execution.realTradingTouched, false);
+});
+
+test('entry evaluator opens at most one position per MT5 symbol across horizons', async () => {
+  const state = createState({
+    activePairs: [createPair({ symbol: 'XAUUSD', venue: 'MT5' })],
+    targets: { total: 2, intraday: 1, swing: 1 },
+    targetOpenPositions: 2,
+    targetIntradayPositions: 1,
+    targetSwingPositions: 1
+  });
+
+  const result = await evaluateTrainingDemoEntries({
+    state,
+    env: { TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true' },
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z'),
+    deps: {
+      getMt5Ticker: async () => ({ ok: true, price: 2300 }),
+      readMemory: () => [
+        { kind: 'training_signal', payload: createSignalContext({ signal_id: 'sig-xau', symbol: 'XAUUSD', venue: 'MT5' }) }
+      ]
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.openedEntries.length, 1);
+  assert.equal(result.nextState.positions.filter((position) => position.venue === 'MT5' && position.symbol === 'XAUUSD').length, 1);
+  assert.equal(result.skippedEntries.some((row) => row.symbol === 'XAUUSD' && row.reason === 'duplicate_open_symbol'), false);
+});
+
+test('entry evaluator does not open bootstrapped pairs just to refill targets', async () => {
+  const result = await evaluateTrainingDemoEntries({
+    state: createState({
+      activePairs: [],
+      positions: [],
+      targets: { total: 2, intraday: 2, swing: 0 },
+      targetOpenPositions: 2,
+      targetIntradayPositions: 2,
+      targetSwingPositions: 0
+    }),
+    env: { TRAINING_BACKEND_DEMO_ENTRY_ENABLED: 'true' },
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z'),
+    deps: {
+      getBinanceSymbols: async () => ['BTCUSDT', 'ETHUSDT'],
+      getTicker: async (symbol) => ({
+        price: symbol === 'BTCUSDT' ? 100000 : 3000,
+        changePct: 1.5,
+        quoteVolume: 90000000
+      })
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.openedEntries.length, 0);
+  assert.equal(result.nextState.positions.length, 0);
+  assert.equal(result.nextState.activePairs.length > 0, true);
+  assert.equal(result.skippedEntries.some((row) => row.reason === 'bootstrap_context_only'), true);
 });
 
 test('backend bootstrap includes MT5 candidates when MT5 symbols and ticks are available', async () => {

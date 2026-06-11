@@ -1,4 +1,5 @@
 const { validateRiskConfig } = require('../risk/risk-policy');
+const { buildMt5ProtectionLevels } = require('../adapters/mt5/mt5-protection-policy');
 
 function boolFlag(value) {
   return String(value || 'false').trim().toLowerCase() === 'true';
@@ -53,11 +54,10 @@ function resolveAllowedVenues(env = {}) {
 }
 
 function resolveRealAutonomousLimits(env = {}, riskConfig = {}) {
-  const maxOpenFromRisk = finiteNumber(riskConfig.maxOpenPositions);
   const envMaxOpen = finiteNumber(env.REAL_AUTONOMOUS_MAX_OPEN_POSITIONS);
-  const maxOpenPositions = Math.floor(clampNumber(envMaxOpen ?? maxOpenFromRisk, 4, 1, 20));
-  const maxOrdersPerTick = Math.floor(clampNumber(env.REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK, 1, 1, 5));
-  const maxOrdersPerDay = Math.floor(clampNumber(env.REAL_AUTONOMOUS_MAX_ORDERS_PER_DAY, 10, 1, 50));
+  const maxOpenPositions = Math.floor(clampNumber(envMaxOpen, 200, 1, 500));
+  const maxOrdersPerTick = Math.floor(clampNumber(env.REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK, 20, 1, 100));
+  const maxOrdersPerDay = Math.floor(clampNumber(env.REAL_AUTONOMOUS_MAX_ORDERS_PER_DAY, 1000, 1, 10000));
   const configuredNotional = finiteNumber(env.REAL_AUTONOMOUS_MAX_NOTIONAL_USDT);
   const envCap = finiteNumber(env.REAL_TRADING_MAX_NOTIONAL_USDT);
   const maxNotionalUsdt = clampNumber(configuredNotional ?? Math.min(envCap || 5, 5), 5, 5, Math.max(5, envCap || 25));
@@ -65,6 +65,8 @@ function resolveRealAutonomousLimits(env = {}, riskConfig = {}) {
   const mt5Lots = clampNumber(env.REAL_AUTONOMOUS_MT5_LOTS ?? env.MT5_REAL_MAX_LOTS, 0.01, 0.01, 0.05);
   const stopLossPct = clampNumber(env.REAL_AUTONOMOUS_STOP_LOSS_PCT, 2, 0.1, 20);
   const takeProfitPct = clampNumber(env.REAL_AUTONOMOUS_TAKE_PROFIT_PCT, 3, 0.1, 50);
+  const mt5StopLossPct = finiteNumber(env.REAL_AUTONOMOUS_MT5_STOP_LOSS_PCT);
+  const mt5TakeProfitPct = finiteNumber(env.REAL_AUTONOMOUS_MT5_TAKE_PROFIT_PCT);
   const minHoldConfidence = clampNumber(
     env.REAL_AUTONOMOUS_MIN_HOLD_CONFIDENCE,
     Math.max(35, (clampNumber(env.REAL_AUTONOMOUS_MIN_CONFIDENCE, 78, 1, 100) - 20)),
@@ -86,6 +88,8 @@ function resolveRealAutonomousLimits(env = {}, riskConfig = {}) {
     mt5Lots,
     stopLossPct,
     takeProfitPct,
+    mt5StopLossPct,
+    mt5TakeProfitPct,
     minHoldConfidence,
     mt5AllowOvernight,
     mt5MaxHoldHours,
@@ -578,9 +582,19 @@ async function buildMt5Candidates(context, state, limits, opened) {
       continue;
     }
     const side = signal.bias === 'LONG' ? 'BUY' : 'SELL';
-    const protection = buildProtection(side, signal.price, limits);
+    const protection = buildMt5ProtectionLevels({
+      symbol: signal.symbol,
+      side,
+      entryPrice: signal.price,
+      stopLossPct: limits.mt5StopLossPct,
+      takeProfitPct: limits.mt5TakeProfitPct
+    }, env);
     if (!protection) {
       rows.push({ venue: 'MT5', symbol: signal.symbol, skipOnly: true, reason: 'missing_protection_price' });
+      continue;
+    }
+    if (!protection.ok) {
+      rows.push({ venue: 'MT5', symbol: signal.symbol, skipOnly: true, reason: protection.reason || 'invalid_mt5_protection' });
       continue;
     }
     rows.push({
@@ -592,7 +606,11 @@ async function buildMt5Candidates(context, state, limits, opened) {
       horizon: signal.horizon,
       priorityScore: signal.score,
       maxHoldHours: limits.mt5MaxHoldHours,
-      ...protection,
+      entryPrice: protection.entryPrice,
+      stopLoss: protection.stopLoss,
+      takeProfit: protection.takeProfit,
+      stopLossPct: protection.stopLossPct,
+      takeProfitPct: protection.takeProfitPct,
       reason: signal.reason || 'training_signal'
     });
   }
@@ -762,6 +780,11 @@ async function runRealAutonomousTick(context = {}) {
   );
   for (const candidate of executable) {
     if (executed.filter((row) => row.ok && !row.action).length >= successLimit) break;
+    const key = `${candidate.venue}:${candidate.symbol}`;
+    if (opened.has(key)) {
+      skipped.push({ venue: candidate.venue, symbol: candidate.symbol, reason: 'already_open_real_position' });
+      continue;
+    }
     const result = await executeCandidate(candidate, context);
     executed.push({
       ok: result?.ok === true,
@@ -773,6 +796,7 @@ async function runRealAutonomousTick(context = {}) {
       orderId: result?.order?.orderId || result?.commandId || null,
       realTradingTouched: result?.safety?.realTradingTouched === true || result?.realTradingTouched === true
     });
+    if (result?.ok === true) opened.add(key);
   }
 
   const touched = executed.some((row) => row.realTradingTouched);

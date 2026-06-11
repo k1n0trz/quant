@@ -85,8 +85,8 @@ test('real autonomous tick builds executable universe from router deps and audit
   const tick = await router.dispatch({ method: 'POST', pathname: '/api/real-autonomous/tick' });
 
   assert.equal(tick.status, 200);
-  assert.equal(tick.body.executedCount, 1);
-  assert.equal(executed[0].symbol, 'ACXUSDT');
-  assert.equal(audit.length, 1);
+  assert.equal(tick.body.executedCount, 2);
+  assert.deepEqual(executed.map((order) => order.symbol), ['ACXUSDT', 'BTCUSDT']);
+  assert.equal(audit.length, 2);
   assert.equal(audit[0].status, 'executed');
 });

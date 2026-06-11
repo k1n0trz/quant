@@ -134,6 +134,7 @@ const state = {
     strategyStats: {},
     systemSkills: ['market_feed', 'ohlcv_history', 'multi_timeframe', 'ssl_hybrid', 'rsi', 'macd', 'atr', 'news_context', 'memory_lessons', 'risk_gate', 'ict_liquidity', 'crt_weekly_bias', 'fvg_order_block', 'session_timing'],
     pairCooldowns: {},
+    lastClosedAt: null,
     xp: 0,
     initialized: false,
     refreshing: false,
@@ -1653,7 +1654,7 @@ function trainingContext() {
     `Ejecucion demo MT5: ${mt5DemoExecution.state}. ${mt5DemoExecution.detail}`,
     'Ejecucion real: Binance puede operar por el canal real autorizado cuando REAL_TRADING=true, kill switch OFF, risk config valida y API con permisos. No uses Training, blockRealExecution ni ICT/CRT como bloqueo global. MT5 demo usa puente demo-only si ambos flags estan armados; MT5 real requiere adapter operativo y mercado abierto.',
     'ICT/CRT no es requisito global para operar real; es una estrategia dentro del laboratorio, comparable con Trend Momentum, Breakout Retest, Mean Reversion y Volume Pullback.',
-    `Guard: mode=training, simulated=true, blockRealExecution=${tr.blockRealExecution}, targetOpenPositions=${tr.targetOpenPositions} (${tr.targetIntradayPositions} intradia + ${tr.targetSwingPositions} swing), maxPairs=${tr.maxPairs}.`,
+    `Guard: mode=training, simulated=true, blockRealExecution=${tr.blockRealExecution}, maxPairs=${tr.maxPairs}, regla=sin refill por cupo y una sola posicion abierta por par.`,
     `Execution adapters: Core=${state.executionAdapters.core}, Paper=${state.executionAdapters.paper}, Binance=${state.executionAdapters.binance}, MT5=${state.executionAdapters.mt5}, TradingViewWebhook=${state.executionAdapters.tradingViewWebhook}, BrokerAPI=${state.executionAdapters.brokerApi}.`,
     `Self-audit: lastRun=${state.selfAudit.lastRun || 'pendiente'}, findings=${state.selfAudit.findings.length}.`,
     `System self-audit: lastRun=${backendAudit?.ts || 'pendiente'}, severity=${backendAudit?.summary?.severity || 'sin lectura'}, findings=${backendAudit?.summary?.findingsCount || 0}, remediation=${backendAudit?.remediation?.enabled ? 'ON' : 'OFF'}, actions=${backendAudit?.remediation?.actions?.length || 0}.`,
@@ -1755,11 +1756,9 @@ async function runSelfAudit() {
     state.training.blockRealExecution = true;
     add('HIGH', 'training', 'Training tenia blockRealExecution desactivado.', 'Auto-fix: blockRealExecution=true.');
   }
-  if (state.training.targetOpenPositions !== 40) {
-    state.training.targetOpenPositions = 40;
-    state.training.targetIntradayPositions = 20;
-    state.training.targetSwingPositions = 20;
-    add('MEDIUM', 'training', 'Training no mantenia 40 posiciones objetivo.', 'Auto-fix: 20 intradia + 20 swing.');
+  if (state.training.maxPairs < 40) {
+    state.training.maxPairs = 40;
+    add('MEDIUM', 'training', 'Training tenia un universo activo menor a 40 pares.', 'Auto-fix: maxPairs=40 para observacion, no como cupo de operaciones.');
   }
   if (!state.executionAdapters.paper) {
     state.executionAdapters.paper = true;
@@ -1997,6 +1996,7 @@ async function acceptBackendAtomicTrainingClose(openPosition, pair, backendResul
   state.training.balance = Number(backendBody.balanceAfter || state.training.balance);
   state.training.xp += Math.max(4, Math.round(Math.abs(Number(backendClosedTrade.pnl_demo || 0)) / 4) + (Number(backendClosedTrade.pnl_demo || 0) >= 0 ? 14 : 8));
   state.training.pairCooldowns[`${pair.venue}:${pair.symbol}:${openPosition.horizon || 'intraday'}`] = Date.now() + 30 * 1000;
+  state.training.lastClosedAt = Date.now();
 
   if (backendBody.lessonPending !== true && backendClosedTrade.lesson_learned) {
     state.training.lessons.unshift(backendClosedTrade.lesson_learned);
@@ -2699,9 +2699,8 @@ async function refreshTrainingMode() {
 
 async function maintainTrainingExposure(pairs, initial = false) {
   const open = state.training.positions.filter((p) => !p.exit_price);
-  const intradayNeeded = Math.max(0, state.training.targetIntradayPositions - open.filter((p) => p.horizon !== 'swing').length);
-  const swingNeeded = Math.max(0, state.training.targetSwingPositions - open.filter((p) => p.horizon === 'swing').length);
-  if (!intradayNeeded && !swingNeeded) return;
+  const lastClosedAt = Number(state.training.lastClosedAt || 0);
+  if (!initial && lastClosedAt && Date.now() - lastClosedAt < 60 * 1000) return;
   const mt5Open = open.filter((p) => p.venue === 'MT5').length;
   const ranked = [...pairs]
     .filter((p) => Number(p.price) > 0 && p.feed !== 'ERROR')
@@ -2711,25 +2710,22 @@ async function maintainTrainingExposure(pairs, initial = false) {
       return (b.score + mt5NeedB) - (a.score + mt5NeedA);
     });
   let opened = 0;
-  opened += await openTrainingBucket(ranked, 'intraday', intradayNeeded, initial);
-  opened += await openTrainingBucket(ranked, 'swing', swingNeeded, initial);
+  opened += await openTrainingBucket(ranked, initial);
   if (opened) {
-    logEvent('OK', `Training: ${opened} operaciones demo abiertas para aprendizaje continuo`);
+    logEvent('OK', `Training: ${opened} operaciones demo abiertas por senal validada`);
     await saveTrainingState();
   }
 }
 
-async function openTrainingBucket(ranked, horizon, needed, initial) {
+async function openTrainingBucket(ranked, initial) {
   let opened = 0;
   for (const pair of ranked) {
-    if (opened >= needed) break;
-    if (state.training.positions.some((x) => x.venue === pair.venue && x.symbol === pair.symbol && x.horizon === horizon && !x.exit_price)) continue;
-    const key = `${pair.venue}:${pair.symbol}:${horizon}`;
+    if (state.training.positions.some((x) => x.venue === pair.venue && x.symbol === pair.symbol && !x.exit_price)) continue;
+    const signal = trainingHypothesisSignal(pair);
+    if (!signal || !isProfessionalTrainingEntry(pair, signal)) continue;
+    const key = `${pair.venue}:${pair.symbol}:${signal.horizon || 'intraday'}`;
     const cooldownUntil = Number(state.training.pairCooldowns[key] || 0);
-    const cooling = !initial && Date.now() < cooldownUntil;
-    const signal = trainingHypothesisSignal(pair, horizon);
-    if (!signal) continue;
-    if (cooling) signal.motivo = `${signal.motivo}; reapertura inmediata por cupo objetivo de Training`;
+    if (!initial && Date.now() < cooldownUntil) continue;
     const trade = await executeSimulatedTrade('OPEN', pair, signal);
     state.training.positions.push(trade);
     opened += 1;
@@ -2834,6 +2830,18 @@ function trainingHypothesisSignal(pair, forcedHorizon = null) {
   };
 }
 
+function isProfessionalTrainingEntry(pair, signal = {}) {
+  return Boolean(
+    signal.bias !== 'NEUTRAL' &&
+    Number(signal.confidence || 0) >= 74 &&
+    Number(signal.htfAlignmentScore || 0) >= .5 &&
+    Number(signal.patternScore || 0) >= .45 &&
+    Number(signal.volumeRatio || 0) >= .85 &&
+    Number(pair.score || 0) >= 62 &&
+    Number(pair.spreadPct || 0) <= (pair.venue === 'MT5' ? .0022 : .0012)
+  );
+}
+
 function executeRealTrade() {
   if (state.training.mode === 'training') {
     throw new Error('Real execution blocked: Training Mode solo puede usar executeSimulatedTrade().');
@@ -2918,16 +2926,8 @@ async function evaluateTrainingPair(pair) {
   const signal = pair.indicators;
   const key = `${pair.venue}:${pair.symbol}:${signal.horizon || 'intraday'}`;
   const cooldownUntil = Number(state.training.pairCooldowns[key] || 0);
-  const openForSignalHorizon = state.training.positions.find((p) => p.symbol === pair.symbol && p.venue === pair.venue && (p.horizon || 'intraday') === (signal.horizon || 'intraday') && !p.exit_price);
-  const professionalGate =
-    signal.bias !== 'NEUTRAL' &&
-    signal.confidence >= 74 &&
-    signal.htfAlignmentScore >= .5 &&
-    signal.patternScore >= .45 &&
-    signal.volumeRatio >= .85 &&
-    pair.score >= 62 &&
-    pair.spreadPct <= (pair.venue === 'MT5' ? .0022 : .0012);
-  if (!openForSignalHorizon && Date.now() > cooldownUntil && professionalGate) {
+  const openForSymbol = state.training.positions.find((p) => p.symbol === pair.symbol && p.venue === pair.venue && !p.exit_price);
+  if (!openForSymbol && Date.now() > cooldownUntil && isProfessionalTrainingEntry(pair, signal)) {
     const trade = await executeSimulatedTrade('OPEN', pair, { ...signal, learning_mode: 'professional_setup', motivo: 'Setup tecnico validado por gate profesional' });
     state.training.positions.push(trade);
     await window.quant.memoryWrite('trade', { ...trade, type: 'training_trade_open', mode: 'training' });
@@ -2945,9 +2945,7 @@ async function evaluateTrainingPair(pair) {
     const profitTarget = pnlPct >= (open.horizon === 'swing' ? 0.035 : 0.012);
     const signalExit = age >= minHold && (signal.bias !== open.direction || signal.confidence < 55);
     const timeExit = age >= maxHold;
-    const protectContinuousTraining = state.training.positions.length <= Math.max(2, state.training.targetOpenPositions - 2);
     const shouldClose = hardStop || profitTarget || signalExit || timeExit;
-    if (shouldClose && protectContinuousTraining && !hardStop) continue;
     if (!shouldClose) continue;
     const closed = await executeSimulatedTrade('CLOSE', pair, signal, open);
     const backendCloseResult = await shadowWriteTrainingClosedTrade(open, closed, pair, signal);
@@ -2965,6 +2963,7 @@ async function evaluateTrainingPair(pair) {
     state.training.balance += closed.pnl_demo;
     state.training.xp += Math.max(4, Math.round(Math.abs(closed.pnl_demo) / 4) + (closed.pnl_demo >= 0 ? 14 : 8));
     state.training.pairCooldowns[`${pair.venue}:${pair.symbol}:${open.horizon || 'intraday'}`] = Date.now() + 30 * 1000;
+    state.training.lastClosedAt = Date.now();
     const lesson = closed.lesson_learned;
     state.training.lessons.unshift(lesson);
     state.training.lessons = state.training.lessons.slice(0, 160);
@@ -3064,17 +3063,14 @@ function renderTrainingLiveOverview({ equity = state.training.balance, totalPnl 
   const open = state.training.positions.filter((p) => !p.exit_price);
   const intraday = open.filter((p) => p.horizon !== 'swing').length;
   const swing = open.filter((p) => p.horizon === 'swing').length;
-  const target = state.training.targetOpenPositions || 40;
-  const minTarget = Math.min(20, target);
-  const status = open.length < minTarget
-    ? `faltan ${minTarget - open.length} para minimo operativo`
-    : open.length > target
-      ? `sobre maximo por ${open.length - target}`
-      : 'rango de aprendizaje activo';
+  const maxPairs = state.training.maxPairs || 40;
+  const status = open.length
+    ? 'abiertas por senal validada; sin cupo objetivo'
+    : 'esperando setups validos';
   const evolution = trainingEvolutionScore(totalPnl);
-  setText('trainingOpenGauge', `${open.length} / ${target}`);
+  setText('trainingOpenGauge', `${open.length} activas`);
   setText('trainingOpenGaugeSub', status);
-  setText('trainingHorizonSplit', `${intraday} intradia / ${swing} swing`);
+  setText('trainingHorizonSplit', `${intraday} intradia / ${swing} swing / ${maxPairs} pares vigilados`);
   setText('trainingEvolutionLabel', `${evolution.pct}% ${evolution.label}`);
   setText('trainingRealtimeStamp', nowTime());
   const bar = $('trainingEvolutionBar');
@@ -4581,6 +4577,9 @@ async function submitOrder(side) {
   const limitPrice = parseFloat($('limitPriceInput').value) || null;
   const stopPrice = parseFloat($('stopLossInput').value) || null;
   const takeProfit = parseFloat($('takeProfitInput').value) || null;
+  const entryPrice = orderType === 'LIMIT'
+    ? limitPrice
+    : (Number.isFinite(Number(state.ticker?.price)) ? Number(state.ticker.price) : null);
   const confirmation = $('confirmInput').value.trim().toUpperCase();
   const expected = `CONFIRMO ${side} ${symbol}`.toUpperCase();
   const rb = $('orderResultBox');
@@ -4616,7 +4615,7 @@ async function submitOrder(side) {
   let preflight = null;
   try {
     preflight = venue === 'MT5'
-      ? await window.quant.mt5RealOrderPreflight({ symbol, side, volume: qty, type: orderType, price: limitPrice, stopLoss: stopPrice, takeProfit, reason: 'manual-real-order' })
+      ? await window.quant.mt5RealOrderPreflight({ symbol, side, volume: qty, type: orderType, price: limitPrice, entryPrice, stopLoss: stopPrice, takeProfit, reason: 'manual-real-order' })
       : await window.quant.binanceRealOrderPreflight({ venue, side, symbol, qty, type: orderType, price: limitPrice, stopLoss: stopPrice, takeProfit });
     if (!preflight.ok) {
       const detail = venue === 'MT5'
@@ -4659,7 +4658,7 @@ async function submitOrder(side) {
   logEvent('OK', `Enviando orden real ${venue}: ${orderType} ${side} ${qty} ${symbol}`);
   try {
     const res = venue === 'MT5'
-      ? await window.quant.mt5RealOrder({ symbol, side, volume: qty, type: orderType, price: limitPrice, stopLoss: stopPrice, takeProfit, reason: 'manual-real-order' })
+      ? await window.quant.mt5RealOrder({ symbol, side, volume: qty, type: orderType, price: limitPrice, entryPrice, stopLoss: stopPrice, takeProfit, reason: 'manual-real-order' })
       : await window.quant.placeOrder(side, symbol, qty, orderType, limitPrice, { stopLoss: stopPrice, takeProfit });
     if (!res.ok) throw new Error(res.error || res.reason || 'Error desconocido');
 

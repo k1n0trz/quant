@@ -50,8 +50,9 @@ test('MT5 real order request is independent from training blockRealExecution', (
     side: 'BUY',
     volume: 0.01,
     type: 'MARKET',
-    stopLoss: 1.078,
-    takeProfit: 1.105,
+    entryPrice: 1.09,
+    stopLoss: 1.087,
+    takeProfit: 1.096,
     blockRealExecution: true
   }, realEnv);
 
@@ -59,8 +60,8 @@ test('MT5 real order request is independent from training blockRealExecution', (
   assert.equal(req.order.symbol, 'EURUSD');
   assert.equal(req.order.side, 'BUY');
   assert.equal(req.order.volume, 0.01);
-  assert.equal(req.order.sl, 1.078);
-  assert.equal(req.order.tp, 1.105);
+  assert.equal(req.order.sl, 1.087);
+  assert.equal(req.order.tp, 1.096);
   assert.equal(req.safety.realTradingTouched, true);
   assert.equal(req.safety.blockRealExecutionIgnoredForRealChannel, true);
 });
@@ -91,13 +92,49 @@ test('MT5 real bridge check writes CHECK command without sending an order', asyn
     throw new Error('real check command not written');
   })();
 
-  const result = await checkMt5RealOrder({ symbol: 'EURUSD', side: 'BUY', volume: 0.01 }, { env });
+  const result = await checkMt5RealOrder({
+    symbol: 'EURUSD',
+    side: 'BUY',
+    volume: 0.01,
+    entryPrice: 1.09,
+    stopLoss: 1.087,
+    takeProfit: 1.096
+  }, { env });
   await watcher;
 
   assert.equal(result.ok, true);
   assert.equal(result.action, 'CHECK');
   assert.equal(result.realTradingTouched, false);
   assert.equal(fs.existsSync(path.join(dir, 'quant_bridge_command.txt')), false);
+});
+
+test('MT5 real order blocks missing SL TP before touching the bridge', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'quant-mt5-real-no-protection-'));
+  const statusFile = writeBridgeStatus(dir);
+  const result = await placeMt5RealOrder(
+    { symbol: 'XAUUSD', side: 'BUY', volume: 0.01, entryPrice: 2300 },
+    { env: { ...realEnv, MT5_REAL_BRIDGE_STATUS_FILE: statusFile } }
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'missing_sl_tp');
+  assert.equal(result.realTradingTouched, false);
+  assert.equal(fs.existsSync(path.join(dir, 'quant_bridge_command.txt')), false);
+});
+
+test('MT5 real order blocks XAUUSD stop loss that is too far from entry', async () => {
+  const result = buildMt5RealOrderRequest({
+    symbol: 'XAUUSD',
+    side: 'BUY',
+    volume: 0.01,
+    entryPrice: 2300,
+    stopLoss: 2200,
+    takeProfit: 2315
+  }, realEnv);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'stop_loss_too_far');
+  assert.equal(result.safety.realTradingTouched, false);
 });
 
 test('MT5 real order writes ORDER command only through a real bridge', async () => {
@@ -113,8 +150,8 @@ test('MT5 real order writes ORDER command only through a real bridge', async () 
         assert.ok(id);
         assert.match(text, /^action=ORDER$/m);
         assert.match(text, /^symbol=EURUSD$/m);
-        assert.match(text, /^sl=1\.078$/m);
-        assert.match(text, /^tp=1\.105$/m);
+        assert.match(text, /^sl=1\.087$/m);
+        assert.match(text, /^tp=1\.096$/m);
         fs.writeFileSync(path.join(dir, `quant_bridge_result_${id}.json`), JSON.stringify({
           ok: true,
           action: 'ORDER',
@@ -130,7 +167,14 @@ test('MT5 real order writes ORDER command only through a real bridge', async () 
     throw new Error('real order command not written');
   })();
 
-  const result = await placeMt5RealOrder({ symbol: 'EURUSD', side: 'BUY', volume: 0.01, stopLoss: 1.078, takeProfit: 1.105 }, { env });
+  const result = await placeMt5RealOrder({
+    symbol: 'EURUSD',
+    side: 'BUY',
+    volume: 0.01,
+    entryPrice: 1.09,
+    stopLoss: 1.087,
+    takeProfit: 1.096
+  }, { env });
   await watcher;
 
   assert.equal(result.ok, true);
@@ -142,7 +186,7 @@ test('MT5 real order blocks demo bridge status', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'quant-mt5-real-demo-block-'));
   const statusFile = writeBridgeStatus(dir, { server: 'FBS-Demo', tradeMode: 0 });
   const result = await placeMt5RealOrder(
-    { symbol: 'EURUSD', side: 'BUY', volume: 0.01 },
+    { symbol: 'EURUSD', side: 'BUY', volume: 0.01, entryPrice: 1.09, stopLoss: 1.087, takeProfit: 1.096 },
     { env: { ...realEnv, MT5_REAL_BRIDGE_STATUS_FILE: statusFile } }
   );
 

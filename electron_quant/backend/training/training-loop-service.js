@@ -1,5 +1,6 @@
 const { applyAtomicTrainingDemoClose } = require('./training-atomic-close-service');
 const { createTrainingStateSnapshot } = require('./training-state');
+const { buildMt5ProtectionLevels } = require('../adapters/mt5/mt5-protection-policy');
 const {
   isTrainingBackendDemoEntryEnabled,
   evaluateTrainingDemoEntries
@@ -181,11 +182,27 @@ async function openMt5DemoBridgePosition(openPosition, source = {}, nowMs = Date
   }
   const demoLots = finiteNumber(env.TRAINING_MT5_DEMO_LOT_SIZE, 0.01) || 0.01;
   try {
+    const protection = buildMt5ProtectionLevels({
+      symbol: openPosition.symbol,
+      side: demoSide,
+      entryPrice: openPosition.entry_price
+    }, env);
+    if (!protection.ok) {
+      return {
+        required: true,
+        ok: false,
+        reason: protection.reason,
+        result: compactMt5DemoOpenResult({ ok: false, reason: protection.reason, demoOnly: true }, demoLots)
+      };
+    }
     const result = await deps.placeMt5DemoOrder({
       symbol: openPosition.symbol,
       side: demoSide,
       volume: demoLots,
       type: 'MARKET',
+      entryPrice: openPosition.entry_price,
+      stopLoss: protection.stopLoss,
+      takeProfit: protection.takeProfit,
       reason: 'training-demo-existing-position',
       trainingPositionId: openPosition.id || null
     });
@@ -268,15 +285,9 @@ function evaluateCloseDecision(position, context, state, nowMs) {
   const signalConfidence = Number.isFinite(Number(liveSignal.confidence)) ? Number(liveSignal.confidence) : 100;
   const signalExit = age >= minHold && (signalBias !== position.direction || signalConfidence < 55);
   const timeExit = age >= maxHold;
-  const protectContinuousTraining = (Array.isArray(state.positions) ? state.positions.length : 0) <= Math.max(2, resolveTargetOpenPositions(state) - 2);
   const shouldClose = hardStop || profitTarget || signalExit || timeExit;
 
-  if (!shouldClose) {
-    return { ok: true, shouldClose: false, reason: 'not_closable' };
-  }
-  if (shouldClose && protectContinuousTraining && !hardStop) {
-    return { ok: true, shouldClose: false, reason: 'protected_continuous_training' };
-  }
+  if (!shouldClose) return { ok: true, shouldClose: false, reason: 'not_closable' };
 
   return {
     ok: true,
@@ -405,7 +416,12 @@ async function runTrainingDemoTick(input = {}) {
     if (atomicResult.lessonPending) lessonPendingCount += 1;
   }
 
-  if (entryEnabled) {
+  if (entryEnabled && closedPositions > 0) {
+    skippedEntries.push({
+      reason: 'entry_paused_after_close',
+      closedPositions
+    });
+  } else if (entryEnabled) {
     const entryResult = await evaluateTrainingDemoEntries({
       state: nextState,
       deps: source.deps || {},

@@ -29,6 +29,9 @@ assert.equal(isMt5DemoTradingEnabled({ ...demoEnv, MT5_ACCOUNT2_SERVER: 'FBS-REA
     side: 'BUY',
     volume: 0.01,
     type: 'MARKET',
+    entryPrice: 2300,
+    stopLoss: 2294,
+    takeProfit: 2312,
     reason: 'training-demo-entry',
     trainingPositionId: 'pos_abc'
   }, demoEnv);
@@ -41,12 +44,40 @@ assert.equal(isMt5DemoTradingEnabled({ ...demoEnv, MT5_ACCOUNT2_SERVER: 'FBS-REA
     volume: 0.01,
     type: 'MARKET',
     price: null,
+    sl: 2294,
+    tp: 2312,
     deviation: 20,
     magic: 260530,
     comment: 'Quant demo training pos_abc'
   });
   assert.equal(req.safety.demoOnly, true);
   assert.equal(req.safety.realTradingTouched, false);
+}
+
+{
+  const req = buildMt5DemoOrderRequest({
+    symbol: 'XAUUSD',
+    side: 'BUY',
+    volume: 0.01,
+    type: 'MARKET',
+    entryPrice: 2300
+  }, demoEnv);
+  assert.equal(req.ok, false);
+  assert.equal(req.reason, 'missing_sl_tp');
+}
+
+{
+  const req = buildMt5DemoOrderRequest({
+    symbol: 'XAUUSD',
+    side: 'BUY',
+    volume: 0.01,
+    type: 'MARKET',
+    entryPrice: 2300,
+    stopLoss: 2200,
+    takeProfit: 2310
+  }, demoEnv);
+  assert.equal(req.ok, false);
+  assert.equal(req.reason, 'stop_loss_too_far');
 }
 
 {
@@ -73,6 +104,9 @@ assert.equal(isMt5DemoTradingEnabled({ ...demoEnv, MT5_ACCOUNT2_SERVER: 'FBS-REA
     symbol: 'XAUUSD',
     side: 'BUY',
     volume: 0.01,
+    entryPrice: 2300,
+    stopLoss: 2294,
+    takeProfit: 2312,
     trainingPositionId: 'pos_demo'
   }, {
     env: demoEnv,
@@ -109,6 +143,8 @@ assert.equal(isMt5DemoTradingEnabled({ ...demoEnv, MT5_ACCOUNT2_SERVER: 'FBS-REA
         assert.ok(id, 'bridge command debe incluir id');
         assert.match(text, /^action=ORDER$/m);
         assert.match(text, /^symbol=XAUUSD$/m);
+        assert.match(text, /^sl=2306$/m);
+        assert.match(text, /^tp=2288$/m);
         fs.writeFileSync(path.join(bridgeDir, `quant_bridge_result_${id}.json`), JSON.stringify({
           ok: true,
           retcode: 10009,
@@ -126,6 +162,9 @@ assert.equal(isMt5DemoTradingEnabled({ ...demoEnv, MT5_ACCOUNT2_SERVER: 'FBS-REA
     symbol: 'XAUUSD',
     side: 'SELL',
     volume: 0.01,
+    entryPrice: 2300,
+    stopLoss: 2306,
+    takeProfit: 2288,
     trainingPositionId: 'bridge_demo'
   }, { env: bridgeEnv });
   await watcher;
@@ -149,6 +188,9 @@ assert.equal(isMt5DemoTradingEnabled({ ...demoEnv, MT5_ACCOUNT2_SERVER: 'FBS-REA
     symbol: 'XAUUSD',
     side: 'BUY',
     volume: 0.01,
+    entryPrice: 2300,
+    stopLoss: 2294,
+    takeProfit: 2312,
     trainingPositionId: 'real_bridge_must_not_send'
   }, {
     env: { ...demoEnv, MT5_BRIDGE_STATUS_FILE: realStatusFile },

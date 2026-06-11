@@ -130,6 +130,40 @@ test('tick leaves non-closable position open', async () => {
   assert.equal(result.nextState.positions.length, 1);
 });
 
+test('tick closes profit target even when open count is below the old target profile', async () => {
+  const open = {
+    id: 'pos-profit-target-low-count',
+    signal_id: 'sig-profit-target-low-count',
+    symbol: 'BTCUSDT',
+    venue: 'BINANCE',
+    direction: 'LONG',
+    entry_price: 100,
+    size_demo: 1,
+    fees_simuladas: 0,
+    spread_estimado: 0,
+    slippage_estimado: 0,
+    opened_tick: Date.parse('2026-05-10T08:00:00.000Z'),
+    min_hold_ms: 30 * 60 * 1000,
+    max_hold_ms: 12 * 60 * 60 * 1000,
+    horizon: 'intraday'
+  };
+
+  const result = await runTrainingDemoTick({
+    state: createState({ positions: [open], targetOpenPositions: 40 }),
+    positionContexts: [{
+      positionId: 'pos-profit-target-low-count',
+      pair: { symbol: 'BTCUSDT', venue: 'BINANCE', price: 102 },
+      signal: { bias: 'LONG', confidence: 72 }
+    }],
+    nowMs: Date.parse('2026-05-10T12:00:00.000Z')
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.closedPositions, 1);
+  assert.equal(result.nextState.positions.length, 0);
+  assert.equal(result.nextState.closedTrades[0].signal_id, 'sig-profit-target-low-count');
+});
+
 test('tick updates balance once for one closure', async () => {
   const open = {
     id: 'pos-balance-1',
@@ -282,6 +316,9 @@ test('tick sends existing MT5 paper positions to demo bridge when order_send bec
     side: 'SELL',
     volume: 0.01,
     type: 'MARKET',
+    entryPrice: 0.902,
+    stopLoss: 0.904255,
+    takeProfit: 0.89749,
     reason: 'training-demo-existing-position',
     trainingPositionId: 'pos-mt5-pending-demo-send'
   });
@@ -462,16 +499,16 @@ test('tick bootstraps a Binance universe when perpetual training starts empty', 
 
   assert.equal(result.ok, true);
   assert.equal(result.entryEnabled, true);
-  assert.equal(result.openedPositions, 2);
+  assert.equal(result.openedPositions, 0);
   assert.equal(result.nextState.activePairs.length >= 2, true);
-  assert.equal(result.nextState.positions.length, 2);
-  assert.equal(result.nextState.positions.every((position) => position.venue === 'BINANCE'), true);
-  assert.equal(result.nextState.positions.every((position) => position.simulated === true), true);
+  assert.equal(result.nextState.positions.length, 0);
+  assert.equal(result.skippedEntries.length >= 2, true);
+  assert.equal(result.skippedEntries.every((entry) => entry.reason === 'bootstrap_context_only'), true);
   assert.equal(state.activePairs.length, 0);
   assert.equal(state.positions.length, 0);
 });
 
-test('tick expands a stale small universe toward the 40 slot perpetual profile', async () => {
+test('tick expands a stale small universe as context without filling a position quota', async () => {
   const symbols = Array.from({ length: 40 }, (_, index) => `Q${index + 1}USDT`);
   const state = createState({
     targets: { total: 40, intraday: 20, swing: 20 },
@@ -518,6 +555,8 @@ test('tick expands a stale small universe toward the 40 slot perpetual profile',
 
   assert.equal(result.ok, true);
   assert.equal(result.nextState.activePairs.length >= 40, true);
-  assert.equal(result.nextState.positions.length > 20, true);
-  assert.equal(result.nextState.positions.length <= 40, true);
+  assert.equal(result.nextState.positions.length, 10);
+  assert.equal(result.openedPositions, 10);
+  assert.equal(result.nextState.positions.every((position) => symbols.slice(0, 10).includes(position.symbol)), true);
+  assert.equal(result.skippedEntries.some((entry) => entry.reason === 'bootstrap_context_only'), true);
 });

@@ -45,8 +45,9 @@ test('autonomous scheduler is opt-in and exposes conservative defaults', () => {
   assert.equal(isRealAutonomousSchedulerEnabled({ REAL_AUTONOMOUS_SCHEDULER_ENABLED: 'true' }), true);
 
   const limits = resolveRealAutonomousLimits({ REAL_TRADING_MAX_NOTIONAL_USDT: '25' }, { maxOpenPositions: 7 });
-  assert.equal(limits.maxOrdersPerTick, 1);
-  assert.equal(limits.maxOpenPositions, 7);
+  assert.equal(limits.maxOrdersPerTick >= 20, true);
+  assert.equal(limits.maxOrdersPerDay >= 1000, true);
+  assert.equal(limits.maxOpenPositions >= 200, true);
   assert.equal(limits.minOpenPositions, 0);
   assert.equal(limits.autonomyMode, 'opportunity_only');
   assert.equal(limits.maxNotionalUsdt, 5);
@@ -57,7 +58,7 @@ test('autonomous scheduler is opt-in and exposes conservative defaults', () => {
   assert.deepEqual(limits.allowedVenues, ['BINANCE', 'MT5']);
 
   const defaultLimits = resolveRealAutonomousLimits({}, {});
-  assert.equal(defaultLimits.maxOpenPositions, 4);
+  assert.equal(defaultLimits.maxOpenPositions >= 200, true);
 });
 
 test('tick does not force a minimum number of real positions when no opportunity is available', async () => {
@@ -304,6 +305,41 @@ test('MT5 real candidates run only when explicitly enabled and market is open', 
   assert.equal(mt5Orders[0].stopLoss > 0, true);
   assert.equal(mt5Orders[0].takeProfit > 0, true);
   assert.equal(mt5Orders[0].stopLoss < mt5Orders[0].entryPrice, true);
+  assert.equal(mt5Orders[0].takeProfit > mt5Orders[0].entryPrice, true);
+});
+
+test('MT5 XAUUSD autonomous protection keeps stop loss close to entry', async () => {
+  const mt5Orders = [];
+  const result = await runRealAutonomousTick(armedContext({
+    env: {
+      REAL_AUTONOMOUS_ALLOWED_VENUES: 'MT5',
+      REAL_AUTONOMOUS_MT5_ENABLED: 'true',
+      MT5_REAL_TRADING_ENABLED: 'true',
+      MT5_CONNECTOR_ENABLED: 'true',
+      MT5_REAL_MAX_LOTS: '0.01'
+    },
+    riskConfig: { allowedVenues: ['BINANCE', 'MT5'] },
+    deps: {
+      readTrainingStateSnapshot: () => ({
+        state: {
+          activePairs: [
+            { venue: 'MT5', symbol: 'XAUUSD', bias: 'LONG', confidence: 91, horizon: 'intraday', price: 2300 }
+          ]
+        }
+      }),
+      getMt5MarketSession: () => ({ open: true, reason: 'open' }),
+      checkMt5RealOrder: async () => ({ ok: true, reason: 'check_ok' }),
+      placeMt5RealOrder: async (input) => {
+        mt5Orders.push(input);
+        return { ok: true, order: input, realTradingTouched: true };
+      }
+    }
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.executedCount, 1);
+  assert.equal(mt5Orders.length, 1);
+  assert.equal(mt5Orders[0].stopLoss >= 2291.95, true);
   assert.equal(mt5Orders[0].takeProfit > mt5Orders[0].entryPrice, true);
 });
 

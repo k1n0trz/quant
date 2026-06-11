@@ -198,8 +198,10 @@ const QUANT_SYNC_KEY = ENV.QUANT_SYNC_KEY || process.env.QUANT_SYNC_KEY || '';
 
 const WEB_AUTH_ENABLED  = String(ENV.WEB_AUTH_ENABLED  || 'false').toLowerCase() === 'true';
 const WEB_AUTH_EMAIL    = (ENV.WEB_AUTH_EMAIL    || 'kinotrance@gmail.com').toLowerCase();
-const WEB_AUTH_PASSWORD = ENV.WEB_AUTH_PASSWORD  || 'Qx7!K9mP#Barras2025';
-const DEFAULT_MATEO_PASSWORD = ENV.MATEO_WEB_AUTH_PASSWORD || process.env.MATEO_WEB_AUTH_PASSWORD || 'QuantMateo2026!';
+// Sin fallback embebido: si WEB_AUTH_PASSWORD no esta configurada, el login
+// web queda deshabilitado en vez de aceptar una contraseña publica del repo.
+const WEB_AUTH_PASSWORD = ENV.WEB_AUTH_PASSWORD || '';
+const DEFAULT_MATEO_PASSWORD = ENV.MATEO_WEB_AUTH_PASSWORD || process.env.MATEO_WEB_AUTH_PASSWORD || '';
 
 const userApiConfigFile = path.join(memoryDir, 'user_api_config.json');
 const USER_API_FIELDS = [
@@ -584,7 +586,9 @@ function ensureUser(username, email, password, role = 'user', displayName = user
 }
 
 function seedDefaultUsers() {
-  // Always force-update passwords from env so Cloud Run env vars are authoritative
+  // Always force-update passwords from env so Cloud Run env vars are authoritative.
+  // Never seed users from an empty password: hashing '' would let blank logins in.
+  if (!WEB_AUTH_PASSWORD) return;
   const store = readUserApiStore();
   const adminKey = normalizeEmail(WEB_AUTH_EMAIL);
   store.users[adminKey] = {
@@ -597,17 +601,31 @@ function seedDefaultUsers() {
     updatedAt: new Date().toISOString()
   };
   if (!store.users[adminKey].createdAt) store.users[adminKey].createdAt = new Date().toISOString();
+  // Force-update the tester password from env too, so rotating the env var
+  // actually invalidates the previously persisted hash (ensureUser would not).
+  if (DEFAULT_MATEO_PASSWORD) {
+    const mateoKey = normalizeEmail('teolv@hotmail.com');
+    store.users[mateoKey] = {
+      ...(store.users[mateoKey] || {}),
+      username: 'mateo',
+      email: mateoKey,
+      displayName: 'Mateo',
+      role: 'tester',
+      passwordHash: passwordHash(DEFAULT_MATEO_PASSWORD),
+      updatedAt: new Date().toISOString()
+    };
+    if (!store.users[mateoKey].createdAt) store.users[mateoKey].createdAt = new Date().toISOString();
+  }
   writeUserApiStore(store);
-  ensureUser('mateo', 'teolv@hotmail.com', DEFAULT_MATEO_PASSWORD, 'tester', 'Mateo');
 }
 
 function findUserByCredentials(email, password) {
   const normEmail = normalizeEmail(email);
   // Primary fast-path: match directly against env vars (no file I/O, works when GCS isn't writable yet)
-  if (normEmail === normalizeEmail(WEB_AUTH_EMAIL) && String(password || '') === String(WEB_AUTH_PASSWORD || '')) {
+  if (WEB_AUTH_PASSWORD && normEmail === normalizeEmail(WEB_AUTH_EMAIL) && String(password || '') === String(WEB_AUTH_PASSWORD)) {
     return { email: normEmail, displayName: 'Quant Admin', role: 'admin', username: 'admin' };
   }
-  if (normEmail === normalizeEmail('teolv@hotmail.com') && String(password || '') === String(DEFAULT_MATEO_PASSWORD || '')) {
+  if (DEFAULT_MATEO_PASSWORD && normEmail === normalizeEmail('teolv@hotmail.com') && String(password || '') === String(DEFAULT_MATEO_PASSWORD)) {
     return { email: normEmail, displayName: 'Mateo', role: 'tester', username: 'mateo' };
   }
   // Secondary: check hashed store (desktop or custom-password users)
@@ -3135,7 +3153,12 @@ async function fullWallet(env = ENV, passive = true) {
 // Usamos tokens HMAC firmados (stateless) para que funcionen en Cloud Run
 // donde cada request puede ir a una instancia diferente sin estado compartido.
 const SESSION_TTL = 7 * 24 * 3600 * 1000;  // 7 días
-const SESSION_SECRET = WEB_AUTH_PASSWORD + 'quant_session_v1';
+// Sin contraseña configurada el secreto seria predecible y cualquiera podria
+// forjar cookies; en ese caso se usa un secreto aleatorio por proceso y el
+// login queda deshabilitado hasta configurar WEB_AUTH_PASSWORD.
+const SESSION_SECRET = WEB_AUTH_PASSWORD
+  ? WEB_AUTH_PASSWORD + 'quant_session_v1'
+  : crypto.randomBytes(32).toString('hex');
 
 function signToken(email, expiresAt) {
   const payload = `${email}|${expiresAt}`;
@@ -3198,6 +3221,11 @@ function startLocalWebServer() {
 
       // ── Login endpoint ────────────────────────────────────────────────
       if (url.pathname === '/auth/login' && req.method === 'POST') {
+        if (WEB_AUTH_ENABLED && !WEB_AUTH_PASSWORD) {
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: false, error: 'WEB_AUTH_PASSWORD no configurada en el servidor' }));
+          return;
+        }
         let raw = '';
         req.on('data', (c) => { raw += c; });
         req.on('end', () => {

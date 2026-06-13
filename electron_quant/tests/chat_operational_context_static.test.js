@@ -16,6 +16,10 @@ assert(main.includes('applyOperationalTruthGuard'), 'El backend debe aplicar un 
 assert(main.includes('operationalTruthGuard'), 'El backend debe registrar cuando corrige una promesa operativa no auditada.');
 assert(main.includes('swap') && main.includes('overnight'), 'El prompt sistema debe conocer costos swap/overnight MT5.');
 assert(main.includes('Fecha/hora actual obligatoria') && main.includes('bogotaNow'), 'El prompt sistema debe inyectar fecha/hora Colombia actual, no memoria vieja.');
+assert(main.includes('dos hemisferios del mismo cerebro'), 'El prompt sistema debe presentar a Quant como un solo cerebro (chat + ejecucion), no agentes separados.');
+assert(/PROHIBIDO decir que "otro agente"/.test(main), 'El prompt sistema debe prohibir atribuir las operaciones a otro agente u otra IA.');
+assert(main.includes('primera persona') && main.includes('PRIMERA PERSONA como tuya'), 'El prompt sistema debe exigir autoria en primera persona de las acciones del motor autonomo.');
+assert(main.includes('multiplicar su capital'), 'El prompt sistema debe declarar el objetivo de multiplicar el capital sin quemar la cuenta.');
 assert(main.includes('getMt5MarketSession'), 'El backend debe calcular la sesion MT5 actual para el chat.');
 assert.ok(/max_tokens:\s*(1[8-9]\d{2}|[2-9]\d{3,})/.test(main), 'El modelo debe tener presupuesto suficiente para respuestas completas.');
 assert.equal(/max_tokens:\s*900\b/.test(main), false, 'El chat no debe limitar respuestas largas a 900 tokens.');

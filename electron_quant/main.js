@@ -218,7 +218,25 @@ const USER_API_FIELDS = [
   'MT5_ACCOUNT1_SERVER','MT5_ACCOUNT2_LOGIN','MT5_ACCOUNT2_PASSWORD','MT5_ACCOUNT2_SERVER',
   'MT5_PYTHON_COMMAND',
   'MT5_DEMO_TRADING_ENABLED','MT5_DEMO_MAX_LOTS','TRAINING_MT5_DEMO_ORDER_SEND_ENABLED','TRAINING_MT5_DEMO_LOT_SIZE',
-  'QUANT_SYNC_URL','QUANT_SYNC_KEY'
+  'TRAINING_BACKEND_DEMO_ENTRY_ALLOW_DEFENSIVE_SIGNAL',
+  'QUANT_SYNC_URL','QUANT_SYNC_KEY',
+  // Autonomy tuning dial (web-configurable; overrides the VPS env file so the
+  // operator can adjust aggressiveness without SSH). Clamped in the scheduler.
+  'REAL_AUTONOMOUS_MAX_OPEN_POSITIONS','REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK',
+  'REAL_AUTONOMOUS_MAX_ORDERS_PER_DAY','REAL_AUTONOMOUS_MIN_CONFIDENCE',
+  'REAL_AUTONOMOUS_MAX_NOTIONAL_USDT','REAL_AUTONOMOUS_MIN_POSITION_VALUE_USDT',
+  'MT5_REAL_RISK_PER_TRADE_PCT','MT5_REAL_TOTAL_RISK_PCT'
+];
+// Whitelist of non-secret tuning knobs whose user-config value must win over the
+// VPS process.env (so the operator can dial aggressiveness / learning behavior
+// without editing /etc/quant/quant.env). Applied as an overlay on both the real
+// autonomous scheduler and the training-loop env.
+const AUTONOMY_TUNING_FIELDS = [
+  'REAL_AUTONOMOUS_MAX_OPEN_POSITIONS','REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK',
+  'REAL_AUTONOMOUS_MAX_ORDERS_PER_DAY','REAL_AUTONOMOUS_MIN_CONFIDENCE',
+  'REAL_AUTONOMOUS_MAX_NOTIONAL_USDT','REAL_AUTONOMOUS_MIN_POSITION_VALUE_USDT',
+  'MT5_REAL_RISK_PER_TRADE_PCT','MT5_REAL_TOTAL_RISK_PCT',
+  'TRAINING_BACKEND_DEMO_ENTRY_ALLOW_DEFENSIVE_SIGNAL'
 ];
 const SENSITIVE_API_FIELDS = USER_API_FIELDS.filter((key) => /KEY|SECRET|PASSWORD|PASS/.test(key));
 const botStateStore = createJsonStore(backendStateFile, () => createDefaultBotState());
@@ -504,7 +522,24 @@ function getRealAutonomousOrdersToday() {
   }
 }
 
-function createRealAutonomousRuntimeContext(env) {
+function autonomyTuningOverrides(email = WEB_AUTH_EMAIL) {
+  try {
+    const store = readUserApiStore();
+    const cfg = store.configs[normalizeEmail(email)] || {};
+    const out = {};
+    for (const key of AUTONOMY_TUNING_FIELDS) {
+      const value = cfg[key];
+      if (value !== undefined && value !== null && String(value).trim() !== '') out[key] = String(value).trim();
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function createRealAutonomousRuntimeContext(baseEnv) {
+  // The operator's web-config autonomy dial wins over the VPS env file.
+  const env = { ...baseEnv, ...autonomyTuningOverrides() };
   const executionDeps = createBinanceRealExecutionDeps(env);
   return {
     env,
@@ -3328,7 +3363,7 @@ function startLocalWebServer() {
       logger.info('server.listen.ready', { host: listenHost, port });
       if (!trainingLoopAutoStartAttempted) {
         trainingLoopAutoStartAttempted = true;
-        const schedulerEnv = { ...effectiveEnvForUser(WEB_AUTH_EMAIL), ...process.env };
+        const schedulerEnv = { ...effectiveEnvForUser(WEB_AUTH_EMAIL), ...process.env, ...autonomyTuningOverrides() };
         autoStartTrainingDemoLoopScheduler({
           env: schedulerEnv,
           deps: {

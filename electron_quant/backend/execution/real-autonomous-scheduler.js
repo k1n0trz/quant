@@ -689,6 +689,18 @@ async function runRealAutonomousTick(context = {}) {
     ? context.deps.readTrainingStateSnapshot()
     : null;
   const state = stateFromSnapshot(snapshot);
+
+  // Protect first: set SL/TP on any already-open REAL position that is naked,
+  // before evaluating new entries. A naked position must never persist.
+  let protectionSweep = null;
+  if (typeof context.deps?.runProtectionSweep === 'function') {
+    try {
+      protectionSweep = await context.deps.runProtectionSweep();
+    } catch (error) {
+      protectionSweep = { ok: false, ran: false, reason: 'protection_sweep_exception', error: String(error?.message || error) };
+    }
+  }
+
   const openRows = await openRealPositionRows(context.deps || {});
   const opened = openRealPositionSet(openRows);
   const protectionExecutions = await repairUnprotectedBinanceSpotPositions(context, limits, openRows, limits.maxOrdersPerTick);
@@ -818,6 +830,7 @@ async function runRealAutonomousTick(context = {}) {
     limits,
     openRealPositions: opened.size,
     ordersToday,
+    protectionSweep,
     profitHarvest,
     candidates: executable.map((candidate) => ({
       venue: candidate.venue,

@@ -435,6 +435,17 @@ async function runTrainingDemoTick(input = {}) {
     }
   }
 
+  // Protect: set SL/TP on any already-open demo position left naked by the
+  // broker (rejected stops, price moved). A demo position must never be unguarded.
+  let protectionSweep = null;
+  if (typeof source.deps?.runProtectionSweep === 'function') {
+    try {
+      protectionSweep = await source.deps.runProtectionSweep();
+    } catch (error) {
+      protectionSweep = { ok: false, ran: false, reason: 'protection_sweep_exception', error: String(error?.message || error) };
+    }
+  }
+
   return {
     ok: true,
     tickId,
@@ -444,6 +455,7 @@ async function runTrainingDemoTick(input = {}) {
     mt5DemoOrdersAttempted,
     mt5DemoOrdersSent,
     mt5DemoOrdersFailed,
+    protectionSweep,
     skippedPositions,
     skippedEntries,
     balanceBefore,

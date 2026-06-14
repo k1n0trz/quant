@@ -44,8 +44,9 @@ const { getTrainingDemoLiveSnapshot } = require('./backend/training/training-mon
 const { generateTrainingSignalCandidates } = require('./backend/training/training-signal-candidate-engine');
 const { autoStartTrainingDemoLoopScheduler } = require('./backend/training/training-loop-autostart');
 const { getTrainingDemoLoopSchedulerStatus } = require('./backend/training/training-loop-scheduler');
-const { placeMt5DemoOrder, closeMt5DemoPosition } = require('./backend/adapters/mt5/mt5-demo-order-service');
-const { checkMt5RealOrder, placeMt5RealOrder, closeMt5RealPosition } = require('./backend/adapters/mt5/mt5-real-order-service');
+const { placeMt5DemoOrder, closeMt5DemoPosition, modifyMt5DemoPosition } = require('./backend/adapters/mt5/mt5-demo-order-service');
+const { checkMt5RealOrder, placeMt5RealOrder, closeMt5RealPosition, modifyMt5RealPosition } = require('./backend/adapters/mt5/mt5-real-order-service');
+const { runMt5ProtectionSweep } = require('./backend/adapters/mt5/mt5-protection-sweep');
 const {
   bridgeSymbolsFromStatus,
   bridgeTickerFromStatus,
@@ -454,6 +455,16 @@ async function executeAndAuditBinanceRealOrderRaw(input, env) {
   return result;
 }
 
+async function runMt5ProtectionSweepForChannel(channel, env = ENV) {
+  const isReal = channel === 'real';
+  const status = isReal ? readMt5RealBridgeStatus(env) : readMt5BridgeStatus(env);
+  const positions = Array.isArray(status?.positions) ? status.positions : [];
+  const modifyPosition = isReal
+    ? (ticket, levels) => modifyMt5RealPosition({ ticket, sl: levels.sl, tp: levels.tp, symbol: levels.symbol, reason: 'protection-sweep' }, { env })
+    : (ticket, levels) => modifyMt5DemoPosition({ ticket, sl: levels.sl, tp: levels.tp, symbol: levels.symbol, reason: 'protection-sweep' }, { env });
+  return runMt5ProtectionSweep({ positions, env, modifyPosition, logger });
+}
+
 async function getOpenRealPositionsForScheduler(env) {
   const rows = [];
   try {
@@ -576,7 +587,8 @@ function createRealAutonomousRuntimeContext(baseEnv) {
       placeMt5RealOrder: (input, options = {}) => placeMt5RealOrder(input, { ...options, env }),
       closeMt5RealPosition: (input, options = {}) => closeMt5RealPosition(input, { ...options, env }),
       getMt5MarketSession: (nowMs) => getMt5MarketSession(nowMs),
-      runProfitHarvest: () => runBinanceProfitHarvest(env)
+      runProfitHarvest: () => runBinanceProfitHarvest(env),
+      runProtectionSweep: () => runMt5ProtectionSweepForChannel('real', env)
     }
   };
 }
@@ -2715,6 +2727,7 @@ async function handleApi(req, res, url) {
         realAutonomousScheduler,
         getOpenRealPositions: () => getOpenRealPositionsForScheduler(userEnv),
         runProfitHarvest: () => runBinanceProfitHarvest({ ...userEnv, ...autonomyTuningOverrides() }),
+        runProtectionSweep: () => runMt5ProtectionSweepForChannel('real', userEnv),
         getMt5MarketSession: (nowMs) => getMt5MarketSession(new Date(nowMs || Date.now())),
         testServiceStatus: (service) => testAllowedSystemServiceStatus(service),
         restartAllowedService: (service) => restartAllowedSystemService(service)
@@ -2773,6 +2786,10 @@ async function handleApi(req, res, url) {
     if (url.pathname === '/api/binance-symbols') return sendJson(res, await binanceSymbols());
     if (url.pathname === '/api/mt5-symbols') return sendJson(res, String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? await mt5Symbols(userEnv) : { ok: false, symbols: [], error: 'MT5 adapter disabled' });
     if (url.pathname === '/api/mt5-rates') return sendJson(res, String(userEnv.MT5_CONNECTOR_ENABLED || 'false').toLowerCase() === 'true' ? await mt5Rates(q.symbol, q.timeframe, Number(q.count || 180), userEnv) : { ok: false, candles: [], error: 'MT5 adapter disabled' });
+    if (url.pathname === '/api/mt5-protection-sweep' && req.method === 'POST') {
+      const channel = body.channel === 'real' ? 'real' : 'demo';
+      return sendJson(res, await runMt5ProtectionSweepForChannel(channel, userEnv));
+    }
     if (url.pathname === '/api/mt5-demo-order' && req.method === 'POST') return sendJson(res, await placeMt5DemoOrder(body, { env: userEnv }));
     if (url.pathname === '/api/mt5-demo-close' && req.method === 'POST') return sendJson(res, await closeMt5DemoPosition(body, { env: userEnv }));
     if (url.pathname === '/api/bots-status') {
@@ -3468,6 +3485,7 @@ function startLocalWebServer() {
             getBinanceEarnBalance: (asset) => getBinanceEarnBalance(asset, schedulerEnv),
             placeMt5DemoOrder: (input) => placeMt5DemoOrder(input, { env: schedulerEnv }),
             closeMt5DemoPosition: (input) => closeMt5DemoPosition(input, { env: schedulerEnv }),
+            runProtectionSweep: () => runMt5ProtectionSweepForChannel('demo', schedulerEnv),
             readMt5Snapshot: () => readMt5Snapshot(),
             readMemory: (limit) => readMemory(limit)
           },

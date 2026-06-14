@@ -408,6 +408,32 @@ async function closeMt5RealPosition(input = {}, options = {}) {
   };
 }
 
+// Set SL/TP on an already-open real position (protection sweep). Adding stops
+// only reduces risk, so it is allowed whenever real trading is enabled.
+async function modifyMt5RealPosition(input = {}, options = {}) {
+  const env = options.env || {};
+  if (!isMt5RealTradingEnabled(env)) return { ok: false, reason: 'mt5_real_trading_disabled', realTradingTouched: false };
+  const ticket = finiteNumber(input.ticket, input.positionTicket, input.order);
+  const sl = finiteNumber(input.sl, input.stopLoss);
+  const tp = finiteNumber(input.tp, input.takeProfit);
+  if (!ticket || ticket <= 0) return { ok: false, reason: 'invalid_ticket', realTradingTouched: false };
+  if ((sl === null || sl <= 0) && (tp === null || tp <= 0)) {
+    return { ok: false, reason: 'invalid_modify_levels', realTradingTouched: false };
+  }
+  const command = buildBridgeRealCommand({
+    ticket: Math.trunc(ticket),
+    symbol: safeMt5Symbol(input.symbol) || '',
+    side: '', volume: '', type: '', price: '',
+    sl: sl && sl > 0 ? sl : '',
+    tp: tp && tp > 0 ? tp : '',
+    deviation: Math.max(1, Math.min(100, finiteNumber(input.deviation, env.MT5_REAL_DEVIATION, 20) || 20)),
+    magic: finiteNumber(env.MT5_REAL_MAGIC, 260531) || 260531,
+    comment: safeComment(input.reason || 'protect', input.requestId)
+  }, 'MODIFY');
+  const result = await executeBridgeRealCommand(command, env);
+  return { ...result, action: result.action || 'MODIFY', ticket: result.ticket || Math.trunc(ticket) };
+}
+
 module.exports = {
   isMt5RealTradingEnabled,
   buildMt5RealOrderRequest,
@@ -416,6 +442,7 @@ module.exports = {
   checkMt5RealOrder,
   placeMt5RealOrder,
   closeMt5RealPosition,
+  modifyMt5RealPosition,
   bridgeCommandText,
   buildBridgeRealCommand
 };

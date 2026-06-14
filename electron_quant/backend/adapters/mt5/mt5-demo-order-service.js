@@ -140,6 +140,29 @@ function buildBridgeCloseCommand(close) {
   };
 }
 
+function buildBridgeModifyCommand(modify) {
+  return {
+    id: `q${Date.now().toString(36)}${crypto.randomBytes(4).toString('hex')}`,
+    action: 'MODIFY',
+    ticket: modify.ticket,
+    sl: modify.sl || '',
+    tp: modify.tp || '',
+    deviation: modify.deviation,
+    magic: modify.magic,
+    comment: modify.comment
+  };
+}
+
+// True when the fresh demo bridge already holds an open position on this symbol.
+function demoBridgeHasOpenSymbol(env = {}, symbol = '') {
+  const status = bridgeStatus(env);
+  if (!status?.fresh) return false;
+  const target = String(symbol || '').trim().toUpperCase();
+  if (!target) return false;
+  return (Array.isArray(status.positions) ? status.positions : [])
+    .some((position) => String(position.symbol || '').trim().toUpperCase() === target);
+}
+
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -180,6 +203,33 @@ async function executeBridgeDemoOrder(order, env = {}) {
 
 async function executeBridgeDemoClose(close, env = {}) {
   return executeBridgeDemoCommand(buildBridgeCloseCommand(close), env);
+}
+
+async function executeBridgeDemoModify(modify, env = {}) {
+  return executeBridgeDemoCommand(buildBridgeModifyCommand(modify), env);
+}
+
+// Set SL/TP on an already-open demo position (used by the protection sweep).
+async function modifyMt5DemoPosition(input = {}, options = {}) {
+  const env = options.env || {};
+  const ticket = finiteNumber(input.ticket, input.positionTicket, input.order);
+  const sl = finiteNumber(input.sl, input.stopLoss, input.stop_loss);
+  const tp = finiteNumber(input.tp, input.takeProfit, input.take_profit);
+  if (!ticket || ticket <= 0) return { ok: false, reason: 'invalid_ticket', demoOnly: true, realTradingTouched: false };
+  if ((sl === null || sl <= 0) && (tp === null || tp <= 0)) {
+    return { ok: false, reason: 'invalid_modify_levels', demoOnly: true, realTradingTouched: false };
+  }
+  const modify = {
+    ticket: Math.trunc(ticket),
+    sl: sl && sl > 0 ? sl : '',
+    tp: tp && tp > 0 ? tp : '',
+    deviation: Math.max(1, Math.min(100, finiteNumber(input.deviation, env.MT5_DEMO_DEVIATION, 20) || 20)),
+    magic: finiteNumber(env.MT5_DEMO_MAGIC, 260530) || 260530,
+    comment: safeComment(input.reason || 'training-demo-protect', input.symbol)
+  };
+  const bridgeResult = options.executeBridge === false ? null : await executeBridgeDemoModify(modify, env);
+  if (!bridgeResult) return { ok: false, reason: 'mt5_demo_bridge_unavailable', demoOnly: true, realTradingTouched: false };
+  return { ...bridgeResult, demoOnly: true, realTradingTouched: false };
 }
 
 function buildMt5DemoOrderRequest(input = {}, env = {}) {
@@ -386,6 +436,17 @@ async function placeMt5DemoOrder(input = {}, options = {}) {
       realTradingTouched: false
     };
   }
+  // One position per symbol: never stack a second demo position on a pair that
+  // the demo account already holds (checked against live bridge positions).
+  if (options.enforceOnePerSymbol !== false && demoBridgeHasOpenSymbol(env, built.order.symbol)) {
+    return {
+      ok: false,
+      reason: 'mt5_demo_symbol_already_open',
+      symbol: built.order.symbol,
+      demoOnly: true,
+      realTradingTouched: false
+    };
+  }
   const payload = {
     order: built.order,
     password: String(env.MT5_ACCOUNT2_PASSWORD || '')
@@ -474,8 +535,11 @@ module.exports = {
   buildMt5DemoCloseRequest,
   placeMt5DemoOrder,
   closeMt5DemoPosition,
+  modifyMt5DemoPosition,
+  demoBridgeHasOpenSymbol,
   mt5DemoOrderPythonScript,
   buildBridgeOrderCommand,
   buildBridgeCloseCommand,
+  buildBridgeModifyCommand,
   bridgeCommandText
 };

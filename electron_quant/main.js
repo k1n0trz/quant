@@ -462,7 +462,10 @@ async function runMt5ProtectionSweepForChannel(channel, env = ENV) {
   const modifyPosition = isReal
     ? (ticket, levels) => modifyMt5RealPosition({ ticket, sl: levels.sl, tp: levels.tp, symbol: levels.symbol, reason: 'protection-sweep' }, { env })
     : (ticket, levels) => modifyMt5DemoPosition({ ticket, sl: levels.sl, tp: levels.tp, symbol: levels.symbol, reason: 'protection-sweep' }, { env });
-  return runMt5ProtectionSweep({ positions, env, modifyPosition, logger });
+  const closePosition = isReal
+    ? (ticket, opts) => closeMt5RealPosition({ ticket, symbol: opts.symbol, reason: 'protection-close-naked' }, { env })
+    : (ticket, opts) => closeMt5DemoPosition({ ticket, symbol: opts.symbol, reason: 'protection-close-naked' }, { env });
+  return runMt5ProtectionSweep({ positions, env, modifyPosition, closePosition, logger });
 }
 
 async function getOpenRealPositionsForScheduler(env) {

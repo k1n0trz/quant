@@ -69,17 +69,28 @@ function planMt5ProtectionSweep({ positions = [], env = {} } = {}) {
   return { plans, skipped };
 }
 
-// Apply the sweep via an injected modifyPosition(ticket, { sl, tp, symbol }).
-async function runMt5ProtectionSweep({ positions = [], env = {}, modifyPosition, logger = null } = {}) {
+function boolFlag(value, fallback = false) {
+  if (value === undefined || value === null || value === '') return fallback;
+  return String(value).trim().toLowerCase() === 'true';
+}
+
+// Apply the sweep. Primary action: set SL/TP on the open position (modifyPosition).
+// Fallback: if stops cannot be added (e.g. the running bridge lacks MODIFY) and
+// closeIfCannotProtect is on, CLOSE the naked position so unbounded risk never
+// persists. Both deps are injected: modifyPosition(ticket,{sl,tp,symbol}) and
+// closePosition(ticket,{symbol}).
+async function runMt5ProtectionSweep({ positions = [], env = {}, modifyPosition, closePosition, logger = null } = {}) {
   if (typeof modifyPosition !== 'function') {
     return { ok: false, ran: false, reason: 'modify_unavailable', repaired: 0 };
   }
+  const closeIfCannotProtect = boolFlag(env.MT5_PROTECT_CLOSE_NAKED, true);
   const { plans, skipped } = planMt5ProtectionSweep({ positions, env });
   if (!plans.length) {
     return { ok: true, ran: false, reason: 'no_naked_positions', repaired: 0, skipped };
   }
   const results = [];
   let repaired = 0;
+  let closed = 0;
   for (const plan of plans) {
     let outcome;
     try {
@@ -87,12 +98,31 @@ async function runMt5ProtectionSweep({ positions = [], env = {}, modifyPosition,
     } catch (error) {
       outcome = { ok: false, error: String(error?.message || error) };
     }
-    const ok = outcome?.ok === true;
-    if (ok) repaired += 1;
-    results.push({ ticket: plan.ticket, symbol: plan.symbol, sl: plan.sl, tp: plan.tp, ok, reason: ok ? null : (outcome?.reason || outcome?.error || 'modify_failed') });
+    if (outcome?.ok === true) {
+      repaired += 1;
+      results.push({ ticket: plan.ticket, symbol: plan.symbol, action: 'protected', sl: plan.sl, tp: plan.tp, ok: true });
+      continue;
+    }
+    const modifyReason = outcome?.reason || outcome?.error || 'modify_failed';
+    if (closeIfCannotProtect && typeof closePosition === 'function') {
+      let closeOutcome;
+      try {
+        closeOutcome = await closePosition(plan.ticket, { symbol: plan.symbol });
+      } catch (error) {
+        closeOutcome = { ok: false, error: String(error?.message || error) };
+      }
+      if (closeOutcome?.ok === true) {
+        closed += 1;
+        results.push({ ticket: plan.ticket, symbol: plan.symbol, action: 'closed', ok: true, reason: `could_not_set_stops:${modifyReason}` });
+        continue;
+      }
+      results.push({ ticket: plan.ticket, symbol: plan.symbol, action: 'failed', ok: false, reason: `modify_failed:${modifyReason}; close_failed:${closeOutcome?.reason || closeOutcome?.error || 'unknown'}` });
+      continue;
+    }
+    results.push({ ticket: plan.ticket, symbol: plan.symbol, action: 'failed', ok: false, reason: modifyReason });
   }
-  const summary = { ok: true, ran: true, repaired, attempted: plans.length, results, skipped };
-  if (logger && typeof logger.info === 'function') logger.info('mt5.protection_sweep', { repaired, attempted: plans.length });
+  const summary = { ok: true, ran: true, repaired, closed, attempted: plans.length, results, skipped };
+  if (logger && typeof logger.info === 'function') logger.info('mt5.protection_sweep', { repaired, closed, attempted: plans.length });
   return summary;
 }
 

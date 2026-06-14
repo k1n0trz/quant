@@ -74,13 +74,42 @@ test('runMt5ProtectionSweep is a no-op when nothing is naked', async () => {
   assert.equal(result.reason, 'no_naked_positions');
 });
 
-test('reports a failed MODIFY without crashing the sweep', async () => {
+test('reports a failed MODIFY (no close fallback) without crashing the sweep', async () => {
   const result = await runMt5ProtectionSweep({
     positions: [{ ticket: 7, symbol: 'BTCUSD', side: 'BUY', priceCurrent: 100000, sl: 0, tp: 0 }],
-    env: {},
+    env: { MT5_PROTECT_CLOSE_NAKED: 'false' },
     modifyPosition: async () => ({ ok: false, reason: 'bridge_down' })
   });
   assert.equal(result.repaired, 0);
   assert.equal(result.results[0].ok, false);
-  assert.equal(result.results[0].reason, 'bridge_down');
+  assert.match(result.results[0].reason, /bridge_down/);
+});
+
+test('closes a naked position when stops cannot be set (bridge lacks MODIFY)', async () => {
+  const closedTickets = [];
+  const result = await runMt5ProtectionSweep({
+    positions: [{ ticket: 1838243146, symbol: 'BTCUSD', side: 'BUY', priceCurrent: 64500, sl: 0, tp: 0 }],
+    env: {}, // close fallback defaults ON
+    modifyPosition: async () => ({ ok: false, reason: 'unsupported_action' }),
+    closePosition: async (ticket) => { closedTickets.push(ticket); return { ok: true }; }
+  });
+  assert.equal(result.repaired, 0);
+  assert.equal(result.closed, 1);
+  assert.deepEqual(closedTickets, [1838243146]);
+  assert.equal(result.results[0].action, 'closed');
+  assert.match(result.results[0].reason, /could_not_set_stops:unsupported_action/);
+});
+
+test('prefers MODIFY over closing when stops can be set', async () => {
+  let closeCalled = false;
+  const result = await runMt5ProtectionSweep({
+    positions: [{ ticket: 9, symbol: 'BTCUSD', side: 'BUY', priceCurrent: 64500, sl: 0, tp: 0 }],
+    env: {},
+    modifyPosition: async () => ({ ok: true }),
+    closePosition: async () => { closeCalled = true; return { ok: true }; }
+  });
+  assert.equal(result.repaired, 1);
+  assert.equal(result.closed, 0);
+  assert.equal(closeCalled, false, 'must not close a position it could protect');
+  assert.equal(result.results[0].action, 'protected');
 });

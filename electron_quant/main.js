@@ -2713,6 +2713,7 @@ async function handleApi(req, res, url) {
         systemSelfAuditScheduler,
         realAutonomousScheduler,
         getOpenRealPositions: () => getOpenRealPositionsForScheduler(userEnv),
+        runProfitHarvest: () => runBinanceProfitHarvest({ ...userEnv, ...autonomyTuningOverrides() }),
         getMt5MarketSession: (nowMs) => getMt5MarketSession(new Date(nowMs || Date.now())),
         testServiceStatus: (service) => testAllowedSystemServiceStatus(service),
         restartAllowedService: (service) => restartAllowedSystemService(service)

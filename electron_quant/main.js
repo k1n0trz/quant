@@ -55,6 +55,7 @@ const {
 const { getMt5MarketSession } = require('./backend/market/mt5-market-hours');
 const { createSystemSelfAuditSchedulerController } = require('./backend/system/system-self-audit-scheduler');
 const { createRealAutonomousSchedulerController } = require('./backend/execution/real-autonomous-scheduler');
+const { runProfitHarvest } = require('./backend/execution/binance-profit-harvest');
 const { applyOperationalTruthGuard } = require('./backend/chat/operational-truth-guard');
 const { buildLiveTelemetry, renderLiveTelemetryBlock } = require('./backend/chat/live-telemetry');
 const { buildTrainingBotsStatus } = require('./backend/training/bot-registry-service');
@@ -225,7 +226,10 @@ const USER_API_FIELDS = [
   'REAL_AUTONOMOUS_MAX_OPEN_POSITIONS','REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK',
   'REAL_AUTONOMOUS_MAX_ORDERS_PER_DAY','REAL_AUTONOMOUS_MIN_CONFIDENCE',
   'REAL_AUTONOMOUS_MAX_NOTIONAL_USDT','REAL_AUTONOMOUS_MIN_POSITION_VALUE_USDT',
-  'MT5_REAL_RISK_PER_TRADE_PCT','MT5_REAL_TOTAL_RISK_PCT'
+  'MT5_REAL_RISK_PER_TRADE_PCT','MT5_REAL_TOTAL_RISK_PCT',
+  'REAL_AUTONOMOUS_PROFIT_HARVEST_ENABLED','REAL_AUTONOMOUS_TRADING_FLOAT_USDT',
+  'REAL_AUTONOMOUS_PROFIT_HARVEST_MIN_USDT','REAL_AUTONOMOUS_PROFIT_HARVEST_MAX_USDT',
+  'REAL_AUTONOMOUS_PROFIT_HARVEST_EARN_PRODUCT'
 ];
 // Whitelist of non-secret tuning knobs whose user-config value must win over the
 // VPS process.env (so the operator can dial aggressiveness / learning behavior
@@ -236,7 +240,10 @@ const AUTONOMY_TUNING_FIELDS = [
   'REAL_AUTONOMOUS_MAX_ORDERS_PER_DAY','REAL_AUTONOMOUS_MIN_CONFIDENCE',
   'REAL_AUTONOMOUS_MAX_NOTIONAL_USDT','REAL_AUTONOMOUS_MIN_POSITION_VALUE_USDT',
   'MT5_REAL_RISK_PER_TRADE_PCT','MT5_REAL_TOTAL_RISK_PCT',
-  'TRAINING_BACKEND_DEMO_ENTRY_ALLOW_DEFENSIVE_SIGNAL','TRAINING_BACKEND_DEMO_ENTRY_ALLOW_BOOTSTRAP'
+  'TRAINING_BACKEND_DEMO_ENTRY_ALLOW_DEFENSIVE_SIGNAL','TRAINING_BACKEND_DEMO_ENTRY_ALLOW_BOOTSTRAP',
+  'REAL_AUTONOMOUS_PROFIT_HARVEST_ENABLED','REAL_AUTONOMOUS_TRADING_FLOAT_USDT',
+  'REAL_AUTONOMOUS_PROFIT_HARVEST_MIN_USDT','REAL_AUTONOMOUS_PROFIT_HARVEST_MAX_USDT',
+  'REAL_AUTONOMOUS_PROFIT_HARVEST_EARN_PRODUCT'
 ];
 const SENSITIVE_API_FIELDS = USER_API_FIELDS.filter((key) => /KEY|SECRET|PASSWORD|PASS/.test(key));
 const botStateStore = createJsonStore(backendStateFile, () => createDefaultBotState());
@@ -567,7 +574,8 @@ function createRealAutonomousRuntimeContext(baseEnv) {
       checkMt5RealOrder: (input, options = {}) => checkMt5RealOrder(input, { ...options, env }),
       placeMt5RealOrder: (input, options = {}) => placeMt5RealOrder(input, { ...options, env }),
       closeMt5RealPosition: (input, options = {}) => closeMt5RealPosition(input, { ...options, env }),
-      getMt5MarketSession: (nowMs) => getMt5MarketSession(nowMs)
+      getMt5MarketSession: (nowMs) => getMt5MarketSession(nowMs),
+      runProfitHarvest: () => runBinanceProfitHarvest(env)
     }
   };
 }
@@ -2137,6 +2145,55 @@ async function placeOrderBinance(side, symbol, qty, type = 'MARKET', price = nul
     fills:     res.fills || [],
     transactTime: res.transactTime
   };
+}
+
+async function convertUsdtToUsdc(amountUsdt, env = ENV) {
+  assertRealTradingExecutionAllowed(env);
+  if (!env.BINANCE_API_KEY || !env.BINANCE_SECRET) return { ok: false, error: 'Faltan claves Binance' };
+  const quoteOrderQty = Number(Number(amountUsdt).toFixed(2));
+  if (!(quoteOrderQty > 0)) return { ok: false, error: 'monto_invalido' };
+  // USDCUSDT: base USDC, quote USDT. BUY spends USDT (quoteOrderQty) for USDC.
+  const res = await signedBinance('/api/v3/order', {
+    symbol: 'USDCUSDT', side: 'BUY', type: 'MARKET', quoteOrderQty
+  }, 'POST', env);
+  if (res.code && res.code < 0) return { ok: false, error: `Binance ${res.code}: ${res.msg}` };
+  return {
+    ok: true,
+    orderId: res.orderId,
+    usdcReceived: parseFloat(res.executedQty || 0),
+    spentUsdt: parseFloat(res.cummulativeQuoteQty || 0)
+  };
+}
+
+async function subscribeBinanceFlexibleEarn(amount, productId = 'USDC001', env = ENV) {
+  assertRealTradingExecutionAllowed(env);
+  if (!env.BINANCE_API_KEY || !env.BINANCE_SECRET) return { ok: false, error: 'Faltan claves Binance' };
+  const amt = Number(Number(amount).toFixed(8));
+  if (!(amt > 0)) return { ok: false, error: 'monto_invalido' };
+  const res = await signedBinance('/sapi/v1/simple-earn/flexible/subscribe', {
+    productId, amount: amt
+  }, 'POST', env);
+  if (res.code && res.code < 0) return { ok: false, error: `Binance ${res.code}: ${res.msg}` };
+  return { ok: res.success === true || Boolean(res.purchaseId), purchaseId: res.purchaseId || null };
+}
+
+async function runBinanceProfitHarvest(env = ENV) {
+  return runProfitHarvest({
+    env,
+    logger,
+    deps: {
+      getQuoteFree: async (asset) => {
+        const balance = await getBinanceSpotBalance(asset, env);
+        return Number(balance?.free ?? balance?.available ?? 0);
+      },
+      getUsdcUsdtMinNotional: async () => {
+        const filters = await getSymbolFilters('USDCUSDT');
+        return Number(filters?.minNotional || 1);
+      },
+      convertUsdtToUsdc: (amount) => convertUsdtToUsdc(amount, env),
+      subscribeUsdcEarn: (amount, productId) => subscribeBinanceFlexibleEarn(amount, productId, env)
+    }
+  });
 }
 
 async function placeBinanceSpotOcoProtection(request = {}, order = {}, env = ENV) {

@@ -800,12 +800,25 @@ async function runRealAutonomousTick(context = {}) {
   }
 
   const touched = executed.some((row) => row.realTradingTouched);
+
+  // Harvest realized profit (Spot quote above the trading float) into USDC Earn.
+  // Best-effort and isolated: a harvest failure never affects trade execution.
+  let profitHarvest = null;
+  if (typeof context.deps?.runProfitHarvest === 'function') {
+    try {
+      profitHarvest = await context.deps.runProfitHarvest();
+    } catch (error) {
+      profitHarvest = { ok: false, ran: false, reason: 'harvest_exception', error: String(error?.message || error) };
+    }
+  }
+
   return {
     ok: true,
     ranAt: new Date(context.nowMs || Date.now()).toISOString(),
     limits,
     openRealPositions: opened.size,
     ordersToday,
+    profitHarvest,
     candidates: executable.map((candidate) => ({
       venue: candidate.venue,
       symbol: candidate.symbol,

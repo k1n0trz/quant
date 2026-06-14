@@ -60,6 +60,7 @@ const { applyOperationalTruthGuard } = require('./backend/chat/operational-truth
 const { buildLiveTelemetry, renderLiveTelemetryBlock } = require('./backend/chat/live-telemetry');
 const { buildTrainingBotsStatus } = require('./backend/training/bot-registry-service');
 const { generateDerivedBot } = require('./backend/training/bot-generation-service');
+const { compileGeneratedBot } = require('./backend/training/bot-compile-service');
 const {
   runSystemSelfAudit,
   writeSystemSelfAuditStatus,
@@ -2796,6 +2797,21 @@ async function handleApi(req, res, url) {
       } else {
         logger.warn('bots.generate.failed', { symbol: body.symbol, reason: result.reason });
       }
+      return sendJson(res, result);
+    }
+    if (url.pathname === '/api/bots-compile' && req.method === 'POST') {
+      const result = await compileGeneratedBot({ symbol: body.symbol }, {
+        env: { ...userEnv, QUANT_DATA_DIR: memoryDir, QUANT_BOTS_GENERATED_DIR: botsGeneratedRoot },
+        killStray: () => new Promise((resolve) => {
+          try {
+            const child = require('node:child_process').spawn('pkill', ['-f', 'MetaEditor64'], { windowsHide: true });
+            child.on('close', () => setTimeout(resolve, 1500));
+            child.on('error', () => resolve());
+          } catch { resolve(); }
+        })
+      });
+      if (result.ok) logger.info('bots.compile', { symbol: result.symbol, bytes: result.bytes });
+      else logger.warn('bots.compile.failed', { symbol: body.symbol, reason: result.reason });
       return sendJson(res, result);
     }
     if (url.pathname === '/api/ticker') return sendJson(res, await ticker(q.symbol));

@@ -2824,8 +2824,11 @@ async function handleApi(req, res, url) {
         env: { ...userEnv, QUANT_DATA_DIR: memoryDir, QUANT_BOTS_GENERATED_DIR: botsGeneratedRoot },
         killStray: () => new Promise((resolve) => {
           try {
-            const child = require('node:child_process').spawn('pkill', ['-f', 'MetaEditor64'], { windowsHide: true });
-            child.on('close', () => setTimeout(resolve, 1500));
+            // Case-insensitive: the Wine process is "metaeditor64.exe" (lowercase).
+            // A case-sensitive match leaves stray editors that pile up and block
+            // every subsequent compile under load.
+            const child = require('node:child_process').spawn('pkill', ['-if', 'metaeditor64'], { windowsHide: true });
+            child.on('close', () => setTimeout(resolve, 2000));
             child.on('error', () => resolve());
           } catch { resolve(); }
         })

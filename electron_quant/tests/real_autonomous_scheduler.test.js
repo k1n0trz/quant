@@ -163,6 +163,42 @@ test('tick avoids symbols already open in real accounts', async () => {
   assert.equal(result.skipped.some((row) => row.symbol === 'ACXUSDT' && row.reason === 'already_open_real_position'), true);
 });
 
+test('tick blocks re-entry on a pair opened within the cooldown window', async () => {
+  const executions = [];
+  const recorded = [];
+  const result = await runRealAutonomousTick(armedContext({
+    env: { REAL_AUTONOMOUS_MAX_ORDERS_PER_TICK: '3', REAL_AUTONOMOUS_REENTRY_COOLDOWN_MIN: '45' },
+    deps: {
+      readTrainingStateSnapshot: () => ({
+        state: { activePairs: [
+          { venue: 'BINANCE', symbol: 'ACXUSDT', bias: 'LONG', confidence: 92 },
+          { venue: 'BINANCE', symbol: 'ALLOUSDT', bias: 'LONG', confidence: 88 }
+        ] }
+      }),
+      getOpenRealPositions: async () => [],
+      // ACXUSDT was opened 10 minutes ago -> still inside the 45m cooldown
+      getRecentRealOpens: async () => ({ 'BINANCE:ACXUSDT': Date.now() - 10 * 60000 }),
+      recordRealOpen: async (venue, symbol) => { recorded.push(`${venue}:${symbol}`); },
+      discoverBinanceRealUniverse: async () => ({
+        ok: true,
+        ready: [
+          { venue: 'BINANCE', symbol: 'ACXUSDT', side: 'BUY', type: 'MARKET', qty: 100, requestedNotional: 5, price: 0.041 },
+          { venue: 'BINANCE', symbol: 'ALLOUSDT', side: 'BUY', type: 'MARKET', qty: 20, requestedNotional: 5, price: 0.17 }
+        ]
+      }),
+      executeBinanceRealOrder: async ({ input }) => {
+        executions.push(input);
+        return { ok: true, status: 'executed', request: input, order: { orderId: 1 } };
+      }
+    }
+  }));
+
+  assert.equal(result.executedCount, 1);
+  assert.deepEqual(executions.map((input) => input.symbol), ['ALLOUSDT'], 'cooled-down pair is skipped, fresh pair trades');
+  assert.equal(result.skipped.some((row) => row.symbol === 'ACXUSDT' && row.reason === 'reentry_cooldown_active'), true);
+  assert.deepEqual(recorded, ['BINANCE:ALLOUSDT'], 'only the executed pair is recorded for cooldown');
+});
+
 test('tick respects max autonomous orders per day from audit/deps', async () => {
   let called = false;
   const result = await runRealAutonomousTick(armedContext({

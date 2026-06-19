@@ -197,6 +197,7 @@ const mt5SnapshotFile        = path.join(memoryDir, 'mt5_snapshot.json');
 const backendStateFile       = path.join(memoryDir, 'backend_state.json');
 const riskConfigFile         = path.join(memoryDir, 'risk_config.json');
 const binanceRealOrderAuditFile = path.join(memoryDir, 'binance_real_order_audit.jsonl');
+const realAutonomousPairStateFile = path.join(memoryDir, 'real_autonomous_pair_state.json');
 const systemSelfAuditStatusFile  = path.join(memoryDir, 'system_self_audit_status.json');
 const systemSelfAuditHistoryFile = path.join(memoryDir, 'system_self_audit_history.jsonl');
 
@@ -231,7 +232,7 @@ const USER_API_FIELDS = [
   'MT5_REAL_RISK_PER_TRADE_PCT','MT5_REAL_TOTAL_RISK_PCT',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_ENABLED','REAL_AUTONOMOUS_TRADING_FLOAT_USDT',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_MIN_USDT','REAL_AUTONOMOUS_PROFIT_HARVEST_MAX_USDT',
-  'REAL_AUTONOMOUS_PROFIT_HARVEST_EARN_PRODUCT'
+  'REAL_AUTONOMOUS_PROFIT_HARVEST_EARN_PRODUCT','REAL_AUTONOMOUS_REENTRY_COOLDOWN_MIN'
 ];
 // Whitelist of non-secret tuning knobs whose user-config value must win over the
 // VPS process.env (so the operator can dial aggressiveness / learning behavior
@@ -245,7 +246,7 @@ const AUTONOMY_TUNING_FIELDS = [
   'TRAINING_BACKEND_DEMO_ENTRY_ALLOW_DEFENSIVE_SIGNAL','TRAINING_BACKEND_DEMO_ENTRY_ALLOW_BOOTSTRAP',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_ENABLED','REAL_AUTONOMOUS_TRADING_FLOAT_USDT',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_MIN_USDT','REAL_AUTONOMOUS_PROFIT_HARVEST_MAX_USDT',
-  'REAL_AUTONOMOUS_PROFIT_HARVEST_EARN_PRODUCT'
+  'REAL_AUTONOMOUS_PROFIT_HARVEST_EARN_PRODUCT','REAL_AUTONOMOUS_REENTRY_COOLDOWN_MIN'
 ];
 const SENSITIVE_API_FIELDS = USER_API_FIELDS.filter((key) => /KEY|SECRET|PASSWORD|PASS/.test(key));
 const botStateStore = createJsonStore(backendStateFile, () => createDefaultBotState());
@@ -530,6 +531,32 @@ async function getBinanceSpotExposureRows(env = ENV) {
   return out;
 }
 
+function readRealAutonomousPairOpens() {
+  try {
+    if (!fs.existsSync(realAutonomousPairStateFile)) return {};
+    const data = JSON.parse(fs.readFileSync(realAutonomousPairStateFile, 'utf8'));
+    return data && typeof data === 'object' && data.opens ? data.opens : {};
+  } catch {
+    return {};
+  }
+}
+
+function recordRealAutonomousPairOpen(venue, symbol, ts) {
+  try {
+    const key = `${String(venue || '').toUpperCase()}:${String(symbol || '').toUpperCase()}`;
+    const opens = readRealAutonomousPairOpens();
+    opens[key] = Number(ts) || Date.now();
+    // prune entries older than 48h to keep the file small
+    const cutoff = Date.now() - 48 * 3600 * 1000;
+    for (const k of Object.keys(opens)) { if (Number(opens[k]) < cutoff) delete opens[k]; }
+    fs.mkdirSync(path.dirname(realAutonomousPairStateFile), { recursive: true });
+    fs.writeFileSync(realAutonomousPairStateFile, JSON.stringify({ opens }), 'utf8');
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
+
 function getRealAutonomousOrdersToday() {
   try {
     const today = new Date().toISOString().slice(0, 10);
@@ -591,7 +618,9 @@ function createRealAutonomousRuntimeContext(baseEnv) {
       closeMt5RealPosition: (input, options = {}) => closeMt5RealPosition(input, { ...options, env }),
       getMt5MarketSession: (nowMs) => getMt5MarketSession(nowMs),
       runProfitHarvest: () => runBinanceProfitHarvest(env),
-      runProtectionSweep: () => runMt5ProtectionSweepForChannel('real', env)
+      runProtectionSweep: () => runMt5ProtectionSweepForChannel('real', env),
+      getRecentRealOpens: () => readRealAutonomousPairOpens(),
+      recordRealOpen: (venue, symbol, ts) => recordRealAutonomousPairOpen(venue, symbol, ts)
     }
   };
 }
@@ -2731,6 +2760,8 @@ async function handleApi(req, res, url) {
         getOpenRealPositions: () => getOpenRealPositionsForScheduler(userEnv),
         runProfitHarvest: () => runBinanceProfitHarvest({ ...userEnv, ...autonomyTuningOverrides() }),
         runProtectionSweep: () => runMt5ProtectionSweepForChannel('real', userEnv),
+        getRecentRealOpens: () => readRealAutonomousPairOpens(),
+        recordRealOpen: (venue, symbol, ts) => recordRealAutonomousPairOpen(venue, symbol, ts),
         getMt5MarketSession: (nowMs) => getMt5MarketSession(new Date(nowMs || Date.now())),
         testServiceStatus: (service) => testAllowedSystemServiceStatus(service),
         restartAllowedService: (service) => restartAllowedSystemService(service)

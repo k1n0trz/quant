@@ -76,7 +76,11 @@ function resolveRealAutonomousLimits(env = {}, riskConfig = {}) {
   const mt5AllowOvernight = boolFlag(env.REAL_AUTONOMOUS_MT5_ALLOW_OVERNIGHT);
   const mt5MaxHoldHours = Math.floor(clampNumber(env.REAL_AUTONOMOUS_MT5_MAX_HOLD_HOURS, 22, 1, 168));
   const mt5OrphanMaxHoldHours = Math.floor(clampNumber(env.REAL_AUTONOMOUS_MT5_ORPHAN_MAX_HOLD_HOURS, 6, 1, 72));
+  // Anti-overtrading: minimum minutes before re-opening the SAME pair, so a
+  // losing pair can't be re-entered tick after tick (death by a thousand cuts).
+  const reentryCooldownMinutes = Math.floor(clampNumber(env.REAL_AUTONOMOUS_REENTRY_COOLDOWN_MIN, 45, 0, 1440));
   return {
+    reentryCooldownMinutes,
     allowedVenues: resolveAllowedVenues(env),
     autonomyMode: 'opportunity_only',
     minOpenPositions: 0,
@@ -790,11 +794,22 @@ async function runRealAutonomousTick(context = {}) {
     Math.max(0, limits.maxOpenPositions - opened.size),
     Math.max(0, limits.maxOrdersPerDay - ordersToday)
   );
+  const nowMs = finiteNumber(context.nowMs) ?? Date.now();
+  const cooldownMs = Math.max(0, (limits.reentryCooldownMinutes || 0) * 60000);
+  const recentOpens = (cooldownMs > 0 && typeof context.deps?.getRecentRealOpens === 'function')
+    ? (await context.deps.getRecentRealOpens().catch(() => ({})) || {})
+    : {};
   for (const candidate of executable) {
     if (executed.filter((row) => row.ok && !row.action).length >= successLimit) break;
     const key = `${candidate.venue}:${candidate.symbol}`;
     if (opened.has(key)) {
       skipped.push({ venue: candidate.venue, symbol: candidate.symbol, reason: 'already_open_real_position' });
+      continue;
+    }
+    const lastOpenMs = finiteNumber(recentOpens[key]);
+    if (lastOpenMs !== null && cooldownMs > 0 && (nowMs - lastOpenMs) < cooldownMs) {
+      const waitMin = Math.ceil((cooldownMs - (nowMs - lastOpenMs)) / 60000);
+      skipped.push({ venue: candidate.venue, symbol: candidate.symbol, reason: 'reentry_cooldown_active', waitMinutes: waitMin });
       continue;
     }
     const result = await executeCandidate(candidate, context);
@@ -808,7 +823,12 @@ async function runRealAutonomousTick(context = {}) {
       orderId: result?.order?.orderId || result?.commandId || null,
       realTradingTouched: result?.safety?.realTradingTouched === true || result?.realTradingTouched === true
     });
-    if (result?.ok === true) opened.add(key);
+    if (result?.ok === true) {
+      opened.add(key);
+      if (cooldownMs > 0 && typeof context.deps?.recordRealOpen === 'function') {
+        try { await context.deps.recordRealOpen(candidate.venue, candidate.symbol, nowMs); } catch {}
+      }
+    }
   }
 
   const touched = executed.some((row) => row.realTradingTouched);

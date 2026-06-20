@@ -618,6 +618,26 @@ async function buildMt5Candidates(context, state, limits, opened) {
       reason: signal.reason || 'training_signal'
     });
   }
+  // Diverse watchlist for the AI: let it evaluate liquid majors too, not only the
+  // (often narrow) signal pairs. The AI sets side/SL/TP, so these need no signal.
+  if (boolFlag(env.REAL_AUTONOMOUS_AI_DECISIONS_ENABLED)) {
+    const watchlist = String(env.REAL_AUTONOMOUS_MT5_WATCHLIST
+      || 'EURUSD,GBPUSD,USDJPY,AUDUSD,USDCAD,NZDUSD,USDCHF,XAUUSD,EURJPY,AUDCAD')
+      .split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+    // rotate the order by the current minute so different pairs surface each tick
+    const offset = new Date().getUTCMinutes() % Math.max(1, watchlist.length);
+    const rotated = watchlist.slice(offset).concat(watchlist.slice(0, offset));
+    for (const symbol of rotated) {
+      const key = `MT5:${symbol}`;
+      if (opened.has(key)) continue;
+      if (rows.some((r) => r.symbol === symbol && !r.skipOnly)) continue;
+      rows.push({
+        venue: 'MT5', symbol, side: 'BUY', volume: limits.mt5Lots, type: 'MARKET',
+        priorityScore: limits.minConfidence - 1, maxHoldHours: limits.mt5MaxHoldHours,
+        aiCandidate: true, reason: 'ai_watchlist'
+      });
+    }
+  }
   return rows;
 }
 
@@ -660,6 +680,28 @@ async function executeCandidate(candidate, context) {
       takeProfit: candidate.takeProfit,
       reason: 'real-autonomous-scheduler'
     };
+    // AI decides: an LLM analyzes trend/technicals/news and approves or rejects
+    // the trade, setting its own SL/TP. Its verdict overrides the mechanical one.
+    if (boolFlag((context.env || {}).REAL_AUTONOMOUS_AI_DECISIONS_ENABLED) && typeof deps.aiDecideTrade === 'function') {
+      let decision = null;
+      try {
+        decision = await deps.aiDecideTrade(candidate.symbol, 'MT5');
+      } catch (error) {
+        return { ok: false, status: 'blocked', reason: 'ai_decision_error', error: String(error?.message || error), candidate, input };
+      }
+      if (!decision || decision.ok !== true) {
+        return { ok: false, status: 'blocked', reason: decision?.reason || 'ai_decision_unavailable', candidate, input };
+      }
+      if (decision.decision !== 'OPEN') {
+        return { ok: false, status: 'ai_skip', reason: 'ai_skip', aiReasoning: decision.reasoning, aiConfidence: decision.confidence, candidate, input };
+      }
+      input.side = decision.side;
+      input.entryPrice = decision.entryPrice;
+      input.stopLoss = decision.stopLoss;
+      input.takeProfit = decision.takeProfit;
+      input.aiReasoning = decision.reasoning;
+      input.aiConfidence = decision.confidence;
+    }
     if (typeof deps.checkMt5RealOrder === 'function') {
       const check = await deps.checkMt5RealOrder(input, { env: context.env || {} });
       if (!check?.ok) return { ok: false, status: 'blocked', reason: check?.reason || 'mt5_check_failed', candidate, input, check };
@@ -782,10 +824,15 @@ async function runRealAutonomousTick(context = {}) {
     symbol: candidate.symbol,
     reason: candidate.reason
   }));
+  // When the AI evaluates each candidate (an LLM call), bound how many it judges
+  // per tick to control cost/latency; otherwise keep the wider mechanical queue.
+  const aiEnabled = boolFlag((context.env || {}).REAL_AUTONOMOUS_AI_DECISIONS_ENABLED);
+  const aiEvalBudget = Math.floor(clampNumber((context.env || {}).REAL_AUTONOMOUS_AI_MAX_EVAL_PER_TICK, 3, 1, 12));
+  const queueLimit = aiEnabled ? aiEvalBudget : Math.max(limits.maxOrdersPerTick * 10, 20);
   const executable = balanceCandidateQueueByVenue(candidates
     .filter((candidate) => !candidate.skipOnly)
     .sort(sortByScoreThenSymbol), limits.allowedVenues)
-    .slice(0, Math.max(limits.maxOrdersPerTick * 10, 20));
+    .slice(0, queueLimit);
 
   const executed = [...managementExecutions];
   const closeSuccessCount = managementExecutions.filter((row) => row.ok).length;
@@ -818,8 +865,12 @@ async function runRealAutonomousTick(context = {}) {
       status: result?.status || (result?.ok ? 'executed' : 'blocked'),
       venue: candidate.venue,
       symbol: candidate.symbol,
-      side: candidate.side,
+      side: result?.input?.side || candidate.side,
+      stopLoss: result?.input?.stopLoss ?? null,
+      takeProfit: result?.input?.takeProfit ?? null,
       reason: result?.reason || result?.error || null,
+      aiReasoning: result?.aiReasoning || result?.input?.aiReasoning || null,
+      aiConfidence: result?.aiConfidence ?? result?.input?.aiConfidence ?? null,
       orderId: result?.order?.orderId || result?.commandId || null,
       realTradingTouched: result?.safety?.realTradingTouched === true || result?.realTradingTouched === true
     });

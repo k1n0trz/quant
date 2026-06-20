@@ -57,6 +57,7 @@ const { getMt5MarketSession } = require('./backend/market/mt5-market-hours');
 const { createSystemSelfAuditSchedulerController } = require('./backend/system/system-self-audit-scheduler');
 const { createRealAutonomousSchedulerController } = require('./backend/execution/real-autonomous-scheduler');
 const { runProfitHarvest } = require('./backend/execution/binance-profit-harvest');
+const { decideTrade } = require('./backend/ai/ai-trade-advisor');
 const { applyOperationalTruthGuard } = require('./backend/chat/operational-truth-guard');
 const { buildLiveTelemetry, renderLiveTelemetryBlock } = require('./backend/chat/live-telemetry');
 const { buildTrainingBotsStatus } = require('./backend/training/bot-registry-service');
@@ -232,7 +233,8 @@ const USER_API_FIELDS = [
   'MT5_REAL_RISK_PER_TRADE_PCT','MT5_REAL_TOTAL_RISK_PCT',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_ENABLED','REAL_AUTONOMOUS_TRADING_FLOAT_USDT',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_MIN_USDT','REAL_AUTONOMOUS_PROFIT_HARVEST_MAX_USDT',
-  'REAL_AUTONOMOUS_PROFIT_HARVEST_EARN_PRODUCT','REAL_AUTONOMOUS_REENTRY_COOLDOWN_MIN'
+  'REAL_AUTONOMOUS_PROFIT_HARVEST_EARN_PRODUCT','REAL_AUTONOMOUS_REENTRY_COOLDOWN_MIN',
+  'REAL_AUTONOMOUS_AI_DECISIONS_ENABLED','REAL_AUTONOMOUS_AI_MAX_EVAL_PER_TICK','REAL_AUTONOMOUS_MT5_WATCHLIST'
 ];
 // Whitelist of non-secret tuning knobs whose user-config value must win over the
 // VPS process.env (so the operator can dial aggressiveness / learning behavior
@@ -246,7 +248,8 @@ const AUTONOMY_TUNING_FIELDS = [
   'TRAINING_BACKEND_DEMO_ENTRY_ALLOW_DEFENSIVE_SIGNAL','TRAINING_BACKEND_DEMO_ENTRY_ALLOW_BOOTSTRAP',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_ENABLED','REAL_AUTONOMOUS_TRADING_FLOAT_USDT',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_MIN_USDT','REAL_AUTONOMOUS_PROFIT_HARVEST_MAX_USDT',
-  'REAL_AUTONOMOUS_PROFIT_HARVEST_EARN_PRODUCT','REAL_AUTONOMOUS_REENTRY_COOLDOWN_MIN'
+  'REAL_AUTONOMOUS_PROFIT_HARVEST_EARN_PRODUCT','REAL_AUTONOMOUS_REENTRY_COOLDOWN_MIN',
+  'REAL_AUTONOMOUS_AI_DECISIONS_ENABLED','REAL_AUTONOMOUS_AI_MAX_EVAL_PER_TICK','REAL_AUTONOMOUS_MT5_WATCHLIST'
 ];
 const SENSITIVE_API_FIELDS = USER_API_FIELDS.filter((key) => /KEY|SECRET|PASSWORD|PASS/.test(key));
 const botStateStore = createJsonStore(backendStateFile, () => createDefaultBotState());
@@ -620,7 +623,8 @@ function createRealAutonomousRuntimeContext(baseEnv) {
       runProfitHarvest: () => runBinanceProfitHarvest(env),
       runProtectionSweep: () => runMt5ProtectionSweepForChannel('real', env),
       getRecentRealOpens: () => readRealAutonomousPairOpens(),
-      recordRealOpen: (venue, symbol, ts) => recordRealAutonomousPairOpen(venue, symbol, ts)
+      recordRealOpen: (venue, symbol, ts) => recordRealAutonomousPairOpen(venue, symbol, ts),
+      aiDecideTrade: (symbol, venue) => aiDecideTrade(symbol, venue, env, 'real')
     }
   };
 }
@@ -2627,6 +2631,63 @@ function modelRoute(env = ENV) {
   };
 }
 
+// Reusable single-shot model call (system+user -> text). Used by the AI trade
+// advisor so the same provider routing/keys as the chat power trade decisions.
+async function callModelText({ system, user }, env = ENV, options = {}) {
+  const route = modelRoute(env);
+  if (!route.apiKey) throw new Error('no_model_api_key');
+  const temperature = Number.isFinite(options.temperature) ? options.temperature : 0.2;
+  const maxTokens = Number.isFinite(options.maxTokens) ? options.maxTokens : 600;
+  if (route.provider === 'anthropic') {
+    const data = await requestJson('POST', `${route.base}/messages`, {
+      'x-api-key': route.apiKey, 'anthropic-version': '2023-06-01'
+    }, { model: route.model, system, messages: [{ role: 'user', content: String(user || '') }], temperature, max_tokens: maxTokens });
+    return Array.isArray(data.content)
+      ? data.content.filter((p) => p?.type === 'text' && p.text).map((p) => p.text).join('\n').trim()
+      : '';
+  }
+  const data = await requestJson('POST', `${route.base}/chat/completions`, { Authorization: `Bearer ${route.apiKey}` },
+    { model: route.model, messages: [{ role: 'system', content: system }, { role: 'user', content: String(user || '') }], temperature, max_tokens: maxTokens });
+  return data.choices?.[0]?.message?.content || '';
+}
+
+// Candles for a symbol/timeframe straight from the live bridge rates book.
+function bridgeCandles(env, symbol, timeframe, channel) {
+  const bridge = channel === 'real' ? readMt5RealBridgeStatus(env) : readMt5BridgeStatus(env);
+  const book = bridge?.rates;
+  const sym = book && (book[symbol] || book[String(symbol).toUpperCase()]);
+  const tf = sym && (sym[timeframe] || sym[String(timeframe).toUpperCase()]);
+  return Array.isArray(tf?.candles) ? tf.candles : [];
+}
+
+function aiTradeAdvisorDeps(env, channel = 'real') {
+  return {
+    callModel: (messages) => callModelText(messages, env),
+    getCandles: async (symbol, timeframe) => bridgeCandles(env, symbol, timeframe, channel),
+    getMarket: async (symbol) => {
+      const m15 = bridgeCandles(env, symbol, 'M15', channel);
+      const last = m15.length ? m15[m15.length - 1] : null;
+      const price = last ? Number(last.c ?? last.close) : null;
+      return { price, spread: null, brokerMinDistance: null, digits: 5 };
+    },
+    getNews: async () => {
+      if (!env.FINNHUB_API_KEY) return [];
+      try {
+        const data = await requestJson('GET', `https://finnhub.io/api/v1/news?${query({ category: 'forex', token: env.FINNHUB_API_KEY })}`);
+        return Array.isArray(data) ? data.slice(0, 8) : [];
+      } catch { return []; }
+    },
+    getFunds: async () => {
+      const bridge = channel === 'real' ? readMt5RealBridgeStatus(env) : readMt5BridgeStatus(env);
+      return { equity: Number(bridge?.equity ?? 0), balance: Number(bridge?.balance ?? 0), currency: bridge?.currency || 'USD' };
+    }
+  };
+}
+
+async function aiDecideTrade(symbol, venue = 'MT5', env = ENV, channel = 'real') {
+  return decideTrade({ symbol, venue, env, deps: aiTradeAdvisorDeps(env, channel), logger });
+}
+
 let webServer = null;
 let activeWebPort = Number(ENV.QUANT_WEB_PORT || 47829);
 function sendJson(res, value, status = 200) {
@@ -2762,6 +2823,7 @@ async function handleApi(req, res, url) {
         runProtectionSweep: () => runMt5ProtectionSweepForChannel('real', userEnv),
         getRecentRealOpens: () => readRealAutonomousPairOpens(),
         recordRealOpen: (venue, symbol, ts) => recordRealAutonomousPairOpen(venue, symbol, ts),
+        aiDecideTrade: (symbol, venue) => aiDecideTrade(symbol, venue, { ...userEnv, ...autonomyTuningOverrides() }, 'real'),
         getMt5MarketSession: (nowMs) => getMt5MarketSession(new Date(nowMs || Date.now())),
         testServiceStatus: (service) => testAllowedSystemServiceStatus(service),
         restartAllowedService: (service) => restartAllowedSystemService(service)

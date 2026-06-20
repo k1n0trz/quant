@@ -2583,7 +2583,7 @@ ${memory || 'Aún no hay memoria registrada.'}`;
         role: message.role === 'assistant' ? 'assistant' : 'user',
         content: String(message.content || '')
       })),
-      temperature: payload.temperature,
+      // Newer Claude models (opus-4.x) reject the temperature param; omit it.
       max_tokens: payload.max_tokens
     };
     const data = await requestJson('POST', `${route.base}/messages`, {
@@ -2639,9 +2639,10 @@ async function callModelText({ system, user }, env = ENV, options = {}) {
   const temperature = Number.isFinite(options.temperature) ? options.temperature : 0.2;
   const maxTokens = Number.isFinite(options.maxTokens) ? options.maxTokens : 600;
   if (route.provider === 'anthropic') {
+    // Newer Claude models reject the temperature param; omit it.
     const data = await requestJson('POST', `${route.base}/messages`, {
       'x-api-key': route.apiKey, 'anthropic-version': '2023-06-01'
-    }, { model: route.model, system, messages: [{ role: 'user', content: String(user || '') }], temperature, max_tokens: maxTokens });
+    }, { model: route.model, system, messages: [{ role: 'user', content: String(user || '') }], max_tokens: maxTokens });
     return Array.isArray(data.content)
       ? data.content.filter((p) => p?.type === 'text' && p.text).map((p) => p.text).join('\n').trim()
       : '';

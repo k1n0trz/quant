@@ -381,7 +381,41 @@ function setTf(tf) {
   refreshCandles({ force: true });
 }
 
+// ── Boot progress overlay: show the user what the app is loading ──────────────
+function bootProgress(pct, label) {
+  try {
+    let el = document.getElementById('quantBootOverlay');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'quantBootOverlay';
+      el.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(8,11,18,0.96);color:#cfe;font-family:system-ui,sans-serif;transition:opacity .4s';
+      el.innerHTML = '<div style="font-size:20px;font-weight:600;letter-spacing:.08em">QUANT</div>'
+        + '<div id="quantBootLabel" style="font-size:13px;opacity:.8">Iniciando…</div>'
+        + '<div style="width:min(420px,70vw);height:8px;background:#1b2433;border-radius:6px;overflow:hidden">'
+        + '<div id="quantBootBar" style="height:100%;width:0;background:linear-gradient(90deg,#2dd4bf,#3b82f6);border-radius:6px;transition:width .35s"></div></div>'
+        + '<div id="quantBootPct" style="font-size:11px;opacity:.6">0%</div>';
+      document.body.appendChild(el);
+    }
+    const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+    const bar = document.getElementById('quantBootBar');
+    const lab = document.getElementById('quantBootLabel');
+    const pctEl = document.getElementById('quantBootPct');
+    if (bar) bar.style.width = clamped + '%';
+    if (lab && label) lab.textContent = label;
+    if (pctEl) pctEl.textContent = clamped + '%';
+  } catch {}
+}
+function bootDone() {
+  try {
+    const el = document.getElementById('quantBootOverlay');
+    if (!el) return;
+    el.style.opacity = '0';
+    setTimeout(() => { try { el.remove(); } catch {} }, 450);
+  } catch {}
+}
+
 async function boot() {
+  bootProgress(5, 'Iniciando sistema…');
   // PHASE 1: Initialize new state management modules
   if (window.heroController) {
     window.heroController.init();
@@ -407,6 +441,7 @@ async function boot() {
     });
     logEvent('ERR', `No pude leer configuraciÃ³n: ${err.message}`);
   }
+  bootProgress(20, 'Configuración cargada');
   await loadApiConfig();
   // Boot cognitivo: restaura última conversación si existe; si no, silencio honesto.
   // Sin mensajes teatrales. Los insights reales llegarán por el canal de Quant-Core
@@ -433,16 +468,22 @@ async function boot() {
     });
     logEvent('ERR', `No pude leer configuración: ${err.message}`);
   }
+  bootProgress(40, 'Cargando símbolos y memoria…');
   await loadSymbols();
   await loadMemoryStats();
   window.quant.alertConfigRead().then((cfg) => { _alertConfig = cfg; }).catch(() => {});
   // Cargar calibración nocturna persistida
   window.quant.calibrationRead().then((cal) => { if (cal?.ok) state.nightCalibration = cal; }).catch(() => {});
+  bootProgress(60, 'Mercado, wallet y macro…');
   await Promise.allSettled([refreshMarket(true), refreshWallet(), refreshMacroContext(false)]);
+  bootProgress(78, 'Estado de training…');
   await loadTrainingState();
   await initTrainingMode(false);
+  bootProgress(90, 'Snapshot en vivo…');
   await loadTrainingLiveSnapshot(true);
   await runSelfAudit();
+  bootProgress(100, 'Listo');
+  bootDone();
 
   // ── Al arrancar: si training local está vacío, intenta traer datos del cloud ──
   if (window.quant.pullCloudData && state.env?.syncConfigured) {
@@ -5016,4 +5057,6 @@ document.addEventListener('submit', (event) => {
 
 window.addEventListener('resize', () => { drawChart(); drawGauge(64); drawPerf(); });
 window.addEventListener('beforeunload', () => { saveTrainingState(); });
-boot();
+// Safety: never leave the boot overlay stuck if a load step hangs/throws.
+setTimeout(() => { try { bootDone(); } catch {} }, 30000);
+boot().catch((e) => { try { console.error('boot failed', e); } catch {}; try { bootDone(); } catch {} });

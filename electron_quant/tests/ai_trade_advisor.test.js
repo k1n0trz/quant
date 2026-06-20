@@ -20,14 +20,16 @@ test('summarizeOutcomes computes win rate and flags a loss streak', () => {
   assert.equal(s.netPnl, -0.4);
 });
 
-test('advisor prompt warns the model about a loss streak so it learns', () => {
+test('advisor prompt frames history as a teacher, not a jailer (courage with criterion)', () => {
   const { user } = buildTradeDecisionMessages({
     symbol: 'USDJPY', venue: 'MT5', marketPrice: 156, minStopDistance: 0.2, funds: { equity: 37 },
     h1: summarizeCandles(rising(), 'H1'), m15: summarizeCandles(rising(), 'M15'), h4: { label: 'H4', available: false },
-    outcomes: summarizeOutcomes([{ pnl: -0.3 }, { pnl: -0.4 }, { pnl: -0.2 }])
+    outcomes: summarizeOutcomes([{ pnl: -0.3 }, { pnl: -0.4 }, { pnl: -0.2 }, { pnl: -0.5 }, { pnl: -0.1 }])
   });
-  assert.match(user, /historial reciente en USDJPY/);
-  assert.match(user, /perdidas seguidas/);
+  assert.match(user, /Historial en USDJPY/);
+  assert.match(user, /no es el mismo rio/, 'reframes old losses as a different, less-skilled strategy');
+  assert.match(user, /MANDATO de operarlo con conviccion/, 'grants courage to trade a strong setup');
+  assert.match(user, /nunca por miedo a un pasado que no es tuyo/);
 });
 
 test('decideTrade feeds recent outcomes to the model', async () => {
@@ -40,11 +42,11 @@ test('decideTrade feeds recent outcomes to the model', async () => {
       getNews: async () => [],
       getFunds: async () => ({ equity: 37 }),
       getRecentOutcomes: async () => [{ pnl: -0.5 }, { pnl: -0.6 }, { pnl: -0.4 }],
-      callModel: async (m) => { promptSeen = m.user; return '{"decision":"SKIP","side":"BUY","stopLossPrice":1.09,"takeProfitPrice":1.12,"confidence":20,"reasoning":"racha perdedora, evito"}'; }
+      callModel: async (m) => { promptSeen = m.user; return '{"decision":"OPEN","side":"BUY","stopLossPrice":1.0980,"takeProfitPrice":1.1040,"confidence":71,"reasoning":"setup fuerte pese al historial"}'; }
     }
   });
-  assert.equal(res.decision, 'SKIP');
-  assert.match(promptSeen, /perdidas seguidas/);
+  assert.equal(res.decision, 'OPEN', 'a strong setup can still trade a bad-history pair');
+  assert.match(promptSeen, /Historial en EURUSD/);
 });
 
 function rising(n = 30, start = 1.10, step = 0.001) {

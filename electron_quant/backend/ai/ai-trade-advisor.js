@@ -133,11 +133,11 @@ function buildTradeDecisionMessages(ctx = {}) {
     `  ${tf(m15)}`,
     news.length ? `Noticias recientes:\n  - ${newsHeadlines(news).join('\n  - ')}` : 'Noticias: sin titulares relevantes disponibles.',
     outcomes && outcomes.available
-      ? `Tu historial reciente en ${symbol}: ${outcomes.wins}G/${outcomes.losses}P (${outcomes.winRate}% aciertos), PnL neto ${outcomes.netPnl}, ultimas: [${outcomes.last.join(', ')}]${outcomes.lossStreak >= 3 ? `. ATENCION: ${outcomes.lossStreak} perdidas seguidas en este par, se MUY exigente o evita.` : ''}`
-      : `Sin historial reciente en ${symbol}.`,
+      ? `Historial en ${symbol}: ${outcomes.wins}G/${outcomes.losses}P (${outcomes.winRate}% aciertos), PnL neto ${outcomes.netPnl}, ultimas: [${outcomes.last.join(', ')}]. CONTEXTO CLAVE: buena parte de ese historial probablemente lo genero una estrategia ANTERIOR, mecanica y menos habil — NO eres la misma IA que perdio ahi (no es el mismo rio). Usalo para entender QUE fallo (malas entradas, sobre-extension, contexto), no como prohibicion. Si AHORA ves un setup genuinamente fuerte, tienes el MANDATO de operarlo con conviccion y maestria; la valentia con criterio es tu trabajo.${outcomes.lossStreak >= 4 ? ` (Hay ${outcomes.lossStreak} perdidas recientes seguidas: exige mayor calidad de setup, pero uno excelente SI justifica entrar.)` : ''}`
+      : `Sin historial reciente en ${symbol}: decide por el merito tecnico actual.`,
     spotOnly ? 'IMPORTANTE: esto es SPOT (solo se puede COMPRAR). Si decides OPEN, side DEBE ser BUY. Si no hay un setup alcista claro, responde SKIP.' : '',
     '',
-    'Decide si abrir una operacion AHORA. Considera: tu historial reciente en el par (aprende de tus perdidas), alineacion de tendencia entre timeframes, si el precio no esta sobre-extendido, si hay noticia de alto impacto que aconseje esperar, y un ratio riesgo/beneficio de al menos 1:1.5.',
+    'Decide si abrir una operacion AHORA. Aprende de las perdidas pero NO te paralices por ellas: un setup fuerte justifica operar incluso un par con mal historial previo. Considera: alineacion de tendencia entre timeframes, si el precio no esta sobre-extendido, noticia de alto impacto, y ratio riesgo/beneficio de al menos 1:1.5. Evita SOLO si el setup ACTUAL es debil — nunca por miedo a un pasado que no es tuyo.',
     'Responde con este JSON exacto:',
     '{"decision":"OPEN|SKIP","side":"BUY|SELL","stopLossPrice":number,"takeProfitPrice":number,"confidence":0-100,"reasoning":"una frase corta en espanol"}',
     'Si decision es SKIP, igual incluye side/SL/TP con tu mejor estimado pero NO se ejecutara. Reasoning siempre obligatorio.'

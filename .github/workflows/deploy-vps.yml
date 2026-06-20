@@ -109,6 +109,8 @@ jobs:
             if [ -d /var/lib/quant ]; then
               tar -czf "/var/backups/quant/data-$(date +%Y%m%d-%H%M%S).tar.gz" /var/lib/quant 2>/dev/null || true
             fi
+            # Keep only the 3 most recent backups so they never fill the disk.
+            ls -1t /var/backups/quant/data-*.tar.gz 2>/dev/null | tail -n +4 | xargs -r rm -f || true
 
             git fetch --tags origin
             git checkout "$TARGET_SHA"

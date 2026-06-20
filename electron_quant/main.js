@@ -234,7 +234,7 @@ const USER_API_FIELDS = [
   'REAL_AUTONOMOUS_PROFIT_HARVEST_ENABLED','REAL_AUTONOMOUS_TRADING_FLOAT_USDT',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_MIN_USDT','REAL_AUTONOMOUS_PROFIT_HARVEST_MAX_USDT',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_EARN_PRODUCT','REAL_AUTONOMOUS_REENTRY_COOLDOWN_MIN',
-  'REAL_AUTONOMOUS_AI_DECISIONS_ENABLED','REAL_AUTONOMOUS_AI_MAX_EVAL_PER_TICK','REAL_AUTONOMOUS_MT5_WATCHLIST'
+  'REAL_AUTONOMOUS_AI_DECISIONS_ENABLED','REAL_AUTONOMOUS_AI_MAX_EVAL_PER_TICK','REAL_AUTONOMOUS_MT5_WATCHLIST','REAL_AUTONOMOUS_AI_MODEL'
 ];
 // Whitelist of non-secret tuning knobs whose user-config value must win over the
 // VPS process.env (so the operator can dial aggressiveness / learning behavior
@@ -249,7 +249,7 @@ const AUTONOMY_TUNING_FIELDS = [
   'REAL_AUTONOMOUS_PROFIT_HARVEST_ENABLED','REAL_AUTONOMOUS_TRADING_FLOAT_USDT',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_MIN_USDT','REAL_AUTONOMOUS_PROFIT_HARVEST_MAX_USDT',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_EARN_PRODUCT','REAL_AUTONOMOUS_REENTRY_COOLDOWN_MIN',
-  'REAL_AUTONOMOUS_AI_DECISIONS_ENABLED','REAL_AUTONOMOUS_AI_MAX_EVAL_PER_TICK','REAL_AUTONOMOUS_MT5_WATCHLIST'
+  'REAL_AUTONOMOUS_AI_DECISIONS_ENABLED','REAL_AUTONOMOUS_AI_MAX_EVAL_PER_TICK','REAL_AUTONOMOUS_MT5_WATCHLIST','REAL_AUTONOMOUS_AI_MODEL'
 ];
 const SENSITIVE_API_FIELDS = USER_API_FIELDS.filter((key) => /KEY|SECRET|PASSWORD|PASS/.test(key));
 const botStateStore = createJsonStore(backendStateFile, () => createDefaultBotState());
@@ -2638,17 +2638,18 @@ async function callModelText({ system, user }, env = ENV, options = {}) {
   if (!route.apiKey) throw new Error('no_model_api_key');
   const temperature = Number.isFinite(options.temperature) ? options.temperature : 0.2;
   const maxTokens = Number.isFinite(options.maxTokens) ? options.maxTokens : 600;
+  const model = options.model || route.model;
   if (route.provider === 'anthropic') {
     // Newer Claude models reject the temperature param; omit it.
     const data = await requestJson('POST', `${route.base}/messages`, {
       'x-api-key': route.apiKey, 'anthropic-version': '2023-06-01'
-    }, { model: route.model, system, messages: [{ role: 'user', content: String(user || '') }], max_tokens: maxTokens });
+    }, { model, system, messages: [{ role: 'user', content: String(user || '') }], max_tokens: maxTokens });
     return Array.isArray(data.content)
       ? data.content.filter((p) => p?.type === 'text' && p.text).map((p) => p.text).join('\n').trim()
       : '';
   }
   const data = await requestJson('POST', `${route.base}/chat/completions`, { Authorization: `Bearer ${route.apiKey}` },
-    { model: route.model, messages: [{ role: 'system', content: system }, { role: 'user', content: String(user || '') }], temperature, max_tokens: maxTokens });
+    { model, messages: [{ role: 'system', content: system }, { role: 'user', content: String(user || '') }], temperature, max_tokens: maxTokens });
   return data.choices?.[0]?.message?.content || '';
 }
 
@@ -2662,8 +2663,11 @@ function bridgeCandles(env, symbol, timeframe, channel) {
 }
 
 function aiTradeAdvisorDeps(env, channel = 'real') {
+  // Trade decisions run often; default to a cheaper-but-capable model (Sonnet)
+  // unless overridden. The chat keeps using DEFAULT_PROVIDER's model.
+  const advisorModel = env.REAL_AUTONOMOUS_AI_MODEL || 'claude-sonnet-4-6';
   return {
-    callModel: (messages) => callModelText(messages, env),
+    callModel: (messages) => callModelText(messages, env, { model: advisorModel }),
     getCandles: async (symbol, timeframe) => bridgeCandles(env, symbol, timeframe, channel),
     getMarket: async (symbol) => {
       const m15 = bridgeCandles(env, symbol, 'M15', channel);

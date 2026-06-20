@@ -63,6 +63,7 @@ const { buildLiveTelemetry, renderLiveTelemetryBlock } = require('./backend/chat
 const { buildTrainingBotsStatus } = require('./backend/training/bot-registry-service');
 const { generateDerivedBot } = require('./backend/training/bot-generation-service');
 const { compileGeneratedBot } = require('./backend/training/bot-compile-service');
+const { runBotLifecycle } = require('./backend/training/bot-lifecycle-service');
 const {
   runSystemSelfAudit,
   writeSystemSelfAuditStatus,
@@ -77,6 +78,7 @@ let timeOffsetMs = 0;
 let trainingLoopAutoStartAttempted = false;
 let systemSelfAuditAutoStartAttempted = false;
 let realAutonomousAutoStartAttempted = false;
+let botLifecycleAutoStartAttempted = false;
 const logger = createLogger(IS_ELECTRON ? 'quant-desktop' : 'quant-backend');
 const DEFAULT_VPS_PUBLIC_IP = '37.60.227.190';
 const CLOUD_ENV_KEYS = [
@@ -2662,46 +2664,101 @@ function bridgeCandles(env, symbol, timeframe, channel) {
   return Array.isArray(tf?.candles) ? tf.candles : [];
 }
 
-function aiTradeAdvisorDeps(env, channel = 'real') {
+const BINANCE_TF_MAP = { M15: '15m', H1: '1h', H4: '4h', M5: '5m', M1: '1m', D1: '1d' };
+
+function recentTradeOutcomes(symbol) {
+  try {
+    const state = readTrainingState();
+    const target = String(symbol || '').toUpperCase();
+    const closed = Array.isArray(state?.closedTrades) ? state.closedTrades : [];
+    return closed
+      .filter((t) => String(t.symbol || '').toUpperCase() === target)
+      .slice(-12)
+      .map((t) => ({ pnl: t.pnl_demo ?? t.pnl ?? t.profit, ts: t.closed_timestamp || t.closed_at || t.timestamp }));
+  } catch { return []; }
+}
+
+function aiTradeAdvisorDeps(env, channel = 'real', venue = 'MT5') {
   // Trade decisions run often; default to a cheaper-but-capable model (Sonnet)
   // unless overridden. The chat keeps using DEFAULT_PROVIDER's model.
   const advisorModel = env.REAL_AUTONOMOUS_AI_MODEL || 'claude-sonnet-4-6';
+  const isBinance = String(venue || '').toUpperCase() === 'BINANCE';
   return {
     callModel: (messages) => callModelText(messages, env, { model: advisorModel }),
-    getCandles: async (symbol, timeframe) => bridgeCandles(env, symbol, timeframe, channel),
+    getCandles: async (symbol, timeframe) => {
+      if (!isBinance) return bridgeCandles(env, symbol, timeframe, channel);
+      try { return await klines(symbol, BINANCE_TF_MAP[timeframe] || '1h', 80); } catch { return []; }
+    },
     getMarket: async (symbol) => {
+      if (isBinance) {
+        try {
+          const t = await ticker(symbol);
+          const price = Number(t?.price ?? t?.lastPrice ?? t);
+          return { price: Number.isFinite(price) ? price : null, spread: null, brokerMinDistance: null, digits: 8 };
+        } catch { return { price: null }; }
+      }
       const m15 = bridgeCandles(env, symbol, 'M15', channel);
       const last = m15.length ? m15[m15.length - 1] : null;
-      const price = last ? Number(last.c ?? last.close) : null;
-      return { price, spread: null, brokerMinDistance: null, digits: 5 };
+      return { price: last ? Number(last.c ?? last.close) : null, spread: null, brokerMinDistance: null, digits: 5 };
     },
     getNews: async () => {
-      if (!env.FINNHUB_API_KEY) return [];
       try {
+        if (isBinance) return (await fetchFinnhubCrypto(env)).slice(0, 8);
+        if (!env.FINNHUB_API_KEY) return [];
         const data = await requestJson('GET', `https://finnhub.io/api/v1/news?${query({ category: 'forex', token: env.FINNHUB_API_KEY })}`);
         return Array.isArray(data) ? data.slice(0, 8) : [];
       } catch { return []; }
     },
     getFunds: async () => {
+      if (isBinance) {
+        try {
+          const bal = await getBinanceSpotBalance('USDT', env);
+          const free = Number(bal?.free ?? bal?.available ?? 0);
+          return { equity: free, balance: free, currency: 'USDT' };
+        } catch { return { equity: 0, balance: 0, currency: 'USDT' }; }
+      }
       const bridge = channel === 'real' ? readMt5RealBridgeStatus(env) : readMt5BridgeStatus(env);
       return { equity: Number(bridge?.equity ?? 0), balance: Number(bridge?.balance ?? 0), currency: bridge?.currency || 'USD' };
     },
-    getRecentOutcomes: async (symbol) => {
-      try {
-        const state = readTrainingState();
-        const target = String(symbol || '').toUpperCase();
-        const closed = Array.isArray(state?.closedTrades) ? state.closedTrades : [];
-        return closed
-          .filter((t) => String(t.symbol || '').toUpperCase() === target)
-          .slice(-12)
-          .map((t) => ({ pnl: t.pnl_demo ?? t.pnl ?? t.profit, ts: t.closed_timestamp || t.closed_at || t.timestamp }));
-      } catch { return []; }
-    }
+    getRecentOutcomes: async (symbol) => recentTradeOutcomes(symbol)
   };
 }
 
 async function aiDecideTrade(symbol, venue = 'MT5', env = ENV, channel = 'real') {
-  return decideTrade({ symbol, venue, env, deps: aiTradeAdvisorDeps(env, channel), logger });
+  return decideTrade({ symbol, venue, env, deps: aiTradeAdvisorDeps(env, channel, venue), logger });
+}
+
+function botWatchlist(env = ENV) {
+  return String(env.REAL_AUTONOMOUS_MT5_WATCHLIST
+    || 'EURUSD,GBPUSD,USDJPY,AUDUSD,USDCAD,NZDUSD,USDCHF,XAUUSD,EURJPY,AUDCAD')
+    .split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+}
+
+async function runBotLifecycleNow(env = ENV) {
+  return runBotLifecycle({
+    watchlist: botWatchlist(env),
+    env,
+    logger,
+    deps: {
+      listBotSymbols: async () => {
+        try {
+          const status = buildTrainingBotsStatus({ state: readTrainingState() || {}, templatesRoot: botsSeedRoot, generatedRoots: [botsGeneratedRoot] });
+          return (status.trainingBots || [])
+            .filter((b) => b.templateRole === 'generated')
+            .map((b) => String(b.symbol || '').toUpperCase());
+        } catch { return []; }
+      },
+      getOutcomes: async (symbol) => recentTradeOutcomes(symbol),
+      generateBot: async (symbol) => generateDerivedBot({ symbol, venue: 'MT5', seedDir: path.join(botsSeedRoot, 'EdiLearningBot_XAUUSD'), outputRoot: botsGeneratedRoot }),
+      removeBot: async (symbol) => {
+        try {
+          const dir = path.join(botsGeneratedRoot, `QuantAutoBot_${String(symbol).toUpperCase()}`);
+          fs.rmSync(dir, { recursive: true, force: true });
+          return { ok: true };
+        } catch (error) { return { ok: false, error: error.message }; }
+      }
+    }
+  });
 }
 
 let webServer = null;
@@ -2905,7 +2962,8 @@ async function handleApi(req, res, url) {
     if (url.pathname === '/api/ai-trade-decision') {
       const symbol = String(q.symbol || 'EURUSD').trim().toUpperCase().replace(/[^A-Z0-9.]/g, '') || 'EURUSD';
       const channel = q.channel === 'demo' ? 'demo' : 'real';
-      return sendJson(res, await aiDecideTrade(symbol, 'MT5', { ...userEnv, ...autonomyTuningOverrides() }, channel));
+      const venue = String(q.venue || 'MT5').trim().toUpperCase() === 'BINANCE' ? 'BINANCE' : 'MT5';
+      return sendJson(res, await aiDecideTrade(symbol, venue, { ...userEnv, ...autonomyTuningOverrides() }, channel));
     }
     if (url.pathname === '/api/mt5-demo-order' && req.method === 'POST') return sendJson(res, await placeMt5DemoOrder(body, { env: userEnv }));
     if (url.pathname === '/api/mt5-demo-close' && req.method === 'POST') return sendJson(res, await closeMt5DemoPosition(body, { env: userEnv }));
@@ -2931,6 +2989,11 @@ async function handleApi(req, res, url) {
       } else {
         logger.warn('bots.generate.failed', { symbol: body.symbol, reason: result.reason });
       }
+      return sendJson(res, result);
+    }
+    if (url.pathname === '/api/bots-lifecycle' && req.method === 'POST') {
+      const result = await runBotLifecycleNow({ ...userEnv, ...autonomyTuningOverrides() });
+      if (result.ran) logger.info('bots.lifecycle.manual', { created: result.created, pruned: result.prunedCount });
       return sendJson(res, result);
     }
     if (url.pathname === '/api/bots-compile' && req.method === 'POST') {
@@ -3646,6 +3709,15 @@ function startLocalWebServer() {
             logger.error('real.autonomous.startup_failed', { message: String(error?.message || error) });
           });
         }
+      }
+      if (!botLifecycleAutoStartAttempted) {
+        botLifecycleAutoStartAttempted = true;
+        const lifecycleEnv = () => ({ ...effectiveEnvForUser(WEB_AUTH_EMAIL), ...process.env, ...autonomyTuningOverrides() });
+        const tick = () => runBotLifecycleNow(lifecycleEnv())
+          .then((r) => { if (r?.ran) logger.info('bots.lifecycle.auto', { created: r.created, pruned: r.prunedCount, kept: r.keptCount }); })
+          .catch((error) => logger.warn('bots.lifecycle.auto.failed', { error: String(error?.message || error) }));
+        setTimeout(tick, 60000);                 // shortly after boot
+        setInterval(tick, 6 * 3600 * 1000);      // and every 6h: create/keep/prune the fleet
       }
     });
   };

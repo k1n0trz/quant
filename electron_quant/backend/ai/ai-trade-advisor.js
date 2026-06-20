@@ -110,7 +110,7 @@ function resolveMinStopDistance({ atr, brokerMinDistance, marketPrice }) {
 function buildTradeDecisionMessages(ctx = {}) {
   const {
     symbol, venue, marketPrice, spread, funds = {}, minStopDistance,
-    h1, m15, h4, news = [], maxRiskUsd, outcomes
+    h1, m15, h4, news = [], maxRiskUsd, outcomes, spotOnly
   } = ctx;
   const system = [
     'Eres el cerebro de trading de Quant: un analista cuantitativo que decide operaciones reales con dinero real.',
@@ -135,6 +135,7 @@ function buildTradeDecisionMessages(ctx = {}) {
     outcomes && outcomes.available
       ? `Tu historial reciente en ${symbol}: ${outcomes.wins}G/${outcomes.losses}P (${outcomes.winRate}% aciertos), PnL neto ${outcomes.netPnl}, ultimas: [${outcomes.last.join(', ')}]${outcomes.lossStreak >= 3 ? `. ATENCION: ${outcomes.lossStreak} perdidas seguidas en este par, se MUY exigente o evita.` : ''}`
       : `Sin historial reciente en ${symbol}.`,
+    spotOnly ? 'IMPORTANTE: esto es SPOT (solo se puede COMPRAR). Si decides OPEN, side DEBE ser BUY. Si no hay un setup alcista claro, responde SKIP.' : '',
     '',
     'Decide si abrir una operacion AHORA. Considera: tu historial reciente en el par (aprende de tus perdidas), alineacion de tendencia entre timeframes, si el precio no esta sobre-extendido, si hay noticia de alto impacto que aconseje esperar, y un ratio riesgo/beneficio de al menos 1:1.5.',
     'Responde con este JSON exacto:',
@@ -194,6 +195,7 @@ function validateAndClampDecision(decision, { marketPrice, minStopDistance, digi
 //   deps.getMarket(symbol) -> { price, spread, brokerMinDistance, digits }
 //   deps.callModel({system,user}) -> string
 async function decideTrade({ symbol, venue = 'MT5', deps = {}, env = {}, logger = null } = {}) {
+  const spotOnly = String(venue || '').toUpperCase() === 'BINANCE';
   if (typeof deps.callModel !== 'function' || typeof deps.getCandles !== 'function' || typeof deps.getMarket !== 'function') {
     return { ok: false, executed: false, reason: 'advisor_deps_missing' };
   }
@@ -222,7 +224,7 @@ async function decideTrade({ symbol, venue = 'MT5', deps = {}, env = {}, logger 
     : null;
 
   const messages = buildTradeDecisionMessages({
-    symbol, venue, marketPrice, spread: market?.spread, funds, minStopDistance, maxRiskUsd, news, outcomes,
+    symbol, venue, marketPrice, spread: market?.spread, funds, minStopDistance, maxRiskUsd, news, outcomes, spotOnly,
     h4: summarizeCandles(h4, 'H4'), h1: sumH1, m15: summarizeCandles(m15, 'M15')
   });
 
@@ -235,6 +237,10 @@ async function decideTrade({ symbol, venue = 'MT5', deps = {}, env = {}, logger 
   if (parsed.decision === 'SKIP') {
     if (logger?.info) logger.info('ai.trade.skip', { symbol, reason: parsed.reasoning });
     return { ok: true, executed: false, decision: 'SKIP', symbol, confidence: parsed.confidence, reasoning: parsed.reasoning };
+  }
+  if (spotOnly && parsed.side === 'SELL') {
+    // Cannot short spot; an OPEN-SELL verdict becomes a SKIP.
+    return { ok: true, executed: false, decision: 'SKIP', symbol, confidence: parsed.confidence, reasoning: `spot solo compra; ${parsed.reasoning}` };
   }
   const clamped = validateAndClampDecision(parsed, { marketPrice, minStopDistance, digits: finiteNumber(market?.digits) || 5 });
   if (!clamped.ok) return { ok: false, executed: false, reason: clamped.reason, symbol };

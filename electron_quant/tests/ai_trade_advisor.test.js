@@ -150,6 +150,37 @@ test('decideTrade: model SKIP is honored (no execution)', async () => {
   assert.match(res.reasoning, /espero/);
 });
 
+test('decideTrade on BINANCE is spot-only: an OPEN-SELL becomes SKIP', async () => {
+  const res = await decideTrade({
+    symbol: 'BTCUSDT', venue: 'BINANCE',
+    deps: {
+      getMarket: async () => ({ price: 64000, digits: 2 }),
+      getCandles: async () => rising(30, 64000, 50),
+      getNews: async () => [],
+      getFunds: async () => ({ equity: 11.7, currency: 'USDT' }),
+      callModel: async () => '{"decision":"OPEN","side":"SELL","stopLossPrice":65000,"takeProfitPrice":62000,"confidence":60,"reasoning":"bajista"}'
+    }
+  });
+  assert.equal(res.decision, 'SKIP', 'cannot short spot');
+  assert.match(res.reasoning, /spot solo compra/);
+});
+
+test('decideTrade on BINANCE allows a BUY', async () => {
+  const res = await decideTrade({
+    symbol: 'ETHUSDT', venue: 'BINANCE',
+    deps: {
+      getMarket: async () => ({ price: 3000, digits: 2 }),
+      getCandles: async () => rising(30, 3000, 5),
+      getNews: async () => [],
+      getFunds: async () => ({ equity: 11.7, currency: 'USDT' }),
+      callModel: async () => '{"decision":"OPEN","side":"BUY","stopLossPrice":2950,"takeProfitPrice":3120,"confidence":66,"reasoning":"alza con volumen"}'
+    }
+  });
+  assert.equal(res.decision, 'OPEN');
+  assert.equal(res.side, 'BUY');
+  assert.ok(res.stopLoss < res.entryPrice && res.takeProfit > res.entryPrice);
+});
+
 test('decideTrade blocks when no market price is available', async () => {
   const res = await decideTrade({
     symbol: 'EURUSD',

@@ -658,6 +658,23 @@ async function executeCandidate(candidate, context) {
       takeProfit: candidate.takeProfit,
       reason: 'real-autonomous-scheduler'
     };
+    // AI decides Binance spot BUYs too (full power over Binance, 24/7 incl. when
+    // MT5 is closed). It can only BUY on spot; SKIP otherwise. Its SL/TP feed OCO.
+    if (boolFlag((context.env || {}).REAL_AUTONOMOUS_AI_DECISIONS_ENABLED) && typeof deps.aiDecideTrade === 'function') {
+      let decision = null;
+      try { decision = await deps.aiDecideTrade(candidate.symbol, 'BINANCE'); }
+      catch (error) { return { ok: false, status: 'blocked', reason: 'ai_decision_error', error: String(error?.message || error), candidate, input }; }
+      if (!decision || decision.ok !== true) {
+        return { ok: false, status: 'blocked', reason: decision?.reason || 'ai_decision_unavailable', candidate, input };
+      }
+      if (decision.decision !== 'OPEN' || decision.side !== 'BUY') {
+        return { ok: false, status: 'ai_skip', reason: 'ai_skip', aiReasoning: decision.reasoning, aiConfidence: decision.confidence, candidate, input };
+      }
+      input.stopLoss = decision.stopLoss;
+      input.takeProfit = decision.takeProfit;
+      input.aiReasoning = decision.reasoning;
+      input.aiConfidence = decision.confidence;
+    }
     const result = await deps.executeBinanceRealOrder({
       input,
       env: context.env || {},

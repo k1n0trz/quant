@@ -3,12 +3,49 @@ const assert = require('node:assert/strict');
 
 const {
   summarizeCandles,
+  summarizeOutcomes,
   parseTradeDecision,
   validateAndClampDecision,
   resolveMinStopDistance,
   buildTradeDecisionMessages,
   decideTrade
 } = require('../backend/ai/ai-trade-advisor');
+
+test('summarizeOutcomes computes win rate and flags a loss streak', () => {
+  const s = summarizeOutcomes([{ pnl: 1.2 }, { pnl: -0.5 }, { pnl: -0.3 }, { pnl: -0.8 }]);
+  assert.equal(s.available, true);
+  assert.equal(s.wins, 1);
+  assert.equal(s.losses, 3);
+  assert.equal(s.lossStreak, 3, 'trailing losses counted');
+  assert.equal(s.netPnl, -0.4);
+});
+
+test('advisor prompt warns the model about a loss streak so it learns', () => {
+  const { user } = buildTradeDecisionMessages({
+    symbol: 'USDJPY', venue: 'MT5', marketPrice: 156, minStopDistance: 0.2, funds: { equity: 37 },
+    h1: summarizeCandles(rising(), 'H1'), m15: summarizeCandles(rising(), 'M15'), h4: { label: 'H4', available: false },
+    outcomes: summarizeOutcomes([{ pnl: -0.3 }, { pnl: -0.4 }, { pnl: -0.2 }])
+  });
+  assert.match(user, /historial reciente en USDJPY/);
+  assert.match(user, /perdidas seguidas/);
+});
+
+test('decideTrade feeds recent outcomes to the model', async () => {
+  let promptSeen = '';
+  const res = await decideTrade({
+    symbol: 'EURUSD',
+    deps: {
+      getMarket: async () => ({ price: 1.10, digits: 5 }),
+      getCandles: async () => rising(),
+      getNews: async () => [],
+      getFunds: async () => ({ equity: 37 }),
+      getRecentOutcomes: async () => [{ pnl: -0.5 }, { pnl: -0.6 }, { pnl: -0.4 }],
+      callModel: async (m) => { promptSeen = m.user; return '{"decision":"SKIP","side":"BUY","stopLossPrice":1.09,"takeProfitPrice":1.12,"confidence":20,"reasoning":"racha perdedora, evito"}'; }
+    }
+  });
+  assert.equal(res.decision, 'SKIP');
+  assert.match(promptSeen, /perdidas seguidas/);
+});
 
 function rising(n = 30, start = 1.10, step = 0.001) {
   return Array.from({ length: n }, (_, i) => {

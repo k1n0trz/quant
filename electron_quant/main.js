@@ -2685,6 +2685,17 @@ function aiTradeAdvisorDeps(env, channel = 'real') {
     getFunds: async () => {
       const bridge = channel === 'real' ? readMt5RealBridgeStatus(env) : readMt5BridgeStatus(env);
       return { equity: Number(bridge?.equity ?? 0), balance: Number(bridge?.balance ?? 0), currency: bridge?.currency || 'USD' };
+    },
+    getRecentOutcomes: async (symbol) => {
+      try {
+        const state = readTrainingState();
+        const target = String(symbol || '').toUpperCase();
+        const closed = Array.isArray(state?.closedTrades) ? state.closedTrades : [];
+        return closed
+          .filter((t) => String(t.symbol || '').toUpperCase() === target)
+          .slice(-12)
+          .map((t) => ({ pnl: t.pnl_demo ?? t.pnl ?? t.profit, ts: t.closed_timestamp || t.closed_at || t.timestamp }));
+      } catch { return []; }
     }
   };
 }

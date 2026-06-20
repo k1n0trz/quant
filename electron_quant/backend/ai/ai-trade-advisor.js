@@ -64,6 +64,32 @@ function summarizeCandles(candles = [], label = '') {
   };
 }
 
+// Summarize recent trade outcomes on a pair so the AI LEARNS from its history
+// (stops repeating losers) instead of deciding each trade in a vacuum.
+function summarizeOutcomes(trades = []) {
+  const rows = (Array.isArray(trades) ? trades : [])
+    .map((t) => ({ pnl: finiteNumber(t.pnl, t.pnl_demo, t.profit, t.netPnl), ts: t.ts || t.closed_timestamp || t.closed_at || null }))
+    .filter((t) => t.pnl !== null);
+  if (!rows.length) return { available: false, count: 0 };
+  const wins = rows.filter((r) => r.pnl > 0).length;
+  const losses = rows.filter((r) => r.pnl < 0).length;
+  const net = rows.reduce((a, b) => a + b.pnl, 0);
+  const last = rows.slice(-8).map((r) => Number(r.pnl.toFixed(2)));
+  // consecutive losses at the tail = warning to be cautious
+  let streak = 0;
+  for (let i = rows.length - 1; i >= 0; i--) { if (rows[i].pnl < 0) streak++; else break; }
+  return {
+    available: true,
+    count: rows.length,
+    wins,
+    losses,
+    winRate: rows.length ? Number(((wins / rows.length) * 100).toFixed(0)) : 0,
+    netPnl: Number(net.toFixed(2)),
+    lossStreak: streak,
+    last
+  };
+}
+
 function newsHeadlines(news = [], max = 6) {
   return (Array.isArray(news) ? news : [])
     .map((n) => (typeof n === 'string' ? n : (n.headline || n.title || n.summary || '')))
@@ -84,7 +110,7 @@ function resolveMinStopDistance({ atr, brokerMinDistance, marketPrice }) {
 function buildTradeDecisionMessages(ctx = {}) {
   const {
     symbol, venue, marketPrice, spread, funds = {}, minStopDistance,
-    h1, m15, h4, news = [], maxRiskUsd
+    h1, m15, h4, news = [], maxRiskUsd, outcomes
   } = ctx;
   const system = [
     'Eres el cerebro de trading de Quant: un analista cuantitativo que decide operaciones reales con dinero real.',
@@ -106,8 +132,11 @@ function buildTradeDecisionMessages(ctx = {}) {
     `  ${tf(h1)}`,
     `  ${tf(m15)}`,
     news.length ? `Noticias recientes:\n  - ${newsHeadlines(news).join('\n  - ')}` : 'Noticias: sin titulares relevantes disponibles.',
+    outcomes && outcomes.available
+      ? `Tu historial reciente en ${symbol}: ${outcomes.wins}G/${outcomes.losses}P (${outcomes.winRate}% aciertos), PnL neto ${outcomes.netPnl}, ultimas: [${outcomes.last.join(', ')}]${outcomes.lossStreak >= 3 ? `. ATENCION: ${outcomes.lossStreak} perdidas seguidas en este par, se MUY exigente o evita.` : ''}`
+      : `Sin historial reciente en ${symbol}.`,
     '',
-    'Decide si abrir una operacion AHORA. Considera: alineacion de tendencia entre timeframes, si el precio no esta sobre-extendido, si hay noticia de alto impacto que aconseje esperar, y un ratio riesgo/beneficio de al menos 1:1.5.',
+    'Decide si abrir una operacion AHORA. Considera: tu historial reciente en el par (aprende de tus perdidas), alineacion de tendencia entre timeframes, si el precio no esta sobre-extendido, si hay noticia de alto impacto que aconseje esperar, y un ratio riesgo/beneficio de al menos 1:1.5.',
     'Responde con este JSON exacto:',
     '{"decision":"OPEN|SKIP","side":"BUY|SELL","stopLossPrice":number,"takeProfitPrice":number,"confidence":0-100,"reasoning":"una frase corta en espanol"}',
     'Si decision es SKIP, igual incluye side/SL/TP con tu mejor estimado pero NO se ejecutara. Reasoning siempre obligatorio.'
@@ -185,12 +214,15 @@ async function decideTrade({ symbol, venue = 'MT5', deps = {}, env = {}, logger 
   });
   const news = typeof deps.getNews === 'function' ? await deps.getNews(symbol).catch(() => []) : [];
   const funds = typeof deps.getFunds === 'function' ? (await deps.getFunds().catch(() => ({})) || {}) : {};
+  const outcomes = typeof deps.getRecentOutcomes === 'function'
+    ? summarizeOutcomes(await deps.getRecentOutcomes(symbol).catch(() => []))
+    : { available: false };
   const maxRiskUsd = finiteNumber(env.MT5_REAL_RISK_PER_TRADE_PCT) && funds.equity
     ? round((Number(funds.equity) * Number(env.MT5_REAL_RISK_PER_TRADE_PCT)) / 100, 2)
     : null;
 
   const messages = buildTradeDecisionMessages({
-    symbol, venue, marketPrice, spread: market?.spread, funds, minStopDistance, maxRiskUsd, news,
+    symbol, venue, marketPrice, spread: market?.spread, funds, minStopDistance, maxRiskUsd, news, outcomes,
     h4: summarizeCandles(h4, 'H4'), h1: sumH1, m15: summarizeCandles(m15, 'M15')
   });
 
@@ -224,6 +256,7 @@ async function decideTrade({ symbol, venue = 'MT5', deps = {}, env = {}, logger 
 
 module.exports = {
   summarizeCandles,
+  summarizeOutcomes,
   buildTradeDecisionMessages,
   parseTradeDecision,
   validateAndClampDecision,

@@ -2886,6 +2886,11 @@ async function handleApi(req, res, url) {
       const channel = body.channel === 'real' ? 'real' : 'demo';
       return sendJson(res, await runMt5ProtectionSweepForChannel(channel, userEnv));
     }
+    if (url.pathname === '/api/ai-trade-decision') {
+      const symbol = String(q.symbol || 'EURUSD').trim().toUpperCase().replace(/[^A-Z0-9.]/g, '') || 'EURUSD';
+      const channel = q.channel === 'demo' ? 'demo' : 'real';
+      return sendJson(res, await aiDecideTrade(symbol, 'MT5', { ...userEnv, ...autonomyTuningOverrides() }, channel));
+    }
     if (url.pathname === '/api/mt5-demo-order' && req.method === 'POST') return sendJson(res, await placeMt5DemoOrder(body, { env: userEnv }));
     if (url.pathname === '/api/mt5-demo-close' && req.method === 'POST') return sendJson(res, await closeMt5DemoPosition(body, { env: userEnv }));
     if (url.pathname === '/api/bots-status') {

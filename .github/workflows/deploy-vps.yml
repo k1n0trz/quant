@@ -113,6 +113,8 @@ jobs:
             ls -1t /var/backups/quant/data-*.tar.gz 2>/dev/null | tail -n +4 | xargs -r rm -f || true
 
             git fetch --tags origin
+            # Discard any stray local changes so the checkout never aborts.
+            git checkout -- . 2>/dev/null || true
             git checkout "$TARGET_SHA"
 
             cd "$APP_SUBDIR"

@@ -927,7 +927,68 @@ select:hover, input:hover, select:focus, input:focus {
   margin: 4px 0;
   line-height: 1.4;
 }
-.chat-input-row { display: grid; grid-template-columns: 1fr auto; gap: 10px; margin-top: 8px; }
+.chat-input-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; margin-top: 8px; align-items: end; }
+#chatInput {
+  resize: none;
+  min-height: 40px;
+  max-height: 160px;
+  line-height: 1.45;
+  font-family: var(--font-sans, inherit);
+  overflow-y: auto;
+}
+.chat-attach-btn {
+  border: 1px solid var(--border-bright);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border-radius: 6px;
+  padding: 0 10px;
+  height: 40px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background .16s ease, color .16s ease, border-color .16s ease;
+}
+.chat-attach-btn:hover { background: var(--bg-hover); color: var(--cyan); border-color: var(--cyan); }
+.chat-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.chat-attach-chip { position: relative; width: 56px; height: 56px; }
+.chat-attach-chip img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-bright); }
+.chat-attach-chip button {
+  position: absolute; top: -6px; right: -6px;
+  width: 18px; height: 18px; line-height: 16px;
+  border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--red); color: #fff; font-weight: 900; font-size: 12px; padding: 0;
+}
+.chat-msg-imgs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chat-msg-imgs img { max-width: 160px; max-height: 160px; border-radius: 6px; border: 1px solid var(--border-bright); }
+.chat-dock.drag-over { outline: 2px dashed var(--cyan); outline-offset: -4px; }
+
+/* Loud system alert banner — Quant never fails silently. */
+.alert-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(0,0,0,.4);
+}
+.alert-banner[hidden] { display: none; }
+.alert-banner .alert-ico { font-size: 16px; }
+.alert-banner .alert-text { flex: 1; line-height: 1.4; }
+.alert-banner .alert-text u { text-decoration: underline; opacity: .95; }
+.alert-banner .alert-more { font-weight: 700; opacity: .85; white-space: nowrap; }
+.alert-banner.sev-critical { background: linear-gradient(180deg, #b3122f, #7c0c20); border-bottom: 1px solid #ff476b; animation: alertPulse 2.4s ease-in-out infinite; }
+.alert-banner.sev-warn { background: linear-gradient(180deg, #9a6a00, #6f4c00); border-bottom: 1px solid #ffab00; color: #fff; }
+.alert-banner.sev-info { background: linear-gradient(180deg, #14507a, #0d3a59); border-bottom: 1px solid #2979ff; }
+@keyframes alertPulse { 0%,100% { box-shadow: 0 4px 20px rgba(255,23,68,.25); } 50% { box-shadow: 0 4px 28px rgba(255,23,68,.55); } }
 
 .trade-bar {
   grid-column: 2;
@@ -1300,7 +1361,7 @@ html, body,
 }
 
 .chat-input-row {
-  grid-template-columns: 1fr 64px;
+  grid-template-columns: auto minmax(0, 1fr) 64px;
 }
 
 .signal-message {
@@ -2056,7 +2117,7 @@ html, body,
 }
 
 .chat-input-row {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
 .mini-pipeline {

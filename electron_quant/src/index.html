@@ -11,6 +11,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
 </head>
 <body>
+  <div id="systemAlertBanner" class="alert-banner" hidden></div>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="brand">
@@ -75,8 +76,11 @@
       <section class="panel chat-dock">
         <div class="chat-head">COPILOTO QUANT <span>analista permanente</span></div>
         <div class="chat-log" id="chatLog"></div>
+        <div class="chat-attachments" id="chatAttachments" hidden></div>
         <div class="chat-input-row">
-          <input id="chatInput" placeholder="Pregunta a Quant sobre mercado, training o riesgo..." />
+          <button class="chat-attach-btn" id="chatAttachBtn" title="Adjuntar imagen" aria-label="Adjuntar imagen">📎</button>
+          <input type="file" id="chatFileInput" accept="image/*" multiple hidden />
+          <textarea id="chatInput" rows="1" placeholder="Pregunta a Quant... (Enter envía · Shift+Enter salta de línea · pega o arrastra imágenes)"></textarea>
           <button class="primary-btn" id="sendChat">Enviar</button>
         </div>
         <div class="mini-pipeline-head">CONTEXTO ACTIVO</div>

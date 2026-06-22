@@ -12,6 +12,7 @@ if (!window.quant) {
     klines:                (symbol, interval, limit)   => apiGet(`klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=${limit || 180}`),
     wallet:                ()                          => apiGet('wallet'),
     chat:                  (messages, context)         => apiPost('chat', { messages, context }),
+    systemAlerts:          ()                          => apiGet('system-alerts'),
     memoryWrite:           (kind, payload)             => apiPost('memory-write', { kind, payload }),
     memoryRead:            (limit)                     => apiGet(`memory-read?limit=${limit || 80}`),
     memoryStats:           ()                          => apiGet('memory-stats'),
@@ -508,6 +509,8 @@ async function boot() {
   setInterval(() => refreshTrainingRuntimeStatus(), 15000);
   setInterval(() => renderChatContextPanel(), 5000);
   setInterval(() => runSelfAudit(), 300000);
+  pollSystemAlerts();
+  setInterval(() => pollSystemAlerts(), 20000);
   // PHASE 1: Update hero section every 3 seconds
   setInterval(() => updateHeroSection(), 3000);
   // Recalibración nocturna automática: una vez por hora
@@ -540,7 +543,7 @@ function bindUi() {
   $('cryptoNewsBtn').addEventListener('click', () => refreshNews('crypto'));
   $('chartRefreshBtn').addEventListener('click', () => refreshMarket(true));
   $('sendChat').addEventListener('click', sendChat);
-  $('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });
+  setupChatComposer();
   $('askAiBtn').addEventListener('click', askAiAnalysis);
   const marketSearch = $('marketSearch');
   if (marketSearch) marketSearch.addEventListener('input', renderMarketTable);
@@ -3506,14 +3509,118 @@ async function askAiAnalysis() {
   await askQuant(prompt, true);
 }
 
+// Pending image attachments for the next chat message (data URLs + parsed blocks).
+const chatAttachments = [];
+
+function setupChatComposer() {
+  const input = $('chatInput');
+  const fileInput = $('chatFileInput');
+  const attachBtn = $('chatAttachBtn');
+  if (!input) return;
+  const autoGrow = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 160) + 'px'; };
+  input.addEventListener('input', autoGrow);
+  // Enter sends, Shift+Enter inserts a newline (like a normal AI chat).
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+  });
+  if (attachBtn && fileInput) {
+    attachBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => { addChatImageFiles(fileInput.files); fileInput.value = ''; });
+  }
+  // Paste an image straight from the clipboard.
+  input.addEventListener('paste', (e) => {
+    const items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    const files = [];
+    for (const it of items) { if (it.kind === 'file' && it.type.startsWith('image/')) { const f = it.getAsFile(); if (f) files.push(f); } }
+    if (files.length) { e.preventDefault(); addChatImageFiles(files); }
+  });
+  // Drag & drop onto the chat dock.
+  const dock = input.closest('.chat-dock') || input.parentElement;
+  if (dock) {
+    ['dragover', 'dragenter'].forEach((ev) => dock.addEventListener(ev, (e) => { e.preventDefault(); dock.classList.add('drag-over'); }));
+    ['dragleave', 'drop'].forEach((ev) => dock.addEventListener(ev, (e) => { e.preventDefault(); dock.classList.remove('drag-over'); }));
+    dock.addEventListener('drop', (e) => { if (e.dataTransfer?.files?.length) addChatImageFiles(e.dataTransfer.files); });
+  }
+}
+
+function addChatImageFiles(fileList) {
+  const files = Array.from(fileList || []).filter((f) => f && f.type.startsWith('image/'));
+  for (const file of files) {
+    if (chatAttachments.length >= 6) break; // sane cap
+    if (file.size > 5 * 1024 * 1024) { logEvent('WARN', `Imagen ${file.name} supera 5MB, omitida`); continue; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      const m = dataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+      if (!m) return;
+      chatAttachments.push({ dataUrl, media_type: m[1], data: m[2] });
+      renderChatAttachments();
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function renderChatAttachments() {
+  const strip = $('chatAttachments');
+  if (!strip) return;
+  if (!chatAttachments.length) { strip.hidden = true; strip.innerHTML = ''; return; }
+  strip.hidden = false;
+  strip.innerHTML = chatAttachments.map((a, i) =>
+    `<div class="chat-attach-chip"><img src="${a.dataUrl}" alt="adjunto"/><button data-idx="${i}" title="Quitar" aria-label="Quitar imagen">×</button></div>`
+  ).join('');
+  strip.querySelectorAll('button[data-idx]').forEach((btn) => btn.addEventListener('click', () => {
+    chatAttachments.splice(Number(btn.dataset.idx), 1); renderChatAttachments();
+  }));
+}
+
 async function sendChat() {
   const input = $('chatInput');
   const text = input.value.trim();
-  if (!text) return;
+  const images = chatAttachments.slice();
+  if (!text && !images.length) return;
   input.value = '';
-  addChat('Tú', text);
-  state.messages.push({ role: 'user', content: text });
-  await askQuant(text, false);
+  input.style.height = 'auto';
+  chatAttachments.length = 0;
+  renderChatAttachments();
+  addChat('Tú', text, images.map((a) => a.dataUrl));
+  // Build the model message: array content with image blocks when images are attached.
+  if (images.length) {
+    const content = [];
+    if (text) content.push({ type: 'text', text });
+    for (const a of images) content.push({ type: 'image', source: { type: 'base64', media_type: a.media_type, data: a.data } });
+    state.messages.push({ role: 'user', content });
+  } else {
+    state.messages.push({ role: 'user', content: text });
+  }
+  await askQuant(text || '(imagen adjunta)', false);
+}
+
+// Poll for critical system alerts (model out of credit, bad key, etc.) and show
+// a loud banner so Quant never fails silently again.
+async function pollSystemAlerts() {
+  try {
+    const fn = window.quant && window.quant.systemAlerts;
+    if (!fn) return;
+    const res = await fn();
+    renderSystemAlertBanner((res && res.alerts) || []);
+  } catch { /* ignore transient errors */ }
+}
+
+function renderSystemAlertBanner(alerts) {
+  const banner = $('systemAlertBanner');
+  if (!banner) return;
+  if (!alerts.length) { banner.hidden = true; banner.innerHTML = ''; banner.className = 'alert-banner'; return; }
+  const top = alerts.find((a) => a.severity === 'critical') || alerts[0];
+  banner.hidden = false;
+  banner.className = `alert-banner sev-${top.severity || 'critical'}`;
+  const icon = top.severity === 'critical' ? '⛔' : top.severity === 'warn' ? '⚠️' : 'ℹ️';
+  banner.innerHTML =
+    `<span class="alert-ico">${icon}</span>` +
+    `<span class="alert-text"><b>${escapeHtml(top.title || 'Alerta del sistema')}</b>` +
+    `${top.detail ? ` — ${escapeHtml(top.detail)}` : ''}` +
+    `${top.action ? ` <u>${escapeHtml(top.action)}</u>` : ''}</span>` +
+    (alerts.length > 1 ? `<span class="alert-more">+${alerts.length - 1} más</span>` : '');
 }
 
 async function askQuant(text, writeToAi) {
@@ -3565,19 +3672,22 @@ function renderChatContextPanel() {
 
 // Render-only path: dibuja un mensaje en #chatLog sin persistirlo.
 // Necesario para restaurar conversaciones guardadas sin re-escribirlas a memoria.
-function renderChatMessage(role, text) {
+function renderChatMessage(role, text, images = []) {
   const div = document.createElement('div');
   const isQuant = role.toLowerCase().includes('quant');
   div.className = `chat-msg ${isQuant ? 'quant-msg' : 'user-msg'}`;
+  const imgHtml = (Array.isArray(images) && images.length)
+    ? `<div class="chat-msg-imgs">${images.map((src) => `<img src="${src}" alt="adjunto" />`).join('')}</div>`
+    : '';
   div.innerHTML = isQuant
     ? `<b>${role}</b>${formatQuantText(text)}`
-    : `<b>${role}:</b> ${escapeHtml(text)}`;
+    : `<b>${role}:</b> ${text ? escapeHtml(text) : ''}${imgHtml}`;
   $('chatLog').appendChild(div);
   $('chatLog').scrollTop = $('chatLog').scrollHeight;
 }
 
-function addChat(role, text) {
-  renderChatMessage(role, text);
+function addChat(role, text, images = []) {
+  renderChatMessage(role, text, images);
   window.quant.memoryWrite('message', { role, text }).then(loadMemoryStats).catch(() => {
     $('memoryNow').textContent = `${state.messages.length} msg · ${state.sessionTrades} trades`;
   });

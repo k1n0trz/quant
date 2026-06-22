@@ -2494,6 +2494,85 @@ except Exception as e:
   });
 }
 
+// --- Critical system alerts (so Quant never fails silently) -----------------
+// When a core dependency breaks — the model API runs out of credit, the key is
+// invalid, etc. — we record it here so the UI can surface a loud, actionable
+// banner instead of the agent going quiet for hours. Cleared on the next success.
+const systemAlerts = new Map(); // type -> { type, severity, title, detail, action, since, lastSeen }
+function recordSystemAlert(type, info = {}) {
+  const prev = systemAlerts.get(type);
+  const now = Date.now();
+  systemAlerts.set(type, {
+    type,
+    severity: info.severity || 'critical',
+    title: info.title || type,
+    detail: info.detail || '',
+    action: info.action || '',
+    since: prev?.since || now,
+    lastSeen: now
+  });
+  if (!prev) logger.error('system.alert', { type, title: info.title });
+}
+function clearSystemAlert(type) { systemAlerts.delete(type); }
+function activeSystemAlerts() {
+  const now = Date.now();
+  const out = [];
+  for (const a of systemAlerts.values()) {
+    if (now - a.lastSeen > 15 * 60 * 1000) { systemAlerts.delete(a.type); continue; } // assume recovered
+    out.push({ ...a, ageSec: Math.round((now - a.since) / 1000) });
+  }
+  return out.sort((x, y) => x.since - y.since);
+}
+// Map a model/API error to a recorded alert (billing / auth / rate limit).
+function classifyModelError(err, providerLabel = 'IA') {
+  const msg = String(err?.message || err || '');
+  if (/credit balance is too low|insufficient.*credit|purchase credits|too low to access/i.test(msg)) {
+    recordSystemAlert('model_billing', {
+      severity: 'critical',
+      title: `Saldo de la API de ${providerLabel} agotado`,
+      detail: 'El cerebro de Quant no puede analizar ni decidir operaciones sin saldo de modelo. El trading autónomo queda en pausa hasta recargar.',
+      action: 'Recarga saldo en console.anthropic.com → Plans & Billing.'
+    });
+  } else if (/invalid x-api-key|authentication_error|invalid api key|unauthorized|permission|\b401\b|\b403\b/i.test(msg)) {
+    recordSystemAlert('model_auth', {
+      severity: 'critical',
+      title: `Clave de API de ${providerLabel} inválida o sin permisos`,
+      detail: 'Las llamadas al modelo están siendo rechazadas por autenticación.',
+      action: 'Revisa la API key del proveedor en Configuración.'
+    });
+  } else if (/\b429\b|rate.?limit|overloaded/i.test(msg)) {
+    recordSystemAlert('model_ratelimit', {
+      severity: 'warn',
+      title: `La API de ${providerLabel} está saturada`,
+      detail: 'Hay rate limit o sobrecarga temporal; puede haber pausas cortas.',
+      action: 'Suele resolverse solo; si persiste, revisa el uso del plan.'
+    });
+  }
+}
+function clearModelAlerts() {
+  clearSystemAlert('model_billing'); clearSystemAlert('model_auth'); clearSystemAlert('model_ratelimit');
+}
+// Anthropic accepts text or an array of content blocks (for image/vision input).
+function toAnthropicContent(content) {
+  if (Array.isArray(content)) {
+    const blocks = content.map((b) => {
+      if (typeof b === 'string') return { type: 'text', text: b };
+      if (b && b.type === 'image' && b.source) return { type: 'image', source: b.source };
+      if (b && b.type === 'text') return { type: 'text', text: String(b.text || '') };
+      return null;
+    }).filter(Boolean);
+    return blocks.length ? blocks : '';
+  }
+  return String(content || '');
+}
+// Flatten any array content down to text for providers without vision support.
+function flattenContentToText(content) {
+  if (Array.isArray(content)) {
+    return content.map((b) => (typeof b === 'string' ? b : (b?.type === 'text' ? String(b.text || '') : (b?.type === 'image' ? '[imagen adjunta]' : '')))).filter(Boolean).join('\n');
+  }
+  return String(content || '');
+}
+
 async function chat(messages, context = '', env = ENV) {
   const route = modelRoute(env);
   if (!route.apiKey) return 'Estoy en modo local: puedo operar el dashboard, pero falta una API key de modelo para razonar con proveedor remoto.';
@@ -2585,32 +2664,39 @@ ${memory || 'Aún no hay memoria registrada.'}`;
     : system;
   const payload = {
     model: route.model,
-    messages: [{ role: 'system', content: finalSystem }, ...messages],
+    messages: [{ role: 'system', content: finalSystem }, ...messages.map((m) => ({ role: m.role, content: flattenContentToText(m.content) }))],
     temperature: 0.55,
     max_tokens: 2200
   };
   let rawAnswer = '';
-  if (route.provider === 'anthropic') {
-    const anthropicPayload = {
-      model: route.model,
-      system: finalSystem,
-      messages: messages.map((message) => ({
-        role: message.role === 'assistant' ? 'assistant' : 'user',
-        content: String(message.content || '')
-      })),
-      // Newer Claude models (opus-4.x) reject the temperature param; omit it.
-      max_tokens: payload.max_tokens
-    };
-    const data = await requestJson('POST', `${route.base}/messages`, {
-      'x-api-key': route.apiKey,
-      'anthropic-version': '2023-06-01'
-    }, anthropicPayload);
-    rawAnswer = Array.isArray(data.content)
-      ? data.content.filter((part) => part?.type === 'text' && part.text).map((part) => part.text).join('\n').trim()
-      : '';
-  } else {
-    const data = await requestJson('POST', `${route.base}/chat/completions`, { Authorization: `Bearer ${route.apiKey}` }, payload);
-    rawAnswer = data.choices?.[0]?.message?.content || '';
+  const providerLabel = route.provider === 'anthropic' ? 'Claude' : route.provider;
+  try {
+    if (route.provider === 'anthropic') {
+      const anthropicPayload = {
+        model: route.model,
+        system: finalSystem,
+        messages: messages.map((message) => ({
+          role: message.role === 'assistant' ? 'assistant' : 'user',
+          content: toAnthropicContent(message.content)
+        })),
+        // Newer Claude models (opus-4.x) reject the temperature param; omit it.
+        max_tokens: payload.max_tokens
+      };
+      const data = await requestJson('POST', `${route.base}/messages`, {
+        'x-api-key': route.apiKey,
+        'anthropic-version': '2023-06-01'
+      }, anthropicPayload);
+      rawAnswer = Array.isArray(data.content)
+        ? data.content.filter((part) => part?.type === 'text' && part.text).map((part) => part.text).join('\n').trim()
+        : '';
+    } else {
+      const data = await requestJson('POST', `${route.base}/chat/completions`, { Authorization: `Bearer ${route.apiKey}` }, payload);
+      rawAnswer = data.choices?.[0]?.message?.content || '';
+    }
+    clearModelAlerts(); // a successful call means the model API is healthy again
+  } catch (err) {
+    classifyModelError(err, providerLabel);
+    throw err;
   }
   if (!rawAnswer) rawAnswer = 'No recibí contenido del modelo.';
   const guarded = applyOperationalTruthGuard(rawAnswer);
@@ -2654,18 +2740,28 @@ async function callModelText({ system, user }, env = ENV, options = {}) {
   const temperature = Number.isFinite(options.temperature) ? options.temperature : 0.2;
   const maxTokens = Number.isFinite(options.maxTokens) ? options.maxTokens : 600;
   const model = options.model || route.model;
-  if (route.provider === 'anthropic') {
-    // Newer Claude models reject the temperature param; omit it.
-    const data = await requestJson('POST', `${route.base}/messages`, {
-      'x-api-key': route.apiKey, 'anthropic-version': '2023-06-01'
-    }, { model, system, messages: [{ role: 'user', content: String(user || '') }], max_tokens: maxTokens });
-    return Array.isArray(data.content)
-      ? data.content.filter((p) => p?.type === 'text' && p.text).map((p) => p.text).join('\n').trim()
-      : '';
+  const providerLabel = route.provider === 'anthropic' ? 'Claude' : route.provider;
+  try {
+    let out;
+    if (route.provider === 'anthropic') {
+      // Newer Claude models reject the temperature param; omit it.
+      const data = await requestJson('POST', `${route.base}/messages`, {
+        'x-api-key': route.apiKey, 'anthropic-version': '2023-06-01'
+      }, { model, system, messages: [{ role: 'user', content: String(user || '') }], max_tokens: maxTokens });
+      out = Array.isArray(data.content)
+        ? data.content.filter((p) => p?.type === 'text' && p.text).map((p) => p.text).join('\n').trim()
+        : '';
+    } else {
+      const data = await requestJson('POST', `${route.base}/chat/completions`, { Authorization: `Bearer ${route.apiKey}` },
+        { model, messages: [{ role: 'system', content: system }, { role: 'user', content: String(user || '') }], temperature, max_tokens: maxTokens });
+      out = data.choices?.[0]?.message?.content || '';
+    }
+    clearModelAlerts(); // the trade brain reached the model — API is healthy
+    return out;
+  } catch (err) {
+    classifyModelError(err, providerLabel); // record so the UI warns instead of stalling silently
+    throw err;
   }
-  const data = await requestJson('POST', `${route.base}/chat/completions`, { Authorization: `Bearer ${route.apiKey}` },
-    { model, messages: [{ role: 'system', content: system }, { role: 'user', content: String(user || '') }], temperature, max_tokens: maxTokens });
-  return data.choices?.[0]?.message?.content || '';
 }
 
 // Candles for a symbol/timeframe straight from the live bridge rates book.
@@ -3047,12 +3143,30 @@ async function handleApi(req, res, url) {
     if (url.pathname === '/api/send-alert')         return sendJson(res, await sendAlertEmail(body.subject || 'Alerta', body.body || '', body.cfg || null));
     if (url.pathname === '/api/positions') return sendJson(res, await livePositions(userEnv));
     if (url.pathname === '/api/news-finnhub') return sendJson(res, userEnv.FINNHUB_API_KEY ? await requestJson('GET', `https://finnhub.io/api/v1/news?${query({ category: 'general', token: userEnv.FINNHUB_API_KEY })}`) : []);
+    if (url.pathname === '/api/system-alerts') return sendJson(res, { alerts: activeSystemAlerts() });
     if (url.pathname === '/api/calendar-finnhub-economic') {
       if (!userEnv.FINNHUB_API_KEY) return sendJson(res, []);
       const today = new Date();
       const from = new Date(today.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const to = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      return sendJson(res, await requestJson('GET', `https://finnhub.io/api/v1/calendar/economic?${query({ from, to, token: userEnv.FINNHUB_API_KEY })}`));
+      try {
+        const data = await requestJson('GET', `https://finnhub.io/api/v1/calendar/economic?${query({ from, to, token: userEnv.FINNHUB_API_KEY })}`);
+        clearSystemAlert('finnhub_calendar');
+        return sendJson(res, data);
+      } catch (err) {
+        // The economic calendar needs a paid Finnhub plan; degrade gracefully and
+        // record a soft alert ONCE instead of logging an api.error every minute.
+        if (/\b403\b|don't have access|access to this resource/i.test(String(err?.message || ''))) {
+          recordSystemAlert('finnhub_calendar', {
+            severity: 'info',
+            title: 'Calendario económico de Finnhub no disponible',
+            detail: 'El endpoint de calendario económico requiere un plan de pago de Finnhub. El resto del análisis no se ve afectado.',
+            action: 'Opcional: mejora el plan de Finnhub o ignora este aviso.'
+          });
+          return sendJson(res, []);
+        }
+        throw err;
+      }
     }
     if (url.pathname === '/api/news-alpha') return sendJson(res, userEnv.ALPHA_VANTAGE_API_KEY ? await requestJson('GET', `https://www.alphavantage.co/query?${query({ function: 'NEWS_SENTIMENT', apikey: userEnv.ALPHA_VANTAGE_API_KEY })}`) : {});
     if (url.pathname === '/api/news-finnhub-crypto') return sendJson(res, await fetchFinnhubCrypto(userEnv));

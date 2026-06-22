@@ -13,9 +13,13 @@ input bool AllowDemoOrderSend = true;
 input bool AllowRealOrderSend = false;
 input bool AllowRealOrderCheck = true;
 input string RealOrderFlagFile = "quant_bridge_real_order_enabled.flag";
-input string BridgeRatesSymbols = "XAUUSD,EURUSD,GBPUSD,USDJPY,AUDCAD,USDCAD,AUDUSD,NZDUSD,USDCHF,BTCUSD,ETHUSD";
+// Full-market panorama: majors + main crosses + metals + crypto. Symbols the
+// broker does not offer are simply skipped (CopyRates returns nothing), so
+// over-listing is safe. The backend derives the AI watchlist from whatever
+// actually streams here, giving Quant the complete picture instead of a handful.
+input string BridgeRatesSymbols = "EURUSD,GBPUSD,USDJPY,USDCHF,USDCAD,AUDUSD,NZDUSD,EURJPY,EURGBP,EURCHF,EURAUD,EURCAD,GBPJPY,GBPCHF,GBPAUD,GBPCAD,AUDJPY,NZDJPY,CADJPY,CHFJPY,AUDCAD,AUDNZD,XAUUSD,XAGUSD,BTCUSD,ETHUSD";
 input string BridgeRatesTimeframes = "M1,M5,M15,H1,H4,D1";
-input int BridgeRatesBars = 120;
+input int BridgeRatesBars = 90;
 
 CTrade Trade;
 string LastCommandId = "";

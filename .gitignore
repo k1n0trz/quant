@@ -9,3 +9,6 @@ electron_quant/dist/
 electron_quant/dist2/
 
 .claude/
+
+# Local Codex/agent runtime data and ops scripts (may contain secrets)
+.codex-data/

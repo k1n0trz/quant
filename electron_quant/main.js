@@ -1592,12 +1592,25 @@ function mt5BridgeStatusPath(env = ENV) {
       : '/var/lib/quant/mt5/kinotrance/drive_c/Program Files/MetaTrader 5/MQL5/Files/quant_bridge_status.json');
 }
 
+const _bridgeStatusCache = new Map(); // file -> { parsed, mtimeMs, readAt }
 function readMt5BridgeStatus(env = ENV) {
   const file = mt5BridgeStatusPath(env);
   if (!file) return null;
   try {
-    const raw = fs.readFileSync(file, 'utf8');
-    const data = JSON.parse(raw);
+    // The status file grew with the full-market symbol universe; it is read many
+    // times per scheduler tick (candles x timeframes x pairs). Cache the parse
+    // briefly, invalidating on mtime change, so we don't re-parse ~1MB repeatedly.
+    let data;
+    const cached = _bridgeStatusCache.get(file);
+    let mtimeMs = 0;
+    try { mtimeMs = fs.statSync(file).mtimeMs; } catch { mtimeMs = 0; }
+    if (cached && cached.mtimeMs === mtimeMs && (Date.now() - cached.readAt) < 2000) {
+      data = cached.parsed;
+    } else {
+      const raw = fs.readFileSync(file, 'utf8');
+      data = JSON.parse(raw);
+      _bridgeStatusCache.set(file, { parsed: data, mtimeMs, readAt: Date.now() });
+    }
     const ts = Number(data.ts || 0);
     const ageMs = ts ? Math.max(0, Date.now() - ts * 1000) : Infinity;
     return {
@@ -2894,6 +2907,7 @@ async function handleApi(req, res, url) {
         getOpenRealPositions: () => getOpenRealPositionsForScheduler(userEnv),
         runProfitHarvest: () => runBinanceProfitHarvest({ ...userEnv, ...autonomyTuningOverrides() }),
         runProtectionSweep: () => runMt5ProtectionSweepForChannel('real', userEnv),
+        listMt5Symbols: () => mt5BridgeSymbols(userEnv),
         getRecentRealOpens: () => readRealAutonomousPairOpens(),
         recordRealOpen: (venue, symbol, ts) => recordRealAutonomousPairOpen(venue, symbol, ts),
         aiDecideTrade: (symbol, venue) => aiDecideTrade(symbol, venue, { ...userEnv, ...autonomyTuningOverrides() }, 'real'),

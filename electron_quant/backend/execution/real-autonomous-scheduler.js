@@ -618,12 +618,27 @@ async function buildMt5Candidates(context, state, limits, opened) {
       reason: signal.reason || 'training_signal'
     });
   }
-  // Diverse watchlist for the AI: let it evaluate liquid majors too, not only the
-  // (often narrow) signal pairs. The AI sets side/SL/TP, so these need no signal.
+  // Full-market watchlist for the AI: it should see the WHOLE panorama, not a
+  // narrow handful. Favorites (env) go first, then EVERY symbol the bridge
+  // streams candles for — so the AI never misses an opportunity in a pair just
+  // because it wasn't on a hardcoded list. The AI sets side/SL/TP itself.
   if (boolFlag(env.REAL_AUTONOMOUS_AI_DECISIONS_ENABLED)) {
-    const watchlist = String(env.REAL_AUTONOMOUS_MT5_WATCHLIST
+    const favorites = String(env.REAL_AUTONOMOUS_MT5_WATCHLIST
       || 'EURUSD,GBPUSD,USDJPY,AUDUSD,USDCAD,NZDUSD,USDCHF,XAUUSD,EURJPY,AUDCAD')
       .split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+    // Pull the live universe of streamed symbols so the list grows automatically
+    // whenever the bridge streams more pairs (no code change needed).
+    let universe = [];
+    try {
+      const listed = typeof context.deps?.listMt5Symbols === 'function' ? context.deps.listMt5Symbols() : null;
+      if (listed?.ok && Array.isArray(listed.symbols)) {
+        universe = listed.symbols.map((s) => String(s).trim().toUpperCase()).filter(Boolean);
+      }
+    } catch { /* fall back to favorites only */ }
+    const watchlist = [];
+    for (const sym of favorites.concat(universe)) {
+      if (sym && !watchlist.includes(sym)) watchlist.push(sym);
+    }
     // rotate the order by the current minute so different pairs surface each tick
     const offset = new Date().getUTCMinutes() % Math.max(1, watchlist.length);
     const rotated = watchlist.slice(offset).concat(watchlist.slice(0, offset));
@@ -844,7 +859,7 @@ async function runRealAutonomousTick(context = {}) {
   // When the AI evaluates each candidate (an LLM call), bound how many it judges
   // per tick to control cost/latency; otherwise keep the wider mechanical queue.
   const aiEnabled = boolFlag((context.env || {}).REAL_AUTONOMOUS_AI_DECISIONS_ENABLED);
-  const aiEvalBudget = Math.floor(clampNumber((context.env || {}).REAL_AUTONOMOUS_AI_MAX_EVAL_PER_TICK, 3, 1, 12));
+  const aiEvalBudget = Math.floor(clampNumber((context.env || {}).REAL_AUTONOMOUS_AI_MAX_EVAL_PER_TICK, 6, 1, 16));
   const queueLimit = aiEnabled ? aiEvalBudget : Math.max(limits.maxOrdersPerTick * 10, 20);
   const executable = balanceCandidateQueueByVenue(candidates
     .filter((candidate) => !candidate.skipOnly)

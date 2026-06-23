@@ -875,9 +875,13 @@ async function runRealAutonomousTick(context = {}) {
   );
   const nowMs = finiteNumber(context.nowMs) ?? Date.now();
   const cooldownMs = Math.max(0, (limits.reentryCooldownMinutes || 0) * 60000);
-  const recentOpens = (cooldownMs > 0 && typeof context.deps?.getRecentRealOpens === 'function')
-    ? (await context.deps.getRecentRealOpens().catch(() => ({})) || {})
-    : {};
+  // getRecentRealOpens may be sync (returns a plain object) or async; awaiting a
+  // non-promise is harmless, and try/catch replaces the bogus `.catch` that was
+  // crashing every tick when the dep was synchronous.
+  let recentOpens = {};
+  if (cooldownMs > 0 && typeof context.deps?.getRecentRealOpens === 'function') {
+    try { recentOpens = (await context.deps.getRecentRealOpens()) || {}; } catch { recentOpens = {}; }
+  }
   for (const candidate of executable) {
     if (executed.filter((row) => row.ok && !row.action).length >= successLimit) break;
     const key = `${candidate.venue}:${candidate.symbol}`;

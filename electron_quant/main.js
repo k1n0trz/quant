@@ -626,6 +626,7 @@ function createRealAutonomousRuntimeContext(baseEnv) {
       runProtectionSweep: () => runMt5ProtectionSweepForChannel('real', env),
       getRecentRealOpens: () => readRealAutonomousPairOpens(),
       recordRealOpen: (venue, symbol, ts) => recordRealAutonomousPairOpen(venue, symbol, ts),
+      listMt5Symbols: () => mt5BridgeSymbols(env),
       aiDecideTrade: (symbol, venue) => aiDecideTrade(symbol, venue, env, 'real')
     }
   };

@@ -46,14 +46,20 @@ function computeSma(values, period) {
 // convergePct is the max-min spread as a % of price below which we call it chop.
 function maRegime(closes, { periods = [40, 100, 200], convergePct = 0.12 } = {}) {
   const mas = periods.map((p) => computeSma(closes, p));
-  if (mas.some((m) => m === null)) return { trend: 'UNKNOWN', reason: 'insufficient_history', mas };
-  const [fast, mid, slow] = mas;
+  if (mas.some((m) => m === null)) return { trend: 'UNKNOWN', reason: 'insufficient_history', mas, periods };
   const price = closes[closes.length - 1];
   const spreadPct = price ? (Math.max(...mas) - Math.min(...mas)) / price * 100 : 0;
-  if (spreadPct < convergePct) return { trend: 'CHOP', spreadPct, mas, reason: 'mas_converged' };
-  if (fast > mid && mid > slow) return { trend: 'UP', spreadPct, mas };
-  if (fast < mid && mid < slow) return { trend: 'DOWN', spreadPct, mas };
-  return { trend: 'MIXED', spreadPct, mas, reason: 'mas_not_ordered' };
+  if (spreadPct < convergePct) return { trend: 'CHOP', spreadPct, mas, periods, reason: 'mas_converged' };
+  // Ordered fast>...>slow = up-trend; fast<...<slow = down-trend (works for any
+  // number of periods, so the MA set can adapt to the available history).
+  let descending = true, ascending = true;
+  for (let i = 0; i < mas.length - 1; i++) {
+    if (!(mas[i] > mas[i + 1])) descending = false;
+    if (!(mas[i] < mas[i + 1])) ascending = false;
+  }
+  if (descending) return { trend: 'UP', spreadPct, mas, periods };
+  if (ascending) return { trend: 'DOWN', spreadPct, mas, periods };
+  return { trend: 'MIXED', spreadPct, mas, periods, reason: 'mas_not_ordered' };
 }
 
 // RSI reversal trigger per Edi's rule: dip into <=lowZone then turning up (best
@@ -127,8 +133,10 @@ function evaluateOperatorSetup({
   closes, nowMs, price, digits = 5, pipValueUsd = 0.1,
   riskUsd = 1.5, targetUsd = 2, minDistance = 0, allowOutOfSession = false, maOptions, rsiOptions
 } = {}) {
-  if (!Array.isArray(closes) || closes.length < 201) {
-    return { matches: false, reason: 'historial_insuficiente (se requieren >200 velas para MA200)' };
+  const periods = (maOptions && Array.isArray(maOptions.periods)) ? maOptions.periods : [40, 100, 200];
+  const minBars = Math.max(...periods) + 5;
+  if (!Array.isArray(closes) || closes.length < minBars) {
+    return { matches: false, reason: `historial_insuficiente (se requieren >=${minBars} velas para MA${Math.max(...periods)})` };
   }
   const session = inOperatorSession(new Date(nowMs || Date.now()));
   if (!session.open && !allowOutOfSession) return { matches: false, reason: `fuera_de_sesion:${session.reason}`, session };

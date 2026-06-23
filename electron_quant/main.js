@@ -58,6 +58,7 @@ const { createSystemSelfAuditSchedulerController } = require('./backend/system/s
 const { createRealAutonomousSchedulerController } = require('./backend/execution/real-autonomous-scheduler');
 const { runProfitHarvest } = require('./backend/execution/binance-profit-harvest');
 const { decideTrade } = require('./backend/ai/ai-trade-advisor');
+const { evaluateOperatorSetup } = require('./backend/strategy/operator-playbook');
 const { applyOperationalTruthGuard } = require('./backend/chat/operational-truth-guard');
 const { buildLiveTelemetry, renderLiveTelemetryBlock } = require('./backend/chat/live-telemetry');
 const { buildTrainingBotsStatus } = require('./backend/training/bot-registry-service');
@@ -79,6 +80,7 @@ let trainingLoopAutoStartAttempted = false;
 let systemSelfAuditAutoStartAttempted = false;
 let realAutonomousAutoStartAttempted = false;
 let botLifecycleAutoStartAttempted = false;
+let operatorShadowAutoStartAttempted = false;
 const logger = createLogger(IS_ELECTRON ? 'quant-desktop' : 'quant-backend');
 const DEFAULT_VPS_PUBLIC_IP = '37.60.227.190';
 const CLOUD_ENV_KEYS = [
@@ -2774,6 +2776,69 @@ function bridgeCandles(env, symbol, timeframe, channel) {
   return Array.isArray(tf?.candles) ? tf.candles : [];
 }
 
+// Rough USD value of 1 pip on a 0.01 lot, by quote currency (for $-sized SL/TP).
+function estimatePipValueUsd(symbol) {
+  const s = String(symbol || '').toUpperCase();
+  if (s.endsWith('JPY')) return 0.067;
+  if (s.endsWith('CAD')) return 0.073;
+  if (s.endsWith('CHF')) return 0.11;
+  if (s.endsWith('NZD')) return 0.10;
+  if (s.endsWith('USD')) return 0.10;
+  return 0.10;
+}
+
+// DRY RUN of Edi's playbook on a pair, from live bridge candles. Decides but
+// NEVER trades — so he can validate it reasons like him before going live.
+function operatorPlaybookLive(symbol, channel = 'real', env = ENV, timeframe = 'H1') {
+  const candles = bridgeCandles(env, symbol, timeframe, channel);
+  const closes = (Array.isArray(candles) ? candles : [])
+    .map((c) => Number(c.c ?? c.close)).filter(Number.isFinite);
+  if (closes.length < 50) return { ok: false, symbol, timeframe, reason: 'sin_velas_suficientes', bars: closes.length };
+  // Adapt the MA set to the history the live feed actually provides (the bridge
+  // streams ~120 bars; MA200 needs 200). Closest faithful set wins.
+  let periods;
+  if (closes.length >= 205) periods = [40, 100, 200];
+  else if (closes.length >= 105) periods = [40, 100];
+  else if (closes.length >= 55) periods = [20, 50];
+  else periods = [10, Math.max(20, closes.length - 5)];
+  const digits = String(symbol).toUpperCase().endsWith('JPY') ? 3 : 5;
+  const v = evaluateOperatorSetup({
+    closes, nowMs: Date.now(), digits,
+    pipValueUsd: estimatePipValueUsd(symbol),
+    riskUsd: 1.5, targetUsd: 2,
+    allowOutOfSession: true, // show the technical read even off-hours
+    maOptions: { periods }
+  });
+  const sessionOpen = v.session ? v.session.open : false;
+  return {
+    ok: true, symbol, timeframe, bars: closes.length, maPeriods: periods,
+    wouldEnter: Boolean(v.matches && sessionOpen),
+    sessionOpen,
+    ...v
+  };
+}
+
+// Shadow pass: log Edi's playbook verdict for his pairs without trading, so he
+// can watch a full day of "would I enter? why?" decisions in the logs.
+function runOperatorPlaybookShadow(env = ENV) {
+  const pairs = String(env.OPERATOR_PLAYBOOK_PAIRS || 'AUDCAD,EURGBP,AUDNZD,EURAUD,GBPCAD')
+    .split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+  for (const sym of pairs) {
+    try {
+      const v = operatorPlaybookLive(sym, 'real', env, 'H1');
+      logger.info('operator.playbook.shadow', {
+        symbol: sym, bars: v.bars, maPeriods: v.maPeriods,
+        wouldEnter: v.wouldEnter === true, side: v.side || null,
+        sessionOpen: v.sessionOpen === true,
+        trend: v.regime?.trend || null,
+        rsi: (typeof v.rsi === 'number') ? Number(v.rsi.toFixed(1)) : null,
+        sl: v.stopLoss ?? null, tp: v.takeProfit ?? null,
+        reason: v.reason || v.matches
+      });
+    } catch (e) { logger.warn('operator.playbook.shadow.failed', { symbol: sym, error: e?.message }); }
+  }
+}
+
 const BINANCE_TF_MAP = { M15: '15m', H1: '1h', H4: '4h', M5: '5m', M1: '1m', D1: '1d' };
 
 function recentTradeOutcomes(symbol) {
@@ -3145,6 +3210,12 @@ async function handleApi(req, res, url) {
     if (url.pathname === '/api/positions') return sendJson(res, await livePositions(userEnv));
     if (url.pathname === '/api/news-finnhub') return sendJson(res, userEnv.FINNHUB_API_KEY ? await requestJson('GET', `https://finnhub.io/api/v1/news?${query({ category: 'general', token: userEnv.FINNHUB_API_KEY })}`) : []);
     if (url.pathname === '/api/system-alerts') return sendJson(res, { alerts: activeSystemAlerts() });
+    if (url.pathname === '/api/operator-playbook') {
+      const symbol = (url.searchParams.get('symbol') || 'AUDCAD').toUpperCase();
+      const channel = url.searchParams.get('channel') || 'real';
+      const timeframe = url.searchParams.get('timeframe') || 'H1';
+      return sendJson(res, operatorPlaybookLive(symbol, channel, userEnv, timeframe));
+    }
     if (url.pathname === '/api/calendar-finnhub-economic') {
       if (!userEnv.FINNHUB_API_KEY) return sendJson(res, []);
       const today = new Date();
@@ -3847,6 +3918,13 @@ function startLocalWebServer() {
           .catch((error) => logger.warn('bots.lifecycle.auto.failed', { error: String(error?.message || error) }));
         setTimeout(tick, 60000);                 // shortly after boot
         setInterval(tick, 6 * 3600 * 1000);      // and every 6h: create/keep/prune the fleet
+      }
+      if (!operatorShadowAutoStartAttempted) {
+        operatorShadowAutoStartAttempted = true;
+        // DRY RUN of Edi's playbook: logs "would I enter? why?" every 5 min, no trades.
+        setTimeout(() => runOperatorPlaybookShadow(), 20000);
+        setInterval(() => runOperatorPlaybookShadow(), 5 * 60 * 1000);
+        logger.info('operator.playbook.shadow.autostart', { intervalMin: 5 });
       }
     });
   };

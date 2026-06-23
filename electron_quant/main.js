@@ -429,7 +429,7 @@ const systemSelfAuditScheduler = createSystemSelfAuditSchedulerController({
   runAudit: runPersistentSystemSelfAudit
 });
 
-const realAutonomousScheduler = createRealAutonomousSchedulerController();
+const realAutonomousScheduler = createRealAutonomousSchedulerController({ logger });
 
 function createBinanceRealExecutionDeps(env) {
   return {

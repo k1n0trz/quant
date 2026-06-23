@@ -10,7 +10,7 @@ const renderer = fs.readFileSync(path.join(root, 'src/renderer.js'), 'utf8');
 const scheduler = fs.readFileSync(path.join(root, 'backend/execution/real-autonomous-scheduler.js'), 'utf8');
 
 assert.ok(main.includes("require('./backend/execution/real-autonomous-scheduler')"), 'main debe importar el scheduler real autonomo.');
-assert.ok(main.includes('const realAutonomousScheduler = createRealAutonomousSchedulerController()'), 'main debe crear un controller persistente.');
+assert.ok(main.includes('const realAutonomousScheduler = createRealAutonomousSchedulerController('), 'main debe crear un controller persistente.');
 assert.ok(main.includes('REAL_AUTONOMOUS_SCHEDULER_ENABLED'), 'main debe permitir configurar REAL_AUTONOMOUS_SCHEDULER_ENABLED.');
 assert.ok(main.includes('real.autonomous.autostart'), 'main debe registrar autostart del scheduler real.');
 assert.ok(main.includes('createRealAutonomousRuntimeContext(realEnv)'), 'autostart debe usar contexto runtime real.');

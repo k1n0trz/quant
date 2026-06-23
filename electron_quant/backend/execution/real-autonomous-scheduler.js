@@ -973,6 +973,37 @@ function resolveRealAutonomousIntervalMs(env = {}) {
   return Math.floor(clampNumber(env.REAL_AUTONOMOUS_INTERVAL_MS, 60000, 10000, 3600000));
 }
 
+// Compact, log-friendly summary of a tick: what executed, what was skipped and
+// — crucially — WHY nothing happened when nothing happened.
+function summarizeTick(result) {
+  if (!result || typeof result !== 'object') return { ok: false };
+  const exec = Array.isArray(result.executed) ? result.executed : [];
+  const executedOk = exec.filter((r) => r.ok && !r.action).length;
+  const statuses = {};
+  for (const r of exec) {
+    const k = r.status || (r.ok ? 'executed' : 'blocked');
+    statuses[k] = (statuses[k] || 0) + 1;
+  }
+  const skipReasons = {};
+  for (const r of (Array.isArray(result.skipped) ? result.skipped : [])) {
+    const k = r.reason || 'skip';
+    skipReasons[k] = (skipReasons[k] || 0) + 1;
+  }
+  // A few concrete block/skip reasons so the cause is visible at a glance.
+  const samples = exec.filter((r) => !r.ok).slice(0, 5)
+    .map((r) => `${r.symbol || '?'}:${r.status || 'blocked'}${r.reason ? ':' + String(r.reason).slice(0, 40) : ''}`);
+  return {
+    ok: result.ok === true,
+    reason: result.reason || null,
+    executedOk,
+    candidates: Array.isArray(result.candidates) ? result.candidates.length : undefined,
+    statuses,
+    skipReasons,
+    samples,
+    realTradingTouched: result.realTradingTouched === true
+  };
+}
+
 function createRealAutonomousSchedulerController(options = {}) {
   const timers = options.timers || {
     setInterval: (...args) => setInterval(...args),
@@ -1008,11 +1039,15 @@ function createRealAutonomousSchedulerController(options = {}) {
       state.ticksRun += 1;
       state.lastTickResult = result;
       state.lastError = result?.ok ? null : { at: state.lastTickAt, message: result?.reason || 'real_autonomous_tick_failed' };
+      // Make every tick visible so the engine is never a silent black box: one
+      // concise line per tick showing what it did or exactly why it did nothing.
+      try { options.logger?.info?.('real.autonomous.tick', summarizeTick(result)); } catch { /* logging must never break the tick */ }
       return result;
     } catch (error) {
       state.ticksRun += 1;
       state.lastError = { at: state.lastTickAt, message: String(error?.message || error) };
       state.lastTickResult = { ok: false, reason: 'real_autonomous_tick_exception', error: state.lastError.message, realTradingTouched: false };
+      try { options.logger?.error?.('real.autonomous.tick.exception', { error: state.lastError.message }); } catch { /* ignore */ }
       return state.lastTickResult;
     } finally {
       state.inProgress = false;

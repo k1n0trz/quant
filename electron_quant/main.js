@@ -238,7 +238,8 @@ const USER_API_FIELDS = [
   'REAL_AUTONOMOUS_PROFIT_HARVEST_ENABLED','REAL_AUTONOMOUS_TRADING_FLOAT_USDT',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_MIN_USDT','REAL_AUTONOMOUS_PROFIT_HARVEST_MAX_USDT',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_EARN_PRODUCT','REAL_AUTONOMOUS_REENTRY_COOLDOWN_MIN',
-  'REAL_AUTONOMOUS_AI_DECISIONS_ENABLED','REAL_AUTONOMOUS_AI_MAX_EVAL_PER_TICK','REAL_AUTONOMOUS_MT5_WATCHLIST','REAL_AUTONOMOUS_AI_MODEL'
+  'REAL_AUTONOMOUS_AI_DECISIONS_ENABLED','REAL_AUTONOMOUS_AI_MAX_EVAL_PER_TICK','REAL_AUTONOMOUS_MT5_WATCHLIST','REAL_AUTONOMOUS_AI_MODEL',
+  'REAL_AUTONOMOUS_OPERATOR_PLAYBOOK','OPERATOR_PLAYBOOK_PAIRS'
 ];
 // Whitelist of non-secret tuning knobs whose user-config value must win over the
 // VPS process.env (so the operator can dial aggressiveness / learning behavior
@@ -253,7 +254,8 @@ const AUTONOMY_TUNING_FIELDS = [
   'REAL_AUTONOMOUS_PROFIT_HARVEST_ENABLED','REAL_AUTONOMOUS_TRADING_FLOAT_USDT',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_MIN_USDT','REAL_AUTONOMOUS_PROFIT_HARVEST_MAX_USDT',
   'REAL_AUTONOMOUS_PROFIT_HARVEST_EARN_PRODUCT','REAL_AUTONOMOUS_REENTRY_COOLDOWN_MIN',
-  'REAL_AUTONOMOUS_AI_DECISIONS_ENABLED','REAL_AUTONOMOUS_AI_MAX_EVAL_PER_TICK','REAL_AUTONOMOUS_MT5_WATCHLIST','REAL_AUTONOMOUS_AI_MODEL'
+  'REAL_AUTONOMOUS_AI_DECISIONS_ENABLED','REAL_AUTONOMOUS_AI_MAX_EVAL_PER_TICK','REAL_AUTONOMOUS_MT5_WATCHLIST','REAL_AUTONOMOUS_AI_MODEL',
+  'REAL_AUTONOMOUS_OPERATOR_PLAYBOOK','OPERATOR_PLAYBOOK_PAIRS'
 ];
 const SENSITIVE_API_FIELDS = USER_API_FIELDS.filter((key) => /KEY|SECRET|PASSWORD|PASS/.test(key));
 const botStateStore = createJsonStore(backendStateFile, () => createDefaultBotState());
@@ -629,6 +631,7 @@ function createRealAutonomousRuntimeContext(baseEnv) {
       getRecentRealOpens: () => readRealAutonomousPairOpens(),
       recordRealOpen: (venue, symbol, ts) => recordRealAutonomousPairOpen(venue, symbol, ts),
       listMt5Symbols: () => mt5BridgeSymbols(env),
+      operatorPlaybook: (symbol) => operatorPlaybookLive(symbol, 'real', env),
       aiDecideTrade: (symbol, venue) => aiDecideTrade(symbol, venue, env, 'real')
     }
   };
@@ -1160,22 +1163,28 @@ function computeCalibration() {
   return result;
 }
 
-function requestJson(method, url, headers = {}, payload = null) {
+function requestJson(method, url, headers = {}, payload = null, options = {}) {
+  // A hung connection used to hang forever and freeze the autonomous tick
+  // (await never resolved -> inProgress stuck). Always bound it with a timeout.
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 30000;
   return new Promise((resolve, reject) => {
     const body = payload ? Buffer.from(JSON.stringify(payload)) : null;
+    let settled = false;
+    const finish = (fn, arg) => { if (settled) return; settled = true; fn(arg); };
     const req = https.request(url, { method, headers: { ...headers, ...(body ? { 'Content-Type': 'application/json' } : {}) } }, (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+          finish(reject, new Error(`HTTP ${res.statusCode}: ${data}`));
           return;
         }
-        try { resolve(data ? JSON.parse(data) : {}); }
-        catch (err) { reject(err); }
+        try { finish(resolve, data ? JSON.parse(data) : {}); }
+        catch (err) { finish(reject, err); }
       });
     });
-    req.on('error', reject);
+    req.setTimeout(timeoutMs, () => { req.destroy(new Error(`request_timeout_${timeoutMs}ms`)); });
+    req.on('error', (err) => finish(reject, err));
     if (body) req.write(body);
     req.end();
   });

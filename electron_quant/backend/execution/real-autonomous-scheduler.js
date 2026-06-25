@@ -622,7 +622,7 @@ async function buildMt5Candidates(context, state, limits, opened) {
   // narrow handful. Favorites (env) go first, then EVERY symbol the bridge
   // streams candles for — so the AI never misses an opportunity in a pair just
   // because it wasn't on a hardcoded list. The AI sets side/SL/TP itself.
-  if (boolFlag(env.REAL_AUTONOMOUS_AI_DECISIONS_ENABLED)) {
+  if (boolFlag(env.REAL_AUTONOMOUS_AI_DECISIONS_ENABLED) || boolFlag(env.REAL_AUTONOMOUS_OPERATOR_PLAYBOOK)) {
     const favorites = String(env.REAL_AUTONOMOUS_MT5_WATCHLIST
       || 'EURUSD,GBPUSD,USDJPY,AUDUSD,USDCAD,NZDUSD,USDCHF,XAUUSD,EURJPY,AUDCAD')
       .split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
@@ -712,9 +712,30 @@ async function executeCandidate(candidate, context) {
       takeProfit: candidate.takeProfit,
       reason: 'real-autonomous-scheduler'
     };
-    // AI decides: an LLM analyzes trend/technicals/news and approves or rejects
-    // the trade, setting its own SL/TP. Its verdict overrides the mechanical one.
-    if (boolFlag((context.env || {}).REAL_AUTONOMOUS_AI_DECISIONS_ENABLED) && typeof deps.aiDecideTrade === 'function') {
+    // Operator playbook decides (preferred): Edi's own rules (RSI reversal + MA
+    // regime + session + $1-2 targets) as pure mechanics — no LLM, so it's free
+    // per tick and cannot hang. When enabled it governs MT5 entries.
+    if (boolFlag((context.env || {}).REAL_AUTONOMOUS_OPERATOR_PLAYBOOK) && typeof deps.operatorPlaybook === 'function') {
+      let pb = null;
+      try {
+        pb = await deps.operatorPlaybook(candidate.symbol);
+      } catch (error) {
+        return { ok: false, status: 'blocked', reason: 'playbook_error', error: String(error?.message || error), candidate, input };
+      }
+      if (!pb || pb.ok !== true) {
+        return { ok: false, status: 'blocked', reason: pb?.reason || 'playbook_unavailable', candidate, input };
+      }
+      if (!pb.wouldEnter) {
+        return { ok: false, status: 'playbook_skip', reason: pb.reason, candidate, input };
+      }
+      input.side = pb.side;
+      if (Number.isFinite(pb.entryPrice)) input.entryPrice = pb.entryPrice;
+      input.stopLoss = pb.stopLoss;
+      input.takeProfit = pb.takeProfit;
+      input.playbookReason = pb.reason;
+    } else if (boolFlag((context.env || {}).REAL_AUTONOMOUS_AI_DECISIONS_ENABLED) && typeof deps.aiDecideTrade === 'function') {
+      // AI decides: an LLM analyzes trend/technicals/news and approves or rejects
+      // the trade, setting its own SL/TP. Its verdict overrides the mechanical one.
       let decision = null;
       try {
         decision = await deps.aiDecideTrade(candidate.symbol, 'MT5');
@@ -1038,8 +1059,16 @@ function createRealAutonomousSchedulerController(options = {}) {
     const context = overrideContext || state.context || {};
     state.inProgress = true;
     state.lastTickAt = new Date(now()).toISOString();
+    let watchdogTimer = null;
     try {
-      const result = await runner({ ...context, nowMs: now() });
+      // Watchdog: a single hung call must never freeze the engine. If a tick
+      // runs past the budget, reject so `finally` clears inProgress and the next
+      // tick runs (the leaked op, if any, is abandoned).
+      const tickTimeoutMs = Math.max(15000, Number(options.tickTimeoutMs) || 50000);
+      const result = await Promise.race([
+        runner({ ...context, nowMs: now() }),
+        new Promise((_, rej) => { watchdogTimer = setTimeout(() => rej(new Error('real_autonomous_tick_timeout')), tickTimeoutMs); if (watchdogTimer.unref) watchdogTimer.unref(); })
+      ]);
       state.ticksRun += 1;
       state.lastTickResult = result;
       state.lastError = result?.ok ? null : { at: state.lastTickAt, message: result?.reason || 'real_autonomous_tick_failed' };
@@ -1054,6 +1083,7 @@ function createRealAutonomousSchedulerController(options = {}) {
       try { options.logger?.error?.('real.autonomous.tick.exception', { error: state.lastError.message }); } catch { /* ignore */ }
       return state.lastTickResult;
     } finally {
+      if (watchdogTimer) clearTimeout(watchdogTimer);
       state.inProgress = false;
     }
   }

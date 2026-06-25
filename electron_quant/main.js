@@ -1166,7 +1166,7 @@ function computeCalibration() {
 function requestJson(method, url, headers = {}, payload = null, options = {}) {
   // A hung connection used to hang forever and freeze the autonomous tick
   // (await never resolved -> inProgress stuck). Always bound it with a timeout.
-  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 30000;
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? options.timeoutMs : 15000;
   return new Promise((resolve, reject) => {
     const body = payload ? Buffer.from(JSON.stringify(payload)) : null;
     let settled = false;
@@ -2697,12 +2697,12 @@ ${memory || 'Aún no hay memoria registrada.'}`;
       const data = await requestJson('POST', `${route.base}/messages`, {
         'x-api-key': route.apiKey,
         'anthropic-version': '2023-06-01'
-      }, anthropicPayload);
+      }, anthropicPayload, { timeoutMs: 60000 });
       rawAnswer = Array.isArray(data.content)
         ? data.content.filter((part) => part?.type === 'text' && part.text).map((part) => part.text).join('\n').trim()
         : '';
     } else {
-      const data = await requestJson('POST', `${route.base}/chat/completions`, { Authorization: `Bearer ${route.apiKey}` }, payload);
+      const data = await requestJson('POST', `${route.base}/chat/completions`, { Authorization: `Bearer ${route.apiKey}` }, payload, { timeoutMs: 60000 });
       rawAnswer = data.choices?.[0]?.message?.content || '';
     }
     clearModelAlerts(); // a successful call means the model API is healthy again
@@ -2759,13 +2759,13 @@ async function callModelText({ system, user }, env = ENV, options = {}) {
       // Newer Claude models reject the temperature param; omit it.
       const data = await requestJson('POST', `${route.base}/messages`, {
         'x-api-key': route.apiKey, 'anthropic-version': '2023-06-01'
-      }, { model, system, messages: [{ role: 'user', content: String(user || '') }], max_tokens: maxTokens });
+      }, { model, system, messages: [{ role: 'user', content: String(user || '') }], max_tokens: maxTokens }, { timeoutMs: 60000 });
       out = Array.isArray(data.content)
         ? data.content.filter((p) => p?.type === 'text' && p.text).map((p) => p.text).join('\n').trim()
         : '';
     } else {
       const data = await requestJson('POST', `${route.base}/chat/completions`, { Authorization: `Bearer ${route.apiKey}` },
-        { model, messages: [{ role: 'system', content: system }, { role: 'user', content: String(user || '') }], temperature, max_tokens: maxTokens });
+        { model, messages: [{ role: 'system', content: system }, { role: 'user', content: String(user || '') }], temperature, max_tokens: maxTokens }, { timeoutMs: 60000 });
       out = data.choices?.[0]?.message?.content || '';
     }
     clearModelAlerts(); // the trade brain reached the model — API is healthy

@@ -1064,7 +1064,7 @@ function createRealAutonomousSchedulerController(options = {}) {
       // Watchdog: a single hung call must never freeze the engine. If a tick
       // runs past the budget, reject so `finally` clears inProgress and the next
       // tick runs (the leaked op, if any, is abandoned).
-      const tickTimeoutMs = Math.max(15000, Number(options.tickTimeoutMs) || 50000);
+      const tickTimeoutMs = Math.max(15000, Number(options.tickTimeoutMs) || Number((context.env || {}).REAL_AUTONOMOUS_TICK_TIMEOUT_MS) || 90000);
       const result = await Promise.race([
         runner({ ...context, nowMs: now() }),
         new Promise((_, rej) => { watchdogTimer = setTimeout(() => rej(new Error('real_autonomous_tick_timeout')), tickTimeoutMs); if (watchdogTimer.unref) watchdogTimer.unref(); })
